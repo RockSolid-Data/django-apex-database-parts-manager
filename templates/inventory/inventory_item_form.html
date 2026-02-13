@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Add Inventory Item — Manchester Electric{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-plus-lg"></i> Add Inventory Item
+  </h1>
+  <a href="{% url 'inventory:inventory_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Inventory
+  </a>
+</div>
+
+{% if form.errors %}
+<div class="alert alert-danger">
+  <strong>Please correct the errors below.</strong>
+  {% if form.non_field_errors %}{{ form.non_field_errors }}{% endif %}
+</div>
+{% endif %}
+
+<form method="post" id="inventory-form">
+  {% csrf_token %}
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Basic</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.item_name.id_for_label }}">
+            {{ form.item_name.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.item_name }}
+          {% if form.item_name.errors %}
+            <div class="invalid-feedback d-block">{{ form.item_name.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.part_number.id_for_label }}">
+            {{ form.part_number.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.part_number }}
+          {% if form.part_number.errors %}
+            <div class="invalid-feedback d-block">{{ form.part_number.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="{{ form.description.id_for_label }}">
+            {{ form.description.label }}
+          </label>
+          {{ form.description }}
+          {% if form.description.errors %}
+            <div class="invalid-feedback d-block">{{ form.description.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.supplier.id_for_label }}">
+            {{ form.supplier.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.supplier }}
+          {% if form.supplier.errors %}
+            <div class="invalid-feedback d-block">{{ form.supplier.errors.0 }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Pricing</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label" for="{{ form.cost.id_for_label }}">
+            {{ form.cost.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.cost }}
+          {% if form.cost.errors %}
+            <div class="invalid-feedback d-block">{{ form.cost.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="{{ form.margin_pct.id_for_label }}">
+            {{ form.margin_pct.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.margin_pct }}
+          {% if form.margin_pct.errors %}
+            <div class="invalid-feedback d-block">{{ form.margin_pct.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Calculated Sale Price</label>
+          <input type="text" class="form-control" id="calculated-sale-price" readonly
+                 placeholder="Auto-calculated">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Quantity</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.quantity_purchased.id_for_label }}">
+            {{ form.quantity_purchased.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.quantity_purchased }}
+          {% if form.quantity_purchased.errors %}
+            <div class="invalid-feedback d-block">{{ form.quantity_purchased.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.quantity_available.id_for_label }}">
+            {{ form.quantity_available.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.quantity_available }}
+          {% if form.quantity_available.errors %}
+            <div class="invalid-feedback d-block">{{ form.quantity_available.errors.0 }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Notes</div>
+    <div class="card-body">
+      <label class="form-label" for="{{ form.notes.id_for_label }}">
+        {{ form.notes.label }}
+      </label>
+      {{ form.notes }}
+      {% if form.notes.errors %}
+        <div class="invalid-feedback d-block">{{ form.notes.errors.0 }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mb-4">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg"></i> Add Inventory Item
+    </button>
+    <a href="{% url 'inventory:inventory_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const costEl = document.getElementById('{{ form.cost.id_for_label }}');
+  const marginEl = document.getElementById('{{ form.margin_pct.id_for_label }}');
+  const saleEl = document.getElementById('calculated-sale-price');
+
+  function updateSalePrice() {
+    const cost = parseFloat(costEl.value) || 0;
+    const margin = parseFloat(marginEl.value) || 0;
+    const sale = cost * (1 + margin / 100);
+    saleEl.value = sale ? '$' + sale.toFixed(2) : '';
+  }
+
+  costEl.addEventListener('input', updateSalePrice);
+  marginEl.addEventListener('input', updateSalePrice);
+  updateSalePrice();
+})();
+</script>
+{% endblock %}

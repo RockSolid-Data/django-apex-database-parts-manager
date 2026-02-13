@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Application {{ application.name }} — Manchester Electric{% endblock %}
+
+{% block content %}
+
+{# ===== Header with action buttons (3.5) ===== #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-gear"></i> {{ application.name }}
+  </h1>
+  <div class="d-flex gap-2">
+    <a href="{% url 'catalog:application_edit' application.pk %}" class="btn btn-primary">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+    <a href="{% url 'catalog:application_list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to List
+    </a>
+    <a href="{% url 'catalog:unit_search' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-search"></i> Search Units
+    </a>
+  </div>
+</div>
+
+{# ===== General Specifications (3.5) ===== #}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">General Specifications</div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <tbody>
+        <tr><th class="ps-3" style="width: 30%;">Name</th><td>{{ application.name }}</td></tr>
+        {% if application.make %}
+        <tr><th class="ps-3">Make</th><td>{{ application.make }}</td></tr>
+        {% endif %}
+        {% if application.engine %}
+        <tr><th class="ps-3">Engine</th><td>{{ application.engine }}</td></tr>
+        {% endif %}
+        {% if application.year %}
+        <tr><th class="ps-3">Year</th><td>{{ application.year }}</td></tr>
+        {% endif %}
+        {% if application.mfr %}
+        <tr><th class="ps-3">Mfr</th><td>{{ application.mfr }}</td></tr>
+        {% endif %}
+        {% if application.volt %}
+        <tr><th class="ps-3">Volt</th><td>{{ application.volt }}</td></tr>
+        {% endif %}
+        {% if application.amp %}
+        <tr><th class="ps-3">Amp</th><td>{{ application.amp }}</td></tr>
+        {% endif %}
+        {% if application.part_number %}
+        <tr><th class="ps-3">Part Number</th><td>{{ application.part_number }}</td></tr>
+        {% endif %}
+        {% if application.other_number %}
+        <tr><th class="ps-3">Other Number</th><td>{{ application.other_number }}</td></tr>
+        {% endif %}
+        {% if application.unit_number %}
+        <tr><th class="ps-3">Unit Number</th><td>{{ application.unit_number }}</td></tr>
+        {% endif %}
+        {% if application.options %}
+        <tr><th class="ps-3">Options</th><td>{{ application.options|linebreaksbr }}</td></tr>
+        {% endif %}
+        {% if application.notes %}
+        <tr><th class="ps-3">Notes</th><td>{{ application.notes|linebreaksbr }}</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ===== Application Specifications (8.7) ===== #}
+<div class="card mb-3">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span>Application Specifications</span>
+    <a href="{% url 'catalog:application_spec_add' application.pk %}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-plus-lg"></i> Add Specification
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if specifications %}
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Category</th>
+          <th>Type</th>
+          <th>Specification</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for spec in specifications %}
+        <tr>
+          <td class="ps-3">{{ spec.category|default:"—" }}</td>
+          <td>{{ spec.type|default:"—" }}</td>
+          <td>{{ spec.specification|default:"—" }}</td>
+          <td class="text-center">
+            <a href="{% url 'catalog:application_spec_edit' application.pk spec.pk %}" class="btn btn-sm btn-outline-secondary me-1" title="Edit">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="post" action="{% url 'catalog:application_spec_delete' application.pk spec.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"
+                onclick="return confirm('Remove this specification?');">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-list-columns fs-3 d-block mb-2"></i>
+      No specifications listed.
+      <div class="mt-2">
+        <a href="{% url 'catalog:application_spec_add' application.pk %}" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg"></i> Add Specification
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ===== Unit Linking Status (3.5) ===== #}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Unit Linking Status</div>
+  <div class="card-body">
+    {% if application.units.exists %}
+      <p class="mb-0 text-success">
+        <i class="bi bi-check-circle"></i> This application is linked to {{ application.units.count }} unit{{ application.units.count|pluralize }}.
+      </p>
+    {% else %}
+      <p class="mb-0 text-muted">
+        <i class="bi bi-dash-circle"></i> This application is not linked to any units.
+      </p>
+    {% endif %}
+  </div>
+</div>
+
+{# ===== Linked Units panel (3.6) ===== #}
+<div class="card mb-3">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span>Linked Units</span>
+    <a href="{% url 'catalog:application_link_unit' application.pk %}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-lg"></i> Link to Unit
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if linked_units %}
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Unit Number</th>
+          <th>YT Number</th>
+          <th>OEM</th>
+          <th>Position</th>
+          <th>Notes</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for au in linked_units %}
+        <tr>
+          <td class="ps-3">
+            <a href="{% url 'catalog:unit_detail' au.unit.pk %}">{{ au.unit.unit_number }}</a>
+          </td>
+          <td>{{ au.unit.yt_number|default:"—" }}</td>
+          <td>{{ au.unit.oem|default:"—" }}</td>
+          <td>{{ au.position|default:"—" }}</td>
+          <td>{{ au.notes|truncatewords:8|default:"—" }}</td>
+          <td class="text-center">
+            <a href="{% url 'catalog:unit_detail' au.unit.pk %}" class="btn btn-sm btn-outline-primary me-1" title="View">
+              <i class="bi bi-eye"></i>
+            </a>
+            <form method="post" action="{% url 'catalog:application_unlink_unit' application.pk au.unit.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Unlink"
+                onclick="return confirm('Unlink this unit from the application?');">
+                <i class="bi bi-link-45deg"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-link-45deg fs-3 d-block mb-2"></i>
+      No linked units found.
+      <div class="mt-2">
+        <a href="{% url 'catalog:application_link_unit' application.pk %}" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg"></i> Link to Unit
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

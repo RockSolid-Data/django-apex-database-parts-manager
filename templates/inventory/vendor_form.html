@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — Manchester Electric{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-truck"></i> {{ title }}
+  </h1>
+  <a href="{% url 'inventory:vendor_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Vendors
+  </a>
+</div>
+
+{% if form.errors %}
+<div class="alert alert-danger">
+  <strong>Please correct the errors below.</strong>
+  {{ form.non_field_errors }}
+</div>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Contact</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label small mb-1" for="{{ form.name.id_for_label }}">
+            {{ form.name.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.name }}
+          {% if form.name.errors %}
+            <div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small mb-1" for="{{ form.contact_name.id_for_label }}">
+            {{ form.contact_name.label }}
+          </label>
+          {{ form.contact_name }}
+          {% if form.contact_name.errors %}
+            <div class="invalid-feedback d-block">{{ form.contact_name.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small mb-1" for="{{ form.email.id_for_label }}">
+            {{ form.email.label }}
+          </label>
+          {{ form.email }}
+          {% if form.email.errors %}
+            <div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small mb-1" for="{{ form.phone.id_for_label }}">
+            {{ form.phone.label }}
+          </label>
+          {{ form.phone }}
+          {% if form.phone.errors %}
+            <div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Address</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label small mb-1" for="{{ form.address_line1.id_for_label }}">
+            {{ form.address_line1.label }}
+          </label>
+          {{ form.address_line1 }}
+          {% if form.address_line1.errors %}
+            <div class="invalid-feedback d-block">{{ form.address_line1.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label small mb-1" for="{{ form.address_line2.id_for_label }}">
+            {{ form.address_line2.label }}
+          </label>
+          {{ form.address_line2 }}
+          {% if form.address_line2.errors %}
+            <div class="invalid-feedback d-block">{{ form.address_line2.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.city.id_for_label }}">
+            {{ form.city.label }}
+          </label>
+          {{ form.city }}
+          {% if form.city.errors %}
+            <div class="invalid-feedback d-block">{{ form.city.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.state.id_for_label }}">
+            {{ form.state.label }}
+          </label>
+          {{ form.state }}
+          {% if form.state.errors %}
+            <div class="invalid-feedback d-block">{{ form.state.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.zip_code.id_for_label }}">
+            {{ form.zip_code.label }}
+          </label>
+          {{ form.zip_code }}
+          {% if form.zip_code.errors %}
+            <div class="invalid-feedback d-block">{{ form.zip_code.errors.0 }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Notes</div>
+    <div class="card-body">
+      <label class="form-label small mb-1" for="{{ form.notes.id_for_label }}">
+        {{ form.notes.label }}
+      </label>
+      {{ form.notes }}
+      {% if form.notes.errors %}
+        <div class="invalid-feedback d-block">{{ form.notes.errors.0 }}</div>
+      {% endif %}
+
+      <div class="form-check mt-3">
+        {{ form.is_active }}
+        <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+          {{ form.is_active.label }}
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mb-4 flex-wrap">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg"></i> Save Vendor
+    </button>
+    <a href="{% url 'inventory:vendor_list' %}" class="btn btn-outline-secondary">Cancel</a>
+    {% if vendor %}
+    <form method="post" action="{% url 'inventory:vendor_delete' vendor.pk %}" class="d-inline ms-auto">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Delete this vendor? This cannot be undone.');">
+        <i class="bi bi-trash"></i> Delete
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

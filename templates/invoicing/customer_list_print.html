@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Customer List — Manchester Electric</title>
+  <style>
+    @page { size: letter; margin: 0.5in; }
+    body { font-family: sans-serif; font-size: 10pt; max-width: 7.5in; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 0.35rem 0.5rem; text-align: left; }
+    th { background: #333; color: #fff; }
+    .text-center { text-align: center; }
+  </style>
+</head>
+<body>
+<h1>Customer List — Manchester Electric</h1>
+<p>{{ customers|length }} customer{{ customers|length|pluralize }} found</p>
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Email</th>
+      <th>Phone</th>
+      <th>City</th>
+      <th>State</th>
+      <th class="text-center">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in customers %}
+    <tr>
+      <td>{{ c.name }}</td>
+      <td>{{ c.email|default:"—" }}</td>
+      <td>{{ c.phone|default:"—" }}</td>
+      <td>{{ c.city|default:"—" }}</td>
+      <td>{{ c.state|default:"—" }}</td>
+      <td class="text-center">{% if c.is_active %}Active{% else %}Inactive{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="text-center">No customers found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

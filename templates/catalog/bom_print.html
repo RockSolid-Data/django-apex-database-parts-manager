@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOM {{ bom.name }} — Manchester Electric</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 1rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .no-print { margin-bottom: 1rem; }
+    @media print {
+      .no-print { display: none !important; }
+      body { margin: 0; padding: 0; }
+    }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid #333; padding: 0.4rem 0.5rem; text-align: left; font-size: 0.9rem; }
+    th { background: #f0f0f0; }
+    .text-end { text-align: right; }
+    .company { font-weight: bold; font-size: 1.2rem; margin-bottom: 0.5rem; }
+    .bom-info { margin-bottom: 1rem; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+<div class="no-print">
+  <a href="{% url 'catalog:bom_detail' bom.pk %}">&larr; Back to BOM</a>
+  &nbsp;|&nbsp;
+  <button onclick="window.print();">Print</button>
+</div>
+
+<div class="company">Manchester Electric</div>
+<h1>Bill of Materials — {{ bom.name }}</h1>
+
+<div class="bom-info">
+  <p class="mb-1"><strong>Created:</strong> {{ bom.created_at|date:"F j, Y" }}</p>
+  {% if bom.unit %}<p class="mb-1"><strong>Unit:</strong> {{ bom.unit.unit_number }}</p>{% endif %}
+  {% if bom.application %}<p class="mb-1"><strong>Application:</strong> {{ bom.application.name }}</p>{% endif %}
+  {% if bom.description %}<p class="mb-1"><strong>Description:</strong> {{ bom.description|truncatewords:30 }}</p>{% endif %}
+</div>
+
+{% if items %}
+<table>
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th>Part #</th>
+      <th>Notes</th>
+      <th class="text-end">Unit Qty</th>
+      <th class="text-end">Stock Qty</th>
+      <th>Bin</th>
+      <th>OEM</th>
+      <th>J&N</th>
+      <th>YT</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.description|default:item.part.part_name|default:"—" }}</td>
+      <td>{{ item.part.part_number }}</td>
+      <td>{{ item.notes|truncatewords:8|default:"—" }}</td>
+      <td class="text-end">{{ item.unit_qty }}</td>
+      <td class="text-end">{{ item.stock_qty }}</td>
+      <td>{{ item.bin_number|default:"—" }}</td>
+      <td>{{ item.oem_number|default:"—" }}</td>
+      <td>{{ item.j_and_n|default:"—" }}</td>
+      <td>{{ item.yt_number|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-muted">No parts to print.</p>
+{% endif %}
+
+</body>
+</html>

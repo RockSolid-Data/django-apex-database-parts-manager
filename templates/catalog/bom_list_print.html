@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BOM List — Manchester Electric</title>
+  <style>
+    @page { size: letter; margin: 0.5in; }
+    body { font-family: sans-serif; font-size: 10pt; max-width: 7.5in; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 0.35rem 0.5rem; text-align: left; }
+    th { background: #333; color: #fff; }
+    .text-end { text-align: right; }
+    .text-center { text-align: center; }
+  </style>
+</head>
+<body>
+<h1>BOM List — Manchester Electric</h1>
+<p>{{ boms|length }} BOM{{ boms|length|pluralize }} found</p>
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Unit</th>
+      <th>Application</th>
+      <th>Created</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for bom in boms %}
+    <tr>
+      <td>{{ bom.name }}</td>
+      <td>{{ bom.unit.unit_number|default:"—" }}</td>
+      <td>{{ bom.application.name|default:"—" }}</td>
+      <td>{{ bom.created_at|date:"M j, Y" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="text-center">No BOMs found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

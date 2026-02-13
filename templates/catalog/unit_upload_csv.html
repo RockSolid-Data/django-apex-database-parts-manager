@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Units CSV — Manchester Electric{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-upload"></i> Upload Units CSV
+  </h1>
+  <a href="{% url 'catalog:unit_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Unit List
+  </a>
+</div>
+
+<div class="row">
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="csv_file" class="form-label">Select CSV file</label>
+            <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Upload &amp; Process
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header fw-semibold">CSV Format</div>
+      <div class="card-body">
+        <p class="small text-muted mb-2">
+          The CSV must have a header row. The <strong>unit_number</strong> column is required
+          and is used as the unique key (existing units are updated, new ones are created).
+        </p>
+        <p class="small text-muted mb-2">Supported columns:</p>
+        <p class="small text-muted mb-0" style="line-height: 1.8;">
+          <code>unit_number</code>, <code>unit_type</code>, <code>yt_number</code>,
+          <code>oem</code>, <code>manufacturer</code>, <code>family</code>,
+          <code>voltage</code>, <code>kw_hp</code>, <code>phase</code>,
+          <code>fla</code>, <code>rpm</code>, <code>frame</code>,
+          <code>enclosure</code>, <code>design</code>, <code>type</code>,
+          <code>rotation</code>, <code>weight</code>, <code>notes</code>,
+          <code>new_unit_price</code>, <code>rebuilt_unit_price</code>,
+          and more &mdash; any Unit model field name works.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

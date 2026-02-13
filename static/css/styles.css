@@ -1,0 +1,202 @@
+/* ==========================================================================
+   Manchester Electric — Global Styles
+   ========================================================================== */
+
+/* ==========================================================================
+   Theme Colors — Edit these to change colors site-wide. Save and refresh.
+   ========================================================================== */
+:root {
+  /* Brand / primary colors */
+  --me-primary: #242a5b;
+  --me-primary-rgb: 38, 50, 143;
+  --me-page-heading: #0e1119;
+
+  /* Layout */
+  --me-body-bg: #f8f9fa;
+  --me-footer-bg: #f1f3f5;
+  --me-footer-border: #dee2e6;
+
+  /* Accents */
+  --me-badge-unit-type: #fd7e14;
+  --me-success: #198754;
+  --me-success-rgb: 25, 135, 84;
+  --me-danger: #dc3545;
+  --me-danger-rgb: 220, 53, 69;
+  --me-warning: #ffc107;
+  --me-info: #0dcaf0;
+
+  /* Muted / UI */
+  --me-muted: #6c757d;
+  --me-muted-hover: #495057;
+  --me-nav-link: rgba(255, 255, 255, 0.8);
+  --me-nav-link-active: #ffffff;
+
+  /* Table headers (thead.table-dark) */
+  --me-table-header-bg: var(--me-primary);
+  --me-table-header-color: #ffffff;
+
+  /* Bootstrap overrides — buttons, badges, links use these */
+  --bs-primary: var(--me-primary);
+  --bs-primary-rgb: var(--me-primary-rgb);
+  --bs-success: var(--me-success);
+  --bs-success-rgb: var(--me-success-rgb);
+  --bs-link-color: var(--me-primary);
+}
+
+/* ---- Primary buttons (Bootstrap compiles hardcoded values) ---- */
+.btn-primary {
+  background-color: var(--me-primary) !important;
+  border-color: var(--me-primary) !important;
+}
+.btn-primary:hover {
+  background-color: color-mix(in srgb, var(--me-primary) 85%, black) !important;
+  border-color: color-mix(in srgb, var(--me-primary) 85%, black) !important;
+}
+.btn-outline-primary {
+  color: var(--me-primary) !important;
+  border-color: var(--me-primary) !important;
+}
+.btn-outline-primary:hover {
+  background-color: var(--me-primary) !important;
+  color: #fff !important;
+  border-color: var(--me-primary) !important;
+}
+
+/* ---- Nav pills (unit type filter tabs) ---- */
+.nav-pills .nav-link.active {
+  background-color: var(--me-primary) !important;
+  color: #fff !important;
+}
+
+/* ---- Navbar ---- */
+.me-navbar {
+  background-color: var(--me-primary) !important;
+}
+
+.me-navbar .navbar-brand {
+  font-size: 1.25rem;
+  letter-spacing: 0.025em;
+}
+
+.me-navbar .nav-link {
+  color: var(--me-nav-link);
+  font-size: 0.9rem;
+  padding-left: 0.85rem;
+  padding-right: 0.85rem;
+  transition: color 0.15s ease-in-out;
+}
+
+.me-navbar .nav-link:hover,
+.me-navbar .nav-link:focus {
+  color: var(--me-nav-link-active);
+}
+
+.me-navbar .nav-link.active {
+  color: var(--me-nav-link-active);
+  font-weight: 600;
+}
+
+/* ---- Body layout ---- */
+html {
+  min-height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--me-body-bg);
+}
+
+main {
+  flex: 1;
+}
+
+/* ---- Footer ---- */
+.me-footer {
+  background-color: var(--me-footer-bg);
+  border-top: 1px solid var(--me-footer-border);
+  font-size: 0.85rem;
+}
+
+/* ---- Utility ---- */
+.page-heading {
+  color: var(--me-page-heading);
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+}
+
+/* ---- Unit list badge ---- */
+.badge.bg-unit-type {
+  background-color: var(--me-badge-unit-type);
+  color: #fff;
+}
+
+/* ---- Table headers ---- */
+thead.table-dark {
+  --bs-table-bg: var(--me-table-header-bg) !important;
+  --bs-table-color: var(--me-table-header-color) !important;
+}
+thead.table-dark th {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ---- Live search input with clear icon ---- */
+.search-input-wrapper {
+  position: relative;
+}
+/* Invoice filter: labels row, then inputs row - all inputs align horizontally */
+.invoice-filter-row .invoice-filter-input .form-control,
+.invoice-filter-row .invoice-filter-input .form-select,
+.invoice-filter-row .invoice-filter-input .search-input-wrapper {
+  height: 31px;
+  min-height: 31px;
+}
+.invoice-filter-row .invoice-filter-input .search-input-wrapper {
+  display: flex;
+  align-items: center;
+}
+.invoice-filter-row .invoice-filter-input .search-input-wrapper input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+.search-input-wrapper input {
+  padding-right: 2rem;
+}
+.search-input-wrapper .search-clear-btn {
+  position: absolute;
+  right: 0.375rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--me-muted);
+  font-size: 0.875rem;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.search-input-wrapper .search-clear-btn:hover {
+  color: var(--me-muted-hover);
+}
+.search-input-wrapper .search-clear-btn.invisible {
+  visibility: hidden;
+}
+.form-control-sm + .search-clear-btn {
+  right: 0.25rem;
+}
+
+/* ---- Home page shortcut cards ---- */
+.me-home-card {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.me-home-card:hover {
+  color: inherit;
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}

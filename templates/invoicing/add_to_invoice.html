@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Add {{ item_label }} to Invoice — Manchester Electric{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-receipt"></i> Add to Invoice
+  </h1>
+  {% if part %}
+  <a href="{% url 'catalog:part_detail' part.pk %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Part
+  </a>
+  {% elif unit %}
+  <a href="{% url 'catalog:unit_detail' unit.pk %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Unit
+  </a>
+  {% endif %}
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <p class="mb-0">
+      <strong>{{ item_label }}</strong>
+      {% if item_price %}
+        — ${{ item_price|floatformat:2 }} each
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="row">
+  {# Option 1: Create new invoice #}
+  <div class="col-md-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Create New Invoice</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Start a new invoice with this item pre-filled.
+        </p>
+        <a href="{{ create_new_url }}" class="btn btn-primary">
+          <i class="bi bi-plus-lg me-1"></i> New Invoice
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# Option 2: Add to existing invoice #}
+  <div class="col-md-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Add to Existing Invoice</div>
+      <div class="card-body">
+        {% if invoices %}
+        <form method="post">
+          {% csrf_token %}
+          {% if unit %}<input type="hidden" name="unit" value="{{ unit.pk }}">{% endif %}
+          {% if part %}<input type="hidden" name="part" value="{{ part.pk }}">{% endif %}
+          <div class="mb-3">
+            <label class="form-label small">Select invoice</label>
+            <select name="invoice" class="form-select" required>
+              <option value="">— Choose invoice —</option>
+              {% for inv in invoices %}
+              <option value="{{ inv.pk }}">{{ inv.invoice_number }} — {{ inv.get_bill_to_name }} ({{ inv.get_status_display }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-plus-lg me-1"></i> Add to Invoice
+          </button>
+        </form>
+        {% else %}
+        <p class="text-muted small mb-0">No draft or sent invoices available.</p>
+        <a href="{% url 'invoicing:invoice_create' %}" class="btn btn-outline-primary mt-2">
+          <i class="bi bi-plus-lg me-1"></i> Create New Invoice
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

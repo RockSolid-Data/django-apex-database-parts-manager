@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}{{ bom.name }} - BOM — Manchester Electric{% endblock %}
+
+{% block content %}
+
+{# ===== Page header: BOM Details title + top-right action buttons ===== #}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-diagram-3"></i> BOM Details
+  </h1>
+  <div class="d-flex flex-wrap gap-2">
+    <a href="#" class="btn btn-success" data-print-url="{% url 'catalog:bom_print' bom.pk %}?all=1">
+      <i class="bi bi-printer"></i> Print All
+    </a>
+    <a href="#" id="bom-print-selected" class="btn btn-info text-white" data-bom-print-url="{% url 'catalog:bom_print' bom.pk %}">
+      <i class="bi bi-printer"></i> Print Selected (<span id="bom-selected-count">0</span>)
+    </a>
+    <a href="{% url 'catalog:bom_item_add' bom.pk %}" class="btn btn-primary">
+      <i class="bi bi-plus-lg"></i> Add Part
+    </a>
+    <a href="{% url 'catalog:bom_edit' bom.pk %}" class="btn btn-outline-secondary">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+    <a href="{% url 'catalog:bom_list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to BOMs
+    </a>
+  </div>
+</div>
+
+{# ===== BOM header info (name, created, description) ===== #}
+<div class="mb-4">
+  <h2 class="h4 mb-2">{{ bom.name }}</h2>
+  <p class="text-muted mb-2">Created: {{ bom.created_at|date:"F j, Y" }}</p>
+  {% if bom.description %}
+  <div class="mt-2">
+    <strong>Description</strong>
+    <p class="mb-0 mt-1">{{ bom.description|linebreaksbr }}</p>
+  </div>
+  {% endif %}
+  {% if bom.unit %}
+  <p class="mb-1 mt-2"><strong>Unit:</strong> <a href="{% url 'catalog:unit_detail' bom.unit.pk %}">{{ bom.unit.unit_number }}</a></p>
+  {% endif %}
+  {% if bom.application %}
+  <p class="mb-1"><strong>Application:</strong> <a href="{% url 'catalog:application_detail' bom.application.pk %}">{{ bom.application.name }}</a></p>
+  {% endif %}
+</div>
+
+{# ===== Parts in BOM table ===== #}
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span>Parts in BOM ({{ bom.items.all|length }})</span>
+    <a href="{% url 'catalog:bom_item_add' bom.pk %}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-lg"></i> Add Part
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if bom.items.all %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="text-center" style="width: 40px;">
+              <input type="checkbox" class="form-check-input" id="bom-select-all" title="Select all lines for Print">
+            </th>
+            <th class="ps-3">DESCRIPTION</th>
+            <th>PART #</th>
+            <th>NOTES</th>
+            <th class="text-end">UNIT QTY</th>
+            <th class="text-end">STOCK QTY</th>
+            <th>BIN NUMBER</th>
+            <th>OEM</th>
+            <th>J&N</th>
+            <th>YT</th>
+            <th class="text-center">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in bom.items.all %}
+          <tr>
+            <td class="text-center">
+              <input type="checkbox" class="form-check-input bom-item-check" data-item-id="{{ item.pk }}" title="Select for Print">
+            </td>
+            <td class="ps-3">{{ item.description|default:item.part.part_name|default:"—" }}</td>
+            <td>
+              {% if item.part %}
+              {% if item.part.part_number %}
+              <a href="{% url 'catalog:part_detail' item.part.pk %}">{{ item.part.part_number }}</a>
+              {% else %}
+              —
+              {% endif %}
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td>{{ item.notes|default:"—" }}</td>
+            <td class="text-end">{{ item.unit_qty }}</td>
+            <td class="text-end">{% if item.stock_qty %}{{ item.stock_qty }}{% else %}—{% endif %}</td>
+            <td>{{ item.bin_number|default:"—" }}</td>
+            <td>{{ item.oem_number|default:item.part.oem_number|default:"—" }}</td>
+            <td>{{ item.j_and_n|default:item.part.j_and_n|default:"—" }}</td>
+            <td>{{ item.yt_number|default:item.part.yt_number|default:"—" }}</td>
+            <td class="text-center">
+              <a href="{% url 'catalog:bom_item_edit' bom.pk item.pk %}" class="text-decoration-none me-2">Edit</a>
+              <form method="post" action="{% url 'catalog:bom_item_delete' bom.pk item.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-link p-0 text-danger text-decoration-none border-0"
+                  onclick="return confirm('Remove this part from the BOM?');">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-box-seam fs-3 d-block mb-2"></i>
+      No parts in this BOM yet.
+      <div class="mt-2">
+        <a href="{% url 'catalog:bom_item_add' bom.pk %}" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg"></i> Add Part
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ===== Bottom action bar ===== #}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div class="d-flex gap-2">
+    <a href="{% url 'catalog:bom_edit' bom.pk %}" class="btn btn-primary">
+      <i class="bi bi-pencil"></i> Edit BOM
+    </a>
+    <a href="{% url 'catalog:bom_delete' bom.pk %}" class="btn btn-danger">
+      <i class="bi bi-trash"></i> Delete BOM
+    </a>
+  </div>
+  <a href="{% url 'catalog:bom_list' %}" class="text-decoration-none">
+    <i class="bi bi-arrow-left"></i> Back to BOM List
+  </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const printBtn = document.getElementById('bom-print-selected');
+  const countEl = document.getElementById('bom-selected-count');
+  const baseUrl = printBtn ? printBtn.getAttribute('data-bom-print-url') : '';
+
+  function updateCount() {
+    const checks = document.querySelectorAll('.bom-item-check:checked');
+    if (countEl) countEl.textContent = checks.length;
+  }
+
+  function openPrintSelected() {
+    const checks = document.querySelectorAll('.bom-item-check:checked');
+    const ids = Array.from(checks).map(c => c.getAttribute('data-item-id')).filter(Boolean);
+    if (ids.length === 0) {
+      alert('Please select at least one part to print.');
+      return;
+    }
+    if (typeof window.printViaIframe === 'function') {
+      window.printViaIframe(baseUrl + '?items=' + ids.join(','));
+    } else {
+      window.open(baseUrl + '?items=' + ids.join(','), '_blank');
+    }
+  }
+
+  document.querySelectorAll('.bom-item-check').forEach(cb => {
+    cb.addEventListener('change', updateCount);
+  });
+  const masterCheck = document.getElementById('bom-select-all');
+  if (masterCheck) {
+    masterCheck.addEventListener('change', function() {
+      document.querySelectorAll('.bom-item-check').forEach(cb => { cb.checked = this.checked; });
+      updateCount();
+    });
+  }
+  if (printBtn) printBtn.addEventListener('click', function(e) { e.preventDefault(); openPrintSelected(); });
+  updateCount();
+})();
+</script>
+{% endblock %}

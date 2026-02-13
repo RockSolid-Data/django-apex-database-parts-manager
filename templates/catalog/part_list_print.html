@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Parts List — Manchester Electric</title>
+  <style>
+    @page { size: letter; margin: 0.5in; }
+    body { font-family: sans-serif; font-size: 9pt; max-width: 7.5in; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 0.3rem 0.4rem; text-align: left; }
+    th { background: #333; color: #fff; }
+    .text-end { text-align: right; }
+    .text-center { text-align: center; }
+  </style>
+</head>
+<body>
+<h1>Parts List — Manchester Electric</h1>
+<p>{{ parts|length }} part{{ parts|length|pluralize }} found</p>
+<table>
+  <thead>
+    <tr>
+      <th>Key</th>
+      <th>YT Number</th>
+      <th>J&N</th>
+      <th>OEM #</th>
+      <th>Description</th>
+      <th class="text-end">In Stock</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for part in parts %}
+    <tr>
+      <td>{{ part.key|default:"—" }}</td>
+      <td>{{ part.yt_number|default:"—" }}</td>
+      <td>{{ part.j_and_n|default:"—" }}</td>
+      <td>{{ part.oem_number|default:"—" }}</td>
+      <td>{{ part.description|truncatewords:12|default:part.part_name|default:"—" }}</td>
+      <td class="text-end">{{ part.stock_quantity }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="text-center">No parts found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

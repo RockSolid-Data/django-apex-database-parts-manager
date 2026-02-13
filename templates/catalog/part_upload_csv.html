@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Parts CSV — Manchester Electric{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-upload"></i> Upload Parts CSV
+  </h1>
+  <a href="{% url 'catalog:part_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Parts List
+  </a>
+</div>
+
+<div class="row">
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="csv_file" class="form-label">Select CSV file</label>
+            <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Upload &amp; Process
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header fw-semibold">CSV Format</div>
+      <div class="card-body">
+        <p class="small text-muted mb-2">
+          The CSV must have a header row. The <strong>part_number</strong> column is required
+          and is used as the unique key (existing parts are updated, new ones are created).
+        </p>
+        <p class="small text-muted mb-2">Supported columns:</p>
+        <p class="small text-muted mb-0" style="line-height: 1.8;">
+          <code>part_number</code>, <code>part_name</code>, <code>key</code>,
+          <code>yt_number</code>, <code>j_and_n</code>, <code>oem_number</code>,
+          <code>item_no</code>, <code>category</code>, <code>type</code>,
+          <code>oem_type</code>, <code>item_typ</code>, <code>oem</code>,
+          <code>primary_vendor</code>, <code>catalog</code>, <code>plug_id</code>,
+          <code>price</code>, <code>cost_price</code>, <code>stock_quantity</code>,
+          <code>reorder_qty</code>, <code>bin_number</code>, <code>description</code>,
+          <code>foot_notes</code>, <code>superseding_notes</code>, <code>unit_number</code> (links to Unit by unit_number).
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

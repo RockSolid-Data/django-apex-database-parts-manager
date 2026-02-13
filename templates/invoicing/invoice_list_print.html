@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice List — Manchester Electric</title>
+  <style>
+    @page { size: {{ company_settings.invoice_paper_size|default:"letter" }}; margin: 0.5in; }
+    body { font-family: sans-serif; font-size: 10pt; max-width: 7.5in; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 0.35rem 0.5rem; text-align: left; }
+    th { background: #333; color: #fff; }
+    .text-end { text-align: right; }
+    .text-center { text-align: center; }
+  </style>
+</head>
+<body>
+<h1>Invoice List — Manchester Electric</h1>
+<p>{{ invoices|length }} invoice{{ invoices|length|pluralize }} found</p>
+<table>
+  <thead>
+    <tr>
+      <th>Invoice #</th>
+      <th>Customer</th>
+      <th>Date</th>
+      <th>Due Date</th>
+      <th>Status</th>
+      <th class="text-end">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for inv in invoices %}
+    <tr>
+      <td>{{ inv.invoice_number }}</td>
+      <td>{{ inv.get_bill_to_name }}</td>
+      <td>{{ inv.date|date:company_settings.invoice_date_format }}</td>
+      <td>{{ inv.due_date|date:company_settings.invoice_date_format|default:"—" }}</td>
+      <td>{{ inv.get_status_display }}</td>
+      <td class="text-end">{{ company_settings.invoice_currency_symbol }}{{ inv.total|floatformat:2 }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="text-center">No invoices found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

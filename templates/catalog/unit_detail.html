@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}Unit {{ unit.unit_number }} — Manchester Electric{% endblock %}
+
+{% block content %}
+
+{# ===== Header with title and action buttons (2.2) ===== #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-cpu"></i> Unit {{ unit.unit_number }}
+  </h1>
+  <div class="d-flex gap-2">
+    <a href="{% url 'invoicing:add_to_invoice' %}?unit={{ unit.pk }}" class="btn btn-success">
+      <i class="bi bi-receipt"></i> Add to Invoice
+    </a>
+    <a href="{% url 'catalog:unit_bom' unit.pk %}" class="btn btn-outline-primary">
+      <i class="bi bi-diagram-3"></i> View BOM
+    </a>
+    <a href="{% url 'catalog:unit_edit' unit.pk %}" class="btn btn-outline-primary">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+    <a href="{% url 'catalog:unit_list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to List
+    </a>
+    <a href="{% url 'catalog:unit_search' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-search"></i> Search Units
+    </a>
+  </div>
+</div>
+
+<div class="row">
+
+  {# ===== LEFT COLUMN — Specs ===== #}
+  <div class="col-lg-8">
+
+    {# Spec sections — only sections with at least one value are shown #}
+    {% for section_title, fields in spec_sections %}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">{{ section_title }}</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            {% for label, value in fields %}
+            {% if value %}
+            <tr>
+              <th class="ps-3" style="width: 40%;">{{ label }}</th>
+              <td>{{ value }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+
+    {# If no spec sections have data, show a message #}
+    {% if not spec_sections %}
+    <div class="card mb-3">
+      <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+        No specifications recorded for this unit.
+      </div>
+    </div>
+    {% endif %}
+
+    {# Descriptive fields #}
+    {% if unit.unit_attributes or unit.notes %}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Notes &amp; Attributes</div>
+      <div class="card-body">
+        {% if unit.unit_attributes %}
+        <h6 class="text-muted small">Unit Attributes</h6>
+        <p>{{ unit.unit_attributes|linebreaksbr }}</p>
+        {% endif %}
+        {% if unit.notes %}
+        <h6 class="text-muted small">Notes</h6>
+        <p class="mb-0">{{ unit.notes|linebreaksbr }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# ===== Cross Reference List (2.3) ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>Cross Reference Units</span>
+        <a href="{% url 'catalog:cross_reference_add' unit.pk %}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-plus-lg"></i> Add Unit
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if cross_ref_units %}
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Unit Number</th>
+              <th>Unit Type</th>
+              <th>OEM</th>
+              <th>Voltage</th>
+              <th>Notes</th>
+              <th class="text-center">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cr in cross_ref_units %}
+            <tr>
+              <td class="ps-3">{{ cr.unit.unit_number }}</td>
+              <td>{{ cr.unit.unit_type|default:"—" }}</td>
+              <td>{{ cr.unit.oem|default:"—" }}</td>
+              <td>{{ cr.unit.voltage|default:"—" }}</td>
+              <td>{{ cr.ref.notes|default:"—" }}</td>
+              <td class="text-center">
+                <a href="{% url 'catalog:unit_detail' cr.unit.pk %}" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-link-45deg fs-3 d-block mb-2"></i>
+          No cross reference units found.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ===== Substitutes (2.4) ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>Substitute Units</span>
+        <a href="{% url 'catalog:substitute_add' unit.pk %}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-plus-lg"></i> Add Substitutes
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if substitute_units %}
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Unit Number</th>
+              <th>Unit Type</th>
+              <th>OEM</th>
+              <th>Voltage</th>
+              <th>Notes</th>
+              <th class="text-center">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in substitute_units %}
+            <tr>
+              <td class="ps-3">{{ s.unit.unit_number }}</td>
+              <td>{{ s.unit.unit_type|default:"—" }}</td>
+              <td>{{ s.unit.oem|default:"—" }}</td>
+              <td>{{ s.unit.voltage|default:"—" }}</td>
+              <td>{{ s.ref.notes|default:"—" }}</td>
+              <td class="text-center">
+                <a href="{% url 'catalog:unit_detail' s.unit.pk %}" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-arrow-left-right fs-3 d-block mb-2"></i>
+          No substitute units found.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ===== Gear Reduction Substitutions (2.5) ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>Gear Reduction Substitutions</span>
+        <a href="{% url 'catalog:gear_reduction_add' unit.pk %}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-plus-lg"></i> Add Gear Reduction
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if gear_reductions %}
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Number</th>
+              <th>Description</th>
+              <th>Notes</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for gr in gear_reductions %}
+            <tr>
+              <td class="ps-3">{{ gr.number|default:"—" }}</td>
+              <td>{{ gr.description }}</td>
+              <td>{{ gr.notes|default:"—" }}</td>
+              <td class="text-center">
+                <a href="{% url 'catalog:gear_reduction_edit' unit.pk gr.pk %}" class="btn btn-sm btn-outline-secondary me-1" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{% url 'catalog:gear_reduction_delete' unit.pk gr.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"
+                    onclick="return confirm('Delete this gear reduction?');">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-gear fs-3 d-block mb-2"></i>
+          No gear reduction substitutions found.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  {# ===== RIGHT COLUMN — Pricing, Unit Type, Images ===== #}
+  <div class="col-lg-4">
+
+    {# Unit Type badge #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Unit Type</div>
+      <div class="card-body text-center">
+        {% if unit.unit_type %}
+        <span class="badge bg-primary fs-6">{{ unit.unit_type.name }}</span>
+        {% else %}
+        <span class="text-muted">Not assigned</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Pricing #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Pricing</div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">New Unit Price</span>
+          <strong>
+            {% if unit.new_unit_price != None %}
+              ${{ unit.new_unit_price }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </strong>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">Rebuilt Unit Price</span>
+          <strong>
+            {% if unit.rebuilt_unit_price != None %}
+              ${{ unit.rebuilt_unit_price }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </strong>
+        </div>
+      </div>
+    </div>
+
+    {# Unit Image #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Unit Image</div>
+      <div class="card-body text-center">
+        {% if unit.unit_image %}
+          <img src="{{ unit.unit_image.url }}" alt="Unit image"
+               class="img-fluid rounded" style="max-height: 250px;">
+        {% else %}
+          <div class="text-muted py-4">
+            <i class="bi bi-image fs-1 d-block mb-2"></i>
+            No image available
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Plug Image #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Plug Image</div>
+      <div class="card-body text-center">
+        {% if unit.plug_image %}
+          <img src="{{ unit.plug_image.url }}" alt="Plug image"
+               class="img-fluid rounded" style="max-height: 250px;">
+        {% else %}
+          <div class="text-muted py-4">
+            <i class="bi bi-image fs-1 d-block mb-2"></i>
+            No plug image available
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Metadata #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Info</div>
+      <div class="card-body small text-muted">
+        <div class="d-flex justify-content-between mb-1">
+          <span>Status</span>
+          {% if unit.is_active %}
+            <span class="badge bg-success">Active</span>
+          {% else %}
+            <span class="badge bg-secondary">Inactive</span>
+          {% endif %}
+        </div>
+        <div class="d-flex justify-content-between mb-1">
+          <span>Created</span>
+          <span>{{ unit.created_at|date:"N j, Y" }}</span>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span>Updated</span>
+          <span>{{ unit.updated_at|date:"N j, Y" }}</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Part {{ part.part_number }} — Manchester Electric{% endblock %}
+
+{% block content %}
+
+{# ===== Header with action buttons (4.5) ===== #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-box-seam"></i> {{ part.part_number }}
+  </h1>
+  <div class="d-flex gap-2">
+    <a href="{% url 'invoicing:add_to_invoice' %}?part={{ part.pk }}" class="btn btn-success">
+      <i class="bi bi-receipt"></i> Add to Invoice
+    </a>
+    <a href="{% url 'catalog:part_edit' part.pk %}" class="btn btn-primary">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+    <a href="{% url 'catalog:part_list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Parts List
+    </a>
+  </div>
+</div>
+
+<div class="row">
+  {# ===== LEFT COLUMN ===== #}
+  <div class="col-lg-8">
+
+    {# Basic Information (4.5) ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Basic Information</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><th class="ps-3" style="width: 30%;">Item No</th><td>{{ part.item_no|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Name</th><td>{{ part.part_name|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Part Number</th><td>{{ part.part_number }}</td></tr>
+            <tr><th class="ps-3">Category</th><td>{{ part.category|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Type</th><td>{{ part.type|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Price</th><td>{% if part.price != None %}${{ part.price }}{% else %}—{% endif %}</td></tr>
+            <tr><th class="ps-3">Item Typ</th><td>{{ part.item_typ|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Bin Location</th><td>{{ part.bin_number|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Key</th><td>{{ part.key|default:"—" }}</td></tr>
+            <tr><th class="ps-3">YT Number</th><td>{{ part.yt_number|default:"—" }}</td></tr>
+            <tr><th class="ps-3">J&N</th><td>{{ part.j_and_n|default:"—" }}</td></tr>
+            <tr><th class="ps-3">OEM #</th><td>{{ part.oem_number|default:"—" }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# Stock & Inventory (4.5) ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Stock &amp; Inventory</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><th class="ps-3" style="width: 30%;">Reorder Qty</th><td>{{ part.reorder_qty }}</td></tr>
+            <tr><th class="ps-3">In Stock</th><td>{{ part.stock_quantity }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# Compatibility (4.5) ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Compatibility</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <h6 class="text-muted small mb-2">Substitutes</h6>
+          <p class="mb-0 text-muted">No substitutes listed.</p>
+          <a href="#" class="btn btn-sm btn-outline-secondary mt-2">Add</a>
+        </div>
+        <hr>
+        <div class="mb-3">
+          <h6 class="text-muted small mb-2">Interchange</h6>
+          {% if part.has_interchange %}
+          <p class="mb-0 text-muted">Interchange information available.</p>
+          {% else %}
+          <p class="mb-0 text-muted">No interchange listed.</p>
+          {% endif %}
+          <a href="#" class="btn btn-sm btn-outline-secondary mt-2">Add</a>
+        </div>
+        <hr>
+        <div>
+          <h6 class="text-muted small mb-2">Superseding</h6>
+          {% if part.has_superseding %}
+          <p class="mb-0 text-muted">Superseding information available.</p>
+          {% else %}
+          <p class="mb-0 text-muted">No superseding listed.</p>
+          {% endif %}
+          <a href="#" class="btn btn-sm btn-outline-secondary mt-2">Add</a>
+        </div>
+      </div>
+    </div>
+
+    {# Superseding Notes (4.5) ===== #}
+    {% if part.superseding_notes %}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Superseding Notes</div>
+      <div class="card-body">
+        {{ part.superseding_notes|linebreaksbr }}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Part Specifications table (4.5) ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Part Specifications</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Category</th>
+              <th>Type</th>
+              <th>Specification</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="ps-3">{{ part.category|default:"—" }}</td>
+              <td>{{ part.type|default:"—" }}</td>
+              <td>{{ part.description|truncatewords:15|default:part.oem_type|default:part.item_typ|default:"—" }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# Description & Footnotes ===== #}
+    {% if part.description or part.foot_notes %}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Description &amp; Notes</div>
+      <div class="card-body">
+        {% if part.description %}
+        <h6 class="text-muted small">Description</h6>
+        <p>{{ part.description|linebreaksbr }}</p>
+        {% endif %}
+        {% if part.foot_notes %}
+        <h6 class="text-muted small">Footnotes</h6>
+        <p class="mb-0">{{ part.foot_notes|linebreaksbr }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ===== RIGHT COLUMN ===== #}
+  <div class="col-lg-4">
+
+    {# Picture (4.5) ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Picture</div>
+      <div class="card-body text-center">
+        {% if part.image %}
+          <img src="{{ part.image.url }}" alt="Part image"
+               class="img-fluid rounded" style="max-height: 250px;">
+        {% else %}
+          <div class="text-muted py-4">
+            <i class="bi bi-image fs-1 d-block mb-2"></i>
+            No image available
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Linked Unit ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Linked Unit</div>
+      <div class="card-body text-center">
+        {% if part.unit %}
+          <a href="{% url 'catalog:unit_detail' part.unit.pk %}">{{ part.unit.unit_number }}</a>
+        {% else %}
+          <span class="text-muted">Not linked</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Metadata ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Info</div>
+      <div class="card-body small text-muted">
+        <div class="d-flex justify-content-between mb-1">
+          <span>Status</span>
+          {% if part.is_active %}
+            <span class="badge bg-success">Active</span>
+          {% else %}
+            <span class="badge bg-secondary">Inactive</span>
+          {% endif %}
+        </div>
+        <div class="d-flex justify-content-between mb-1">
+          <span>Created</span>
+          <span>{{ part.created_at|date:"N j, Y" }}</span>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span>Updated</span>
+          <span>{{ part.updated_at|date:"N j, Y" }}</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

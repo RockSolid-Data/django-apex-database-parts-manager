@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}Create Invoice — Manchester Electric{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+<style>
+  #item-rows .ts-wrapper { min-width: 100%; }
+  .ts-dropdown { z-index: 1060 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-receipt"></i> Create New Invoice
+  </h1>
+  <div class="d-flex gap-2">
+    <a href="#" class="btn btn-success" id="print-invoice-btn" style="pointer-events:none" title="Save invoice first to print">
+      <i class="bi bi-printer"></i> Print Invoice
+    </a>
+    <a href="{% url 'invoicing:invoice_list' %}" class="btn btn-primary">
+      <i class="bi bi-arrow-left"></i> Back to Invoices
+    </a>
+  </div>
+</div>
+
+{% if form.errors or formset.errors %}
+<div class="alert alert-danger">
+  <strong>Please correct the errors below.</strong>
+  {{ form.non_field_errors }}
+  {{ formset.non_form_errors }}
+</div>
+{% endif %}
+
+<form method="post" id="invoice-form" data-currency="{{ company_settings.invoice_currency_symbol }}">
+  {% csrf_token %}
+  {{ formset.management_form }}
+
+  {# ===== Customer Information ===== #}
+  <div class="card mb-4">
+    <div class="card-header fw-semibold">Customer Information</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label" for="{{ form.customer.id_for_label }}">Select Customer (optional)</label>
+          {{ form.customer }}
+          <p class="form-text small text-muted mb-0">Select a customer to prefill info and set due date from their payment terms.</p>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.customer_name.id_for_label }}">Customer Name <span class="text-danger">*</span></label>
+          {{ form.customer_name }}
+          {% if form.customer_name.errors %}<div class="invalid-feedback d-block">{{ form.customer_name.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.contact_name.id_for_label }}">Contact Name</label>
+          {{ form.contact_name }}
+          {% if form.contact_name.errors %}<div class="invalid-feedback d-block">{{ form.contact_name.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.phone.id_for_label }}">Phone Number</label>
+          {{ form.phone }}
+          {% if form.phone.errors %}<div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.email.id_for_label }}">Email</label>
+          {{ form.email }}
+          {% if form.email.errors %}<div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="{{ form.address.id_for_label }}">Address</label>
+          {{ form.address }}
+          {% if form.address.errors %}<div class="invalid-feedback d-block">{{ form.address.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.date.id_for_label }}">Date <span class="text-danger">*</span></label>
+          {{ form.date }}
+          {% if form.date.errors %}<div class="invalid-feedback d-block">{{ form.date.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.due_date.id_for_label }}">Due Date</label>
+          {{ form.due_date }}
+          {% if form.due_date.errors %}<div class="invalid-feedback d-block">{{ form.due_date.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Invoice Items ===== #}
+  <div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Invoice Items</span>
+      <button type="button" class="btn btn-sm btn-primary" id="add-line-btn">
+        <i class="bi bi-plus-lg"></i> Add Line
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:90px" class="text-end">Quantity</th>
+              <th style="width:220px">Part Number</th>
+              <th>Description</th>
+              <th style="width:160px" class="small text-muted">Unit</th>
+              <th style="width:100px" class="text-end">Unit Price</th>
+              <th style="width:100px" class="text-end">Total</th>
+              <th style="width:80px"></th>
+            </tr>
+          </thead>
+          <tbody id="item-rows">
+            {% for f in formset.forms %}
+            <tr class="item-row {% if forloop.counter > 1 %}invoice-extra-row d-none{% endif %}" data-index="{{ forloop.counter0 }}">
+              {% for hidden in f.hidden_fields %}{{ hidden }}{% endfor %}
+              <td class="text-end">{{ f.quantity }}</td>
+              <td>{{ f.part }}</td>
+              <td>{{ f.description }}</td>
+              <td>{{ f.unit }}</td>
+              <td class="text-end">{{ f.unit_price }}</td>
+              <td class="text-end line-total">—</td>
+              <td>
+                {% if f.DELETE %}
+                <div class="d-none">{{ f.DELETE }}</div>
+                <button type="button" class="btn btn-sm btn-outline-danger invoice-delete-btn">
+                  Delete
+                </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% if f.errors %}
+            <tr class="{% if forloop.counter > 1 %}invoice-extra-row d-none{% endif %}"><td colspan="7" class="bg-danger bg-opacity-10 small">{{ f.errors }}</td></tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="p-3 border-top">
+        <div class="row">
+          <div class="col-md-6"></div>
+          <div class="col-md-6 text-md-end">
+            <div>
+              <strong>Subtotal:</strong> <span id="subtotal-display">{{ company_settings.invoice_currency_symbol }}0.00</span><br>
+              <strong>Tax (<span id="tax-rate-display">0</span>%):</strong> <span id="tax-display">{{ company_settings.invoice_currency_symbol }}0.00</span><br>
+              <strong>Total:</strong> <span id="total-display" class="fs-5">{{ company_settings.invoice_currency_symbol }}0.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Invoice Notes and Private Notes ===== #}
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Invoice Notes</div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">Notes for Customer</p>
+          {{ form.notes }}
+          {% if form.notes.errors %}<div class="invalid-feedback d-block">{{ form.notes.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Private Notes</div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">Internal Notes</p>
+          {{ form.private_notes }}
+          {% if form.private_notes.errors %}<div class="invalid-feedback d-block">{{ form.private_notes.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Tax rate and Save ===== #}
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <label class="form-label" for="{{ form.tax_rate.id_for_label }}">Tax Rate (%)</label>
+      {{ form.tax_rate }}
+      {% if form.tax_rate.errors %}<div class="invalid-feedback d-block">{{ form.tax_rate.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="{{ form.status.id_for_label }}">Status</label>
+      {{ form.status }}
+      {% if form.status.errors %}<div class="invalid-feedback d-block">{{ form.status.errors.0 }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mb-4">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg"></i> Save Invoice
+    </button>
+    <a href="{% url 'invoicing:invoice_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+{{ parts_data|json_script:"parts-data" }}
+<script>
+(function() {
+  const partsEl = document.getElementById('parts-data');
+  const partsData = partsEl ? JSON.parse(partsEl.textContent) : [];
+  const partMap = {};
+  partsData.forEach(p => { partMap[String(p.id)] = p; });
+
+  const formEl = document.getElementById('invoice-form');
+  const currency = formEl?.dataset?.currency || '$';
+
+  function updateRowTotal(row) {
+    const qtyInp = row.querySelector('input[id*="quantity"]');
+    const priceInp = row.querySelector('input[id*="unit_price"]');
+    const qty = parseFloat(qtyInp?.value) || 0;
+    const price = parseFloat(priceInp?.value) || 0;
+    const total = qty * price;
+    const cell = row.querySelector('.line-total');
+    if (cell) cell.textContent = total ? currency + total.toFixed(2) : '—';
+    return total;
+  }
+
+  function updateTotals() {
+    let subtotal = 0;
+    document.querySelectorAll('#item-rows tr.item-row').forEach(row => {
+      if (row.classList.contains('d-none')) return;
+      const delCheck = row.querySelector('input[name*="-DELETE"]');
+      if (delCheck?.checked) return;
+      subtotal += updateRowTotal(row);
+    });
+    const taxEl = document.querySelector('[id*="tax_rate"]');
+    const taxRate = parseFloat(taxEl?.value) || 0;
+    const taxAmount = subtotal * taxRate / 100;
+    const total = subtotal + taxAmount;
+    const subtotalEl = document.getElementById('subtotal-display');
+    const taxEl2 = document.getElementById('tax-rate-display');
+    const taxDisplayEl = document.getElementById('tax-display');
+    const totalEl = document.getElementById('total-display');
+    if (subtotalEl) subtotalEl.textContent = currency + subtotal.toFixed(2);
+    if (taxEl2) taxEl2.textContent = taxRate;
+    if (taxDisplayEl) taxDisplayEl.textContent = currency + taxAmount.toFixed(2);
+    if (totalEl) totalEl.textContent = currency + total.toFixed(2);
+    updateDeleteButtons();
+  }
+
+  function getVisibleRowCount() {
+    let count = 0;
+    document.querySelectorAll('#item-rows tr.item-row').forEach(row => {
+      if (!row.classList.contains('d-none')) {
+        const delCheck = row.querySelector('input[name*="-DELETE"]');
+        if (!delCheck?.checked) count++;
+      }
+    });
+    return count;
+  }
+
+  function updateDeleteButtons() {
+    const visible = getVisibleRowCount();
+    document.querySelectorAll('.invoice-delete-btn').forEach(btn => {
+      btn.style.display = visible > 1 ? 'inline-block' : 'none';
+    });
+  }
+
+  document.getElementById('add-line-btn')?.addEventListener('click', function() {
+    const hidden = document.querySelector('#item-rows tr.invoice-extra-row.d-none');
+    if (hidden) {
+      hidden.classList.remove('d-none');
+      const delCheck = hidden.querySelector('input[name*="-DELETE"]');
+      if (delCheck) delCheck.checked = false;
+      updateTotals();
+    }
+  });
+
+  document.querySelectorAll('.invoice-delete-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const row = this.closest('tr');
+      const delCheck = row?.querySelector('input[name*="-DELETE"]');
+      if (delCheck) {
+        delCheck.checked = true;
+        row.classList.add('d-none');
+        updateTotals();
+      }
+    });
+  });
+
+  const form = document.getElementById('invoice-form');
+  if (form) {
+    form.addEventListener('input', updateTotals);
+    form.addEventListener('change', updateTotals);
+  }
+  updateTotals();
+
+  // Searchable Part and Unit dropdowns (Tom Select)
+  document.querySelectorAll('.item-part').forEach(el => {
+    if (el.tomselect) return;
+    new TomSelect(el, {
+      create: false,
+      placeholder: '— Select part —',
+      dropdownParent: 'body',
+      onChange: function(value) {
+        const part = partMap[value];
+        const row = el.closest('tr');
+        if (part && row) {
+          const desc = row.querySelector('input[id*="description"]');
+          const price = row.querySelector('input[id*="unit_price"]');
+          if (desc) desc.value = part.part_name || part.part_number || '';
+          if (price) price.value = part.price || '0';
+          updateTotals();
+        }
+      }
+    });
+  });
+  document.querySelectorAll('.item-unit').forEach(el => {
+    if (el.tomselect) return;
+    new TomSelect(el, { create: false, placeholder: '— Select unit —', dropdownParent: 'body' });
+  });
+
+  // When customer selected, reload to prefill and set due date from net terms
+  const customerSelect = document.getElementById('{{ form.customer.id_for_label }}');
+  if (customerSelect) {
+    customerSelect.addEventListener('change', function() {
+      const v = this.value;
+      if (v) {
+        window.location.href = '{% url "invoicing:invoice_create" %}?customer=' + encodeURIComponent(v);
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

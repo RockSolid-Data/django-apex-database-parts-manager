@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Link to Unit — {{ application.name }} — Manchester Electric{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-link-45deg"></i> Link to Unit
+  </h1>
+  <a href="{% url 'catalog:application_detail' application.pk %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to {{ application.name }}
+  </a>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        Link a unit to <strong>{{ application.name }}</strong>
+      </div>
+      <div class="card-body">
+        {% if form.errors %}
+        <div class="alert alert-danger">
+          <strong>Please correct the errors below.</strong>
+          {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.unit.id_for_label }}">
+              Unit <span class="text-danger">*</span>
+            </label>
+            {{ form.unit }}
+            {% if form.unit.errors %}
+              <div class="invalid-feedback d-block">{{ form.unit.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.position.id_for_label }}">Position</label>
+            {{ form.position }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>
+            {{ form.notes }}
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i> Link to Unit
+            </button>
+            <a href="{% url 'catalog:application_detail' application.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

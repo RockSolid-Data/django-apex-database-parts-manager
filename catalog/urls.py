@@ -1,0 +1,47 @@
+from django.urls import path
+
+from . import views
+
+app_name = "catalog"
+
+urlpatterns = [
+    path("", views.home, name="home"),
+    path("applications/", views.application_list, name="application_list"),
+    path("applications/add/", views.application_create, name="application_create"),
+    path("applications/<int:pk>/", views.application_detail, name="application_detail"),
+    path("applications/<int:pk>/edit/", views.application_edit, name="application_edit"),
+    path("applications/<int:pk>/delete/", views.application_delete, name="application_delete"),
+    path("applications/<int:pk>/link-unit/", views.application_link_unit, name="application_link_unit"),
+    path("applications/<int:pk>/unlink-unit/<int:unit_pk>/", views.application_unlink_unit, name="application_unlink_unit"),
+    path("applications/<int:pk>/spec/add/", views.application_spec_add, name="application_spec_add"),
+    path("applications/<int:pk>/spec/<int:spec_pk>/edit/", views.application_spec_edit, name="application_spec_edit"),
+    path("applications/<int:pk>/spec/<int:spec_pk>/delete/", views.application_spec_delete, name="application_spec_delete"),
+    path("bom/", views.bom_list, name="bom_list"),
+    path("bom/add/", views.bom_create, name="bom_create"),
+    path("bom/<int:pk>/", views.bom_detail, name="bom_detail"),
+    path("bom/<int:pk>/print/", views.bom_print, name="bom_print"),
+    path("bom/<int:pk>/add-part/", views.bom_item_add, name="bom_item_add"),
+    path("bom/<int:pk>/item/<int:item_pk>/edit/", views.bom_item_edit, name="bom_item_edit"),
+    path("bom/<int:pk>/item/<int:item_pk>/delete/", views.bom_item_delete, name="bom_item_delete"),
+    path("bom/<int:pk>/edit/", views.bom_edit, name="bom_edit"),
+    path("bom/<int:pk>/delete/", views.bom_delete, name="bom_delete"),
+    path("parts/", views.part_list, name="part_list"),
+    path("parts/add/", views.part_create, name="part_create"),
+    path("parts/upload-csv/", views.part_upload_csv, name="part_upload_csv"),
+    path("parts/<int:pk>/", views.part_detail, name="part_detail"),
+    path("parts/<int:pk>/edit/", views.part_edit, name="part_edit"),
+    path("parts/<int:pk>/delete/", views.part_delete, name="part_delete"),
+    path("units/", views.unit_list, name="unit_list"),
+    path("units/search/", views.unit_search, name="unit_search"),
+    path("units/add/", views.unit_create, name="unit_create"),
+    path("units/upload-csv/", views.unit_upload_csv, name="unit_upload_csv"),
+    path("units/<int:pk>/", views.unit_detail, name="unit_detail"),
+    path("units/<int:pk>/edit/", views.unit_edit, name="unit_edit"),
+    path("units/<int:pk>/delete/", views.unit_delete, name="unit_delete"),
+    path("units/<int:pk>/bom/", views.unit_bom_view, name="unit_bom"),
+    path("units/<int:pk>/cross-ref/add/", views.cross_reference_add, name="cross_reference_add"),
+    path("units/<int:pk>/substitute/add/", views.substitute_add, name="substitute_add"),
+    path("units/<int:pk>/gear-reduction/add/", views.gear_reduction_add, name="gear_reduction_add"),
+    path("units/<int:pk>/gear-reduction/<int:gr_pk>/edit/", views.gear_reduction_edit, name="gear_reduction_edit"),
+    path("units/<int:pk>/gear-reduction/<int:gr_pk>/delete/", views.gear_reduction_delete, name="gear_reduction_delete"),
+]

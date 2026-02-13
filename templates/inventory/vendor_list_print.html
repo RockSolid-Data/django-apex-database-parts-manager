@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vendor List — Manchester Electric</title>
+  <style>
+    @page { size: letter; margin: 0.5in; }
+    body { font-family: sans-serif; font-size: 10pt; max-width: 7.5in; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 0.35rem 0.5rem; text-align: left; }
+    th { background: #333; color: #fff; }
+    .text-center { text-align: center; }
+  </style>
+</head>
+<body>
+<h1>Vendor List — Manchester Electric</h1>
+<p>{{ vendors|length }} vendor{{ vendors|length|pluralize }} found</p>
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Contact</th>
+      <th>Email</th>
+      <th>Phone</th>
+      <th>City</th>
+      <th>State</th>
+      <th class="text-center">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in vendors %}
+    <tr>
+      <td>{{ v.name }}</td>
+      <td>{{ v.contact_name|default:"—" }}</td>
+      <td>{{ v.email|default:"—" }}</td>
+      <td>{{ v.phone|default:"—" }}</td>
+      <td>{{ v.city|default:"—" }}</td>
+      <td>{{ v.state|default:"—" }}</td>
+      <td class="text-center">{% if v.is_active %}Active{% else %}Inactive{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7" class="text-center">No vendors found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

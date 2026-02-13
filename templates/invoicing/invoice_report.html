@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Invoice Report — {{ company_settings.company_name }}{% endblock %}
+
+{% block content %}
+<div class="no-print mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-heading mb-0">
+      <i class="bi bi-printer me-2"></i> Invoice Report
+    </h1>
+    <a href="{% url 'invoicing:invoice_list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i> Back to Invoices
+    </a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">Filter Report</div>
+    <div class="card-body">
+      <form method="get" action="{% url 'invoicing:invoice_report' %}" class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label">Status</label>
+          <div class="d-flex flex-wrap gap-2">
+            {% for value, label in status_choices %}
+            <div class="form-check">
+              <input type="checkbox" name="status" value="{{ value }}" id="status-{{ value }}"
+                     class="form-check-input" {% if value in filter_statuses %}checked{% endif %}>
+              <label class="form-check-label small" for="status-{{ value }}">{{ label }}</label>
+            </div>
+            {% endfor %}
+          </div>
+          <p class="form-text small text-muted mb-0 mt-1">Select one or more; leave all unchecked for All Statuses.</p>
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label">Date From</label>
+          <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filter_date_from }}">
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label">Date To</label>
+          <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filter_date_to }}">
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Report Type</label>
+          <select name="report_type" class="form-select form-select-sm">
+            <option value="detailed" {% if report_type == 'detailed' %}selected{% endif %}>Detailed (one row per invoice)</option>
+            <option value="customer_summary" {% if report_type == 'customer_summary' %}selected{% endif %}>Customer Summary</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary btn-sm me-2">
+            <i class="bi bi-funnel me-1"></i> Apply
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm js-iframe-print">
+            <i class="bi bi-printer me-1"></i> Print
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="report-content">
+  <div class="report-header d-flex justify-content-between align-items-start mb-4">
+    <div>
+      {% if company_settings.logo %}
+      <img src="{{ company_settings.logo.url }}" alt="{{ company_settings.company_name }}" class="me-report-logo mb-2">
+      {% endif %}
+      <div class="me-report-company">{{ company_settings.company_name }}</div>
+    </div>
+    <div class="text-end">
+      <h2 class="me-report-title mb-0">Invoice Report</h2>
+      <p class="me-report-subtitle mb-0">{{ company_settings.company_name }}</p>
+      <p class="me-report-dates mb-0">
+        {% if date_from_display or date_to_display %}
+          {{ date_from_display }}{% if date_from_display and date_to_display %} – {% endif %}{{ date_to_display }}
+        {% else %}
+          All Dates
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="me-report-table-wrapper">
+    {% for row in customer_summary %}
+    <div class="me-report-customer-section">
+      <div class="me-report-customer-header">{{ row.name }}</div>
+      <table class="table table-sm me-report-table me-report-fixed-cols">
+        <colgroup>
+          <col class="me-report-col-num">
+          <col class="me-report-col-date">
+          <col class="me-report-col-term">
+          <col class="me-report-col-due">
+          <col class="me-report-col-amount">
+          <col class="me-report-col-status">
+        </colgroup>
+        <thead>
+          <tr class="me-report-thead">
+            <th>INVOICE #</th>
+            <th>DATE</th>
+            <th>TERM</th>
+            <th>DUE DATE</th>
+            <th class="text-end">OPEN BALANCE</th>
+            <th class="text-end">STATUS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in row.invoices %}
+          <tr>
+            <td>{{ inv.invoice_number }}</td>
+            <td>{{ inv.date|date:company_settings.invoice_date_format }}</td>
+            <td>{{ inv.get_terms_display }}</td>
+            <td>{{ inv.due_date|date:company_settings.invoice_date_format|default:"—" }}</td>
+            <td class="text-end">{{ company_settings.invoice_currency_symbol }}{{ inv.total|floatformat:2 }}</td>
+            <td class="text-end">{{ inv.get_status_display }}</td>
+          </tr>
+          {% endfor %}
+          <tr class="me-report-subtotal-row">
+            <td colspan="4" class="fw-bold">Total for {{ row.name }}</td>
+            <td class="text-end fw-bold">{{ company_settings.invoice_currency_symbol }}{{ row.total|floatformat:2 }}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    {% empty %}
+    <p class="text-center text-muted py-4">No invoices match the filters.</p>
+    {% endfor %}
+  </div>
+
+  {% if invoices or customer_summary %}
+  <div class="me-report-grand-total mt-3">
+    <table class="table table-sm me-report-table me-report-fixed-cols">
+      <colgroup>
+        <col class="me-report-col-num">
+        <col class="me-report-col-date">
+        <col class="me-report-col-term">
+        <col class="me-report-col-due">
+        <col class="me-report-col-amount">
+        <col class="me-report-col-status">
+      </colgroup>
+      <tr class="me-report-separator"><td colspan="6" class="p-0 border-top border-dark"></td></tr>
+      <tr class="me-report-grand-total-row">
+        <td colspan="4" class="fw-bold">TOTAL</td>
+        <td class="text-end fw-bold">{{ company_settings.invoice_currency_symbol }}{{ grand_total|floatformat:2 }}</td>
+        <td></td>
+      </tr>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<style>
+  .me-report-logo { max-height: 50px; }
+  .me-report-company { font-size: 0.95rem; color: #333; }
+  .me-report-title { font-size: 1.25rem; font-weight: 700; color: #1a2744; }
+  .me-report-subtitle { font-size: 0.9rem; color: #666; }
+  .me-report-dates { font-size: 0.85rem; color: #666; }
+  .me-report-table { border-collapse: collapse; width: 100%; }
+  .me-report-fixed-cols { table-layout: fixed; }
+  .me-report-col-num { width: 16.66%; }
+  .me-report-col-date { width: 16.66%; }
+  .me-report-col-term { width: 16.66%; }
+  .me-report-col-due { width: 16.66%; }
+  .me-report-col-amount { width: 16.66%; }
+  .me-report-col-status { width: 16.66%; }
+  .me-report-thead { border-bottom: 2px solid #333; }
+  .me-report-thead th { font-size: 0.75rem; text-transform: uppercase; font-weight: 600; color: #333; padding: 0.4rem 0.5rem; }
+  .me-report-table td { padding: 0.4rem 0.5rem; font-size: 0.9rem; }
+  .me-report-customer-section { margin-bottom: 1.5rem; break-inside: avoid; }
+  .me-report-customer-header { font-size: 1rem; font-weight: 700; color: #1a2744; margin-bottom: 0.5rem; padding-bottom: 0.25rem; border-bottom: 2px solid #333; }
+  .me-report-subtotal-row td { padding-top: 0.5rem; }
+  .me-report-separator td { border-top: 2px solid #333 !important; }
+  .me-report-grand-total-row td { padding: 0.5rem 0.5rem; }
+  @media print {
+    @page { size: {{ company_settings.invoice_paper_size|default:"letter" }}; margin: 0.5in; }
+    html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: none !important; }
+    .no-print { display: none !important; }
+    .navbar, .me-navbar, nav, .me-footer, footer { display: none !important; }
+    main, .container { max-width: none !important; width: 100% !important; padding: 0 !important; }
+    .report-content { width: 7.5in; margin: 0 auto; }
+    .me-report-table { width: 100%; }
+  }
+</style>
+{% endblock %}

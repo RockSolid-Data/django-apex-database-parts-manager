@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — {{ bom.name }} — Manchester Electric{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-plus-lg"></i> {{ title }}
+  </h1>
+  <a href="{% url 'catalog:bom_detail' bom.pk %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to {{ bom.name }}
+  </a>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        {% if item %}Edit BOM item in <strong>{{ bom.name }}</strong>{% else %}Add a part to <strong>{{ bom.name }}</strong>{% endif %}
+      </div>
+      <div class="card-body">
+        {% if form.errors %}
+        <div class="alert alert-danger">
+          <strong>Please correct the errors below.</strong>
+          {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.part.id_for_label }}">Part <span class="text-danger">*</span></label>
+            {{ form.part }}
+            {% if form.part.errors %}
+              <div class="invalid-feedback d-block">{{ form.part.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.unit_qty.id_for_label }}">Unit Qty</label>
+            {{ form.unit_qty }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.description.id_for_label }}">Description (override)</label>
+            {{ form.description }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>
+            {{ form.notes }}
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small" for="{{ form.stock_qty.id_for_label }}">Stock Qty</label>
+              {{ form.stock_qty }}
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="{{ form.bin_number.id_for_label }}">Bin Number</label>
+              {{ form.bin_number }}
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="{{ form.oem_number.id_for_label }}">OEM #</label>
+              {{ form.oem_number }}
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="{{ form.j_and_n.id_for_label }}">J&N</label>
+              {{ form.j_and_n }}
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="{{ form.yt_number.id_for_label }}">YT Number</label>
+              {{ form.yt_number }}
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i> {% if item %}Update{% else %}Add Part{% endif %}
+            </button>
+            <a href="{% url 'catalog:bom_detail' bom.pk %}" class="btn btn-outline-secondary">Cancel</a>
+            {% if item %}
+            <form method="post" action="{% url 'catalog:bom_item_delete' bom.pk item.pk %}" class="d-inline ms-auto">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Delete this item from the BOM?');">
+                <i class="bi bi-trash"></i> Delete
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
