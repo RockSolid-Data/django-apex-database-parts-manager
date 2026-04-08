@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} — Manchester Electric{% endblock %}
+{% block title %}{{ title }} — Apex Database{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
   <h1 class="page-heading mb-0">
     <i class="bi bi-diagram-3"></i> {{ title }}
   </h1>
-  <a href="{% url 'catalog:bom_list' %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to BOMs
-  </a>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
 </div>
 
 {% if form.errors %}
@@ -21,23 +21,26 @@
 
 <form method="post">
   {% csrf_token %}
+  {{ form.name }}
   <div class="card mb-3">
     <div class="card-header fw-semibold">BOM Details</div>
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-6">
-          <label class="form-label" for="{{ form.name.id_for_label }}">Name <span class="text-danger">*</span></label>
-          {{ form.name }}
-          {% if form.name.errors %}<div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>{% endif %}
+          <label class="form-label" for="{{ form.unit.id_for_label }}">Unit Number <span class="text-danger">*</span></label>
+          {{ form.unit }}
+          {% if form.unit.errors %}<div class="invalid-feedback d-block">{{ form.unit.errors.0 }}</div>{% endif %}
         </div>
         <div class="col-md-6">
-          <label class="form-label" for="{{ form.unit.id_for_label }}">Unit</label>
-          {{ form.unit }}
+          <label class="form-label" for="{{ form.unit_type.id_for_label }}">Unit Type</label>
+          {{ form.unit_type }}
         </div>
+        {% if bom %}
         <div class="col-md-6">
           <label class="form-label" for="{{ form.application.id_for_label }}">Application</label>
           {{ form.application }}
         </div>
+        {% endif %}
         <div class="col-12">
           <label class="form-label" for="{{ form.description.id_for_label }}">Description</label>
           {{ form.description }}
@@ -46,7 +49,54 @@
     </div>
   </div>
 
-  <div class="d-flex gap-2 mb-4">
+  {% if item_form %}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">First Item (optional)</div>
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label small" for="{{ item_form.part.id_for_label }}">Unit Number</label>
+          {{ item_form.part }}
+          {% if item_form.part.errors %}<div class="invalid-feedback d-block">{{ item_form.part.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small" for="{{ item_form.unit_qty.id_for_label }}">Unit Qty</label>
+          {{ item_form.unit_qty }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small" for="{{ item_form.description.id_for_label }}">Description (override)</label>
+          {{ item_form.description }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small" for="{{ item_form.notes.id_for_label }}">Notes</label>
+          {{ item_form.notes }}
+        </div>
+        <div class="col-6">
+          <label class="form-label small" for="{{ item_form.stock_qty.id_for_label }}">Stock Qty</label>
+          {{ item_form.stock_qty }}
+        </div>
+        <div class="col-6">
+          <label class="form-label small" for="{{ item_form.bin_number.id_for_label }}">Bin Number</label>
+          {{ item_form.bin_number }}
+        </div>
+        <div class="col-6">
+          <label class="form-label small" for="{{ item_form.oem_number.id_for_label }}">OEM #</label>
+          {{ item_form.oem_number }}
+        </div>
+        <div class="col-6">
+          <label class="form-label small" for="{{ item_form.j_and_n.id_for_label }}">J&N</label>
+          {{ item_form.j_and_n }}
+        </div>
+        <div class="col-6">
+          <label class="form-label small" for="{{ item_form.yt_number.id_for_label }}">YT Number</label>
+          {{ item_form.yt_number }}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2 me-sticky-actions">
     <button type="submit" class="btn btn-primary">
       <i class="bi bi-check-lg"></i> Save BOM
     </button>
@@ -54,3 +104,53 @@
   </div>
 </form>
 {% endblock %}
+
+{% if item_form %}
+{% block extra_js %}
+<script>
+(function() {
+  var partSelect = document.getElementById('id_item-part');
+  if (!partSelect) return;
+
+  var fieldMap = {
+    j_and_n: 'id_item-j_and_n',
+    yt_number: 'id_item-yt_number',
+    bin_number: 'id_item-bin_number',
+    oem_number: 'id_item-oem_number',
+    stock_quantity: 'id_item-stock_qty'
+  };
+
+  function fillFromPart(partId) {
+    if (!partId) return;
+    fetch('/api/parts/' + partId + '/detail/')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        Object.keys(fieldMap).forEach(function(key) {
+          var el = document.getElementById(fieldMap[key]);
+          if (el && !el.value && data[key]) {
+            el.value = data[key];
+          }
+        });
+      })
+      .catch(function() {});
+  }
+
+  var observer = new MutationObserver(function() {
+    var ts = partSelect.tomselect;
+    if (ts) {
+      observer.disconnect();
+      ts.on('change', function(value) { fillFromPart(value); });
+    }
+  });
+  observer.observe(partSelect.parentElement || document.body, { childList: true, subtree: true });
+
+  setTimeout(function() {
+    if (partSelect.tomselect) {
+      observer.disconnect();
+      partSelect.tomselect.on('change', function(value) { fillFromPart(value); });
+    }
+  }, 500);
+})();
+</script>
+{% endblock %}
+{% endif %}

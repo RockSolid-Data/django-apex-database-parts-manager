@@ -1,11 +1,16 @@
+import logging
+
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from catalog.models import Part
 
-from .forms import InventoryItemForm, VendorForm
-from .models import Vendor
+from .forms import InventoryItemForm, VendorForm, VendorContactFormSet
+from .models import Vendor, VendorContact
+
+logger = logging.getLogger(__name__)
 
 
 def inventory_item_create(request):
@@ -16,7 +21,9 @@ def inventory_item_create(request):
             data = form.cleaned_data
             cost = data["cost"]
             margin_pct = data["margin_pct"]
-            sale_price = cost * (1 + margin_pct / 100)
+            if margin_pct >= 100:
+                margin_pct = 99  # cap at 99% to avoid division by zero
+            sale_price = cost / (1 - margin_pct / 100)
             supplier_name = data["supplier"].name
 
             part, created = Part.objects.update_or_create(
@@ -32,10 +39,9 @@ def inventory_item_create(request):
                     "is_active": True,
                 },
             )
-            if created:
-                messages.success(request, f"Inventory item '{part.part_number}' created.")
-            else:
-                messages.success(request, f"Inventory item '{part.part_number}' updated.")
+            action = "Created" if created else "Updated"
+            logger.info("[Inventory] %s item %s", action, part.part_number)
+            messages.success(request, f"Inventory item '{part.part_number}' {'created' if created else 'updated'}.")
             return redirect("inventory:inventory_list")
     else:
         form = InventoryItemForm()
@@ -69,8 +75,20 @@ def inventory_list(request):
         .order_by("primary_vendor")
     )
 
+    total_count = parts.count()
+    try:
+        per_page = min(int(request.GET.get("per_page", 50)), 100)
+    except (ValueError, TypeError):
+        per_page = 50
+    paginator = Paginator(parts, per_page)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
     context = {
-        "parts": parts,
+        "parts": page_obj,
+        "page_obj": page_obj,
+        "total_count": total_count,
+        "per_page": per_page,
         "q": q,
         "filter_supplier": filter_supplier,
         "supplier_choices": supplier_choices,
@@ -93,7 +111,7 @@ def reorder_list(request):
     q = request.GET.get("q", "").strip()
     if q:
         parts = parts.filter(
-            Q(key__icontains=q)
+            Q(manufacturer_number__icontains=q)
             | Q(j_and_n__icontains=q)
             | Q(oem_number__icontains=q)
             | Q(description__icontains=q)
@@ -135,8 +153,20 @@ def reorder_list(request):
         .order_by("primary_vendor")
     )
 
+    total_count = parts.count()
+    try:
+        per_page = min(int(request.GET.get("per_page", 50)), 100)
+    except (ValueError, TypeError):
+        per_page = 50
+    paginator = Paginator(parts, per_page)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
     context = {
-        "parts": parts,
+        "parts": page_obj,
+        "page_obj": page_obj,
+        "total_count": total_count,
+        "per_page": per_page,
         "q": q,
         "filter_category": filter_category,
         "filter_supplier": filter_supplier,
@@ -156,19 +186,32 @@ def vendor_list(request):
         vendors = vendors.filter(
             Q(name__icontains=q)
             | Q(contact_name__icontains=q)
-            | Q(email__icontains=q)
-            | Q(phone__icontains=q)
-            | Q(city__icontains=q)
-            | Q(state__icontains=q)
+            | Q(fax__icontains=q)
+            | Q(account_number__icontains=q)
+            | Q(contacts__name__icontains=q)
+            | Q(contacts__email__icontains=q)
+            | Q(contacts__phone__icontains=q)
             | Q(notes__icontains=q)
-        )
+        ).distinct()
 
     show_inactive = request.GET.get("inactive", "").lower() == "1"
     if not show_inactive:
         vendors = vendors.filter(is_active=True)
 
+    total_count = vendors.count()
+    try:
+        per_page = min(int(request.GET.get("per_page", 50)), 100)
+    except (ValueError, TypeError):
+        per_page = 50
+    paginator = Paginator(vendors, per_page)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
     context = {
-        "vendors": vendors,
+        "vendors": page_obj,
+        "page_obj": page_obj,
+        "total_count": total_count,
+        "per_page": per_page,
         "q": q,
         "show_inactive": show_inactive,
     }
@@ -181,15 +224,25 @@ def vendor_create(request):
     """Create a new vendor."""
     if request.method == "POST":
         form = VendorForm(request.POST)
-        if form.is_valid():
+        contact_formset = VendorContactFormSet(request.POST, prefix="contacts")
+        if form.is_valid() and contact_formset.is_valid():
             vendor = form.save()
+            contact_formset.instance = vendor
+            contacts = contact_formset.save()
+            if contacts and not any(c.is_primary for c in contacts):
+                first = contacts[0]
+                first.is_primary = True
+                first.save(update_fields=["is_primary"])
+            logger.info("[Vendor] Created '%s' (pk=%s)", vendor.name, vendor.pk)
             messages.success(request, f"Vendor '{vendor.name}' created.")
             return redirect("inventory:vendor_list")
     else:
         form = VendorForm()
+        contact_formset = VendorContactFormSet(prefix="contacts")
 
     return render(request, "inventory/vendor_form.html", {
         "form": form,
+        "contact_formset": contact_formset,
         "vendor": None,
         "title": "Add New Vendor",
     })
@@ -200,15 +253,25 @@ def vendor_edit(request, pk):
     vendor = get_object_or_404(Vendor, pk=pk)
     if request.method == "POST":
         form = VendorForm(request.POST, instance=vendor)
-        if form.is_valid():
+        contact_formset = VendorContactFormSet(request.POST, prefix="contacts", instance=vendor)
+        if form.is_valid() and contact_formset.is_valid():
             form.save()
+            contact_formset.save()
+            remaining = vendor.contacts.all()
+            if remaining.exists() and not remaining.filter(is_primary=True).exists():
+                first = remaining.first()
+                first.is_primary = True
+                first.save(update_fields=["is_primary"])
+            logger.info("[Vendor] Updated '%s' (pk=%s)", vendor.name, vendor.pk)
             messages.success(request, f"Vendor '{vendor.name}' updated.")
             return redirect("inventory:vendor_list")
     else:
         form = VendorForm(instance=vendor)
+        contact_formset = VendorContactFormSet(prefix="contacts", instance=vendor)
 
     return render(request, "inventory/vendor_form.html", {
         "form": form,
+        "contact_formset": contact_formset,
         "vendor": vendor,
         "title": "Edit Vendor",
     })
@@ -220,6 +283,7 @@ def vendor_delete(request, pk):
     if request.method == "POST":
         name = vendor.name
         vendor.delete()
+        logger.info("[Vendor] Deleted '%s' (pk=%s)", name, pk)
         messages.success(request, f"Vendor '{name}' deleted.")
         return redirect("inventory:vendor_list")
     return redirect("inventory:vendor_edit", pk=pk)

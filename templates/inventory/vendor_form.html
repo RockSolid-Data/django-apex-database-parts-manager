@@ -1,157 +1,234 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} — Manchester Electric{% endblock %}
+{% block title %}{{ title }} — Apex Database{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
   <h1 class="page-heading mb-0">
     <i class="bi bi-truck"></i> {{ title }}
   </h1>
-  <a href="{% url 'inventory:vendor_list' %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to Vendors
-  </a>
+  <div class="d-flex gap-2">
+    {% if vendor %}
+    <form method="post" action="{% url 'inventory:vendor_delete' vendor.pk %}" class="d-inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-danger" data-confirm="Delete this vendor? This cannot be undone.">
+        <i class="bi bi-trash"></i> Delete Vendor
+      </button>
+    </form>
+    {% endif %}
+    <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </button>
+  </div>
 </div>
 
-{% if form.errors %}
+{% if form.errors or contact_formset.errors %}
 <div class="alert alert-danger">
   <strong>Please correct the errors below.</strong>
   {{ form.non_field_errors }}
 </div>
 {% endif %}
 
-<form method="post">
+<form method="post" id="vendor-form">
   {% csrf_token %}
 
+  {# ===== Company Info (Primary) ===== #}
   <div class="card mb-3">
-    <div class="card-header fw-semibold">Contact</div>
+    <div class="card-header fw-semibold">Company Info</div>
     <div class="card-body">
       <div class="row g-3">
-        <div class="col-md-6">
+        <div class="col-md-4">
           <label class="form-label small mb-1" for="{{ form.name.id_for_label }}">
-            {{ form.name.label }} <span class="text-danger">*</span>
+            Vendor Name <span class="text-danger">*</span>
           </label>
           {{ form.name }}
           {% if form.name.errors %}
             <div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>
           {% endif %}
         </div>
-        <div class="col-md-6">
-          <label class="form-label small mb-1" for="{{ form.contact_name.id_for_label }}">
-            {{ form.contact_name.label }}
-          </label>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.fax.id_for_label }}">Fax</label>
+          {{ form.fax }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.account_number.id_for_label }}">Account Number</label>
+          {{ form.account_number }}
+        </div>
+      </div>
+      <div class="row g-3 mt-1">
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.contact_name.id_for_label }}">Contact Name</label>
           {{ form.contact_name }}
-          {% if form.contact_name.errors %}
-            <div class="invalid-feedback d-block">{{ form.contact_name.errors.0 }}</div>
-          {% endif %}
         </div>
-        <div class="col-md-6">
-          <label class="form-label small mb-1" for="{{ form.email.id_for_label }}">
-            {{ form.email.label }}
-          </label>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.email.id_for_label }}">Email</label>
           {{ form.email }}
-          {% if form.email.errors %}
-            <div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>
-          {% endif %}
         </div>
-        <div class="col-md-6">
-          <label class="form-label small mb-1" for="{{ form.phone.id_for_label }}">
-            {{ form.phone.label }}
-          </label>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.phone.id_for_label }}">Phone</label>
           {{ form.phone }}
-          {% if form.phone.errors %}
-            <div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>
-          {% endif %}
         </div>
       </div>
     </div>
   </div>
 
+  {# ===== Additional Contacts ===== #}
   <div class="card mb-3">
-    <div class="card-header fw-semibold">Address</div>
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      Additional Contacts
+      <button type="button" class="btn btn-sm btn-outline-primary" id="add-contact-btn">
+        <i class="bi bi-plus-lg"></i> Add Contact
+      </button>
+    </div>
+    <div class="card-body" id="contacts-container">
+      {{ contact_formset.management_form }}
+      {% for cf in contact_formset %}
+      <div class="contact-row border rounded p-3 mb-2 d-flex align-items-start gap-2 {% if forloop.first %}bg-light{% endif %}" data-index="{{ forloop.counter0 }}">
+        <div class="row g-2 flex-grow-1">
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Name</label>
+            {{ cf.name }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Phone</label>
+            {{ cf.phone }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Email</label>
+            {{ cf.email }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Fax</label>
+            {{ cf.fax }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Department</label>
+            {{ cf.department }}
+          </div>
+        </div>
+        <div class="contact-delete-cell pt-4">
+          <button type="button" class="btn btn-link btn-sm text-danger p-0 contact-delete-btn" title="Remove contact" aria-label="Remove contact">
+            <i class="bi bi-trash"></i>
+          </button>
+          <span class="d-none">{{ cf.DELETE }}</span>
+        </div>
+        {{ cf.id }}
+        {{ cf.ordering }}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ===== Main Address ===== #}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Main Address</div>
     <div class="card-body">
       <div class="row g-3">
         <div class="col-12">
-          <label class="form-label small mb-1" for="{{ form.address_line1.id_for_label }}">
-            {{ form.address_line1.label }}
-          </label>
+          <label class="form-label small mb-1">Address Line 1</label>
           {{ form.address_line1 }}
-          {% if form.address_line1.errors %}
-            <div class="invalid-feedback d-block">{{ form.address_line1.errors.0 }}</div>
-          {% endif %}
         </div>
         <div class="col-12">
-          <label class="form-label small mb-1" for="{{ form.address_line2.id_for_label }}">
-            {{ form.address_line2.label }}
-          </label>
+          <label class="form-label small mb-1">Address Line 2</label>
           {{ form.address_line2 }}
-          {% if form.address_line2.errors %}
-            <div class="invalid-feedback d-block">{{ form.address_line2.errors.0 }}</div>
-          {% endif %}
         </div>
         <div class="col-md-4">
-          <label class="form-label small mb-1" for="{{ form.city.id_for_label }}">
-            {{ form.city.label }}
-          </label>
+          <label class="form-label small mb-1">City</label>
           {{ form.city }}
-          {% if form.city.errors %}
-            <div class="invalid-feedback d-block">{{ form.city.errors.0 }}</div>
-          {% endif %}
         </div>
         <div class="col-md-4">
-          <label class="form-label small mb-1" for="{{ form.state.id_for_label }}">
-            {{ form.state.label }}
-          </label>
+          <label class="form-label small mb-1">State / Province</label>
           {{ form.state }}
-          {% if form.state.errors %}
-            <div class="invalid-feedback d-block">{{ form.state.errors.0 }}</div>
-          {% endif %}
         </div>
         <div class="col-md-4">
-          <label class="form-label small mb-1" for="{{ form.zip_code.id_for_label }}">
-            {{ form.zip_code.label }}
-          </label>
+          <label class="form-label small mb-1">ZIP / Postal Code</label>
           {{ form.zip_code }}
-          {% if form.zip_code.errors %}
-            <div class="invalid-feedback d-block">{{ form.zip_code.errors.0 }}</div>
-          {% endif %}
         </div>
       </div>
     </div>
   </div>
 
+  {# ===== Remit Address / Accounts Receivable ===== #}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Remit Address / Accounts Receivable</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label small mb-1">Address Line 1</label>
+          {{ form.remit_line1 }}
+        </div>
+        <div class="col-12">
+          <label class="form-label small mb-1">Address Line 2</label>
+          {{ form.remit_line2 }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">City</label>
+          {{ form.remit_city }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">State / Province</label>
+          {{ form.remit_state }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">ZIP / Postal Code</label>
+          {{ form.remit_zip }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Notes ===== #}
   <div class="card mb-3">
     <div class="card-header fw-semibold">Notes</div>
     <div class="card-body">
-      <label class="form-label small mb-1" for="{{ form.notes.id_for_label }}">
-        {{ form.notes.label }}
-      </label>
       {{ form.notes }}
-      {% if form.notes.errors %}
-        <div class="invalid-feedback d-block">{{ form.notes.errors.0 }}</div>
-      {% endif %}
-
       <div class="form-check mt-3">
         {{ form.is_active }}
-        <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
-          {{ form.is_active.label }}
-        </label>
+        <label class="form-check-label" for="{{ form.is_active.id_for_label }}">Active</label>
       </div>
     </div>
   </div>
 
-  <div class="d-flex gap-2 mb-4 flex-wrap">
+  <div class="d-flex gap-2 flex-wrap me-sticky-actions">
     <button type="submit" class="btn btn-primary">
       <i class="bi bi-check-lg"></i> Save Vendor
     </button>
     <a href="{% url 'inventory:vendor_list' %}" class="btn btn-outline-secondary">Cancel</a>
-    {% if vendor %}
-    <form method="post" action="{% url 'inventory:vendor_delete' vendor.pk %}" class="d-inline ms-auto">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Delete this vendor? This cannot be undone.');">
-        <i class="bi bi-trash"></i> Delete
-      </button>
-    </form>
-    {% endif %}
   </div>
 </form>
+
+<script>
+(function() {
+  var totalForms = document.getElementById('id_contacts-TOTAL_FORMS');
+  var container = document.getElementById('contacts-container');
+  document.getElementById('add-contact-btn').addEventListener('click', function() {
+    var idx = parseInt(totalForms.value);
+    var tmpl = container.querySelector('.contact-row');
+    if (!tmpl) return;
+    var newRow = tmpl.cloneNode(true);
+    newRow.classList.remove('bg-light');
+    newRow.querySelectorAll('input, select, textarea').forEach(function(el) {
+      var name = el.getAttribute('name');
+      if (name) {
+        el.setAttribute('name', name.replace(/-\d+-/, '-' + idx + '-'));
+        el.setAttribute('id', el.getAttribute('id').replace(/-\d+-/, '-' + idx + '-'));
+      }
+      if (el.type === 'checkbox') el.checked = false;
+      else el.value = '';
+    });
+    container.appendChild(newRow);
+    totalForms.value = idx + 1;
+  });
+  container.addEventListener('click', function(e) {
+    var btn = e.target.closest('.contact-delete-btn');
+    if (!btn) return;
+    var row = btn.closest('.contact-row');
+    var deleteInput = row.querySelector('input[name*="-DELETE"]');
+    if (deleteInput) {
+      deleteInput.checked = !deleteInput.checked;
+      row.classList.toggle('opacity-50', deleteInput.checked);
+    }
+  });
+})();
+</script>
 {% endblock %}

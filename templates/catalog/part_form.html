@@ -1,16 +1,29 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} — Manchester Electric{% endblock %}
+{% block title %}{{ title }} — Apex Database{% endblock %}
+
+{% block extra_css %}
+<style>
+  #main-content:has(.part-form-header) {
+    padding-top: 0 !important;
+  }
+  .part-form-header {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background-color: var(--me-body-bg);
+    border-bottom: 1px solid var(--me-footer-border);
+    padding: 1.25rem 0 1rem;
+    margin-bottom: 1rem;
+  }
+  .card-body .ts-dropdown .ts-dropdown-content {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="page-heading mb-0">
-    <i class="bi bi-box-seam"></i> {{ title }}
-  </h1>
-  <a href="{% url 'catalog:part_list' %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to Parts List
-  </a>
-</div>
 
 {% if form.errors %}
 <div class="alert alert-danger">
@@ -19,30 +32,58 @@
 </div>
 {% endif %}
 
-<form method="post" enctype="multipart/form-data">
+<form method="post" enctype="multipart/form-data" id="part-main-form">
   {% csrf_token %}
 
-  <div class="card mb-3">
-    <div class="card-header fw-semibold">Identification</div>
-    <div class="card-body">
-      <div class="row g-3">
-        {% for field in form %}
-          {% if field.name in "part_number,part_name,key,yt_number,j_and_n,oem_number,item_no,category,type,oem_type,item_typ,oem,primary_vendor,catalog,plug_id" %}
-          <div class="col-md-4">
-            {% if field.field.widget.input_type == "checkbox" %}
-              <div class="form-check mt-4">{{ field }} <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
-            {% else %}
-              <label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
-              {{ field }}
-              {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors.0 }}</div>{% endif %}
-            {% endif %}
-          </div>
-          {% endif %}
-        {% endfor %}
+  {# ===== Sticky header with category dropdown ===== #}
+  <div class="part-form-header">
+    <div class="d-flex justify-content-between align-items-center">
+      <h1 class="page-heading mb-0">
+        <i class="bi bi-box-seam"></i> {{ title }}
+      </h1>
+      <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+          <label class="form-label mb-0 fw-semibold text-nowrap" for="id_category">Category:</label>
+          {{ form.category }}
+        </div>
+        <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Back
+        </button>
       </div>
     </div>
   </div>
 
+  {# ===== Identification — always-visible core fields ===== #}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Identification</span>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-primary" id="addPartFieldBtn" data-bs-toggle="modal" data-bs-target="#addPartFieldModal" disabled>
+          <i class="bi bi-plus-lg"></i> Add Custom Field
+        </button>
+        <a href="{% url 'catalog:part_category_create' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-plus-lg"></i> Add New Category
+        </a>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for field in form %}
+          {% if field.name in "part_number,part_name,manufacturer_number,yt_number,j_and_n,oem_number,voltage,item_no,type,oem_type,item_typ,oem,primary_vendor,catalog,plug_id" %}
+          <div class="col-md-4">
+            <label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+            {{ field }}
+            {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors.0 }}</div>{% endif %}
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {# Category-specific custom fields (beyond the defaults) #}
+      <div class="row g-3 mt-1 d-none" id="category-fields"></div>
+    </div>
+  </div>
+
+  {# ===== Pricing & Stock ===== #}
   <div class="card mb-3">
     <div class="card-header fw-semibold">Pricing &amp; Stock</div>
     <div class="card-body">
@@ -60,6 +101,7 @@
     </div>
   </div>
 
+  {# ===== Description & Notes ===== #}
   <div class="card mb-3">
     <div class="card-header fw-semibold">Description &amp; Notes</div>
     <div class="card-body">
@@ -77,40 +119,237 @@
     </div>
   </div>
 
+  {# ===== Units ===== #}
   <div class="card mb-3">
-    <div class="card-header fw-semibold">Flags, Image &amp; Link</div>
-    <div class="card-body">
-      <div class="row g-3">
-        {% for field in form %}
-          {% if field.name in "has_picture,has_interchange,has_superseding,image,unit,is_active" %}
-          <div class="col-md-4">
-            {% if field.field.widget.input_type == "checkbox" %}
-              <div class="form-check mt-4">{{ field }} <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
-            {% else %}
-              <label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
-              {{ field }}
-              {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors.0 }}</div>{% endif %}
-            {% endif %}
-          </div>
-          {% endif %}
-        {% endfor %}
+    <div class="card-header fw-semibold">Units</div>
+    <div class="card-body" style="overflow: visible;">
+      <p class="text-muted small mb-3">
+        Search for existing units, or enter a unit number manually to link.
+      </p>
+
+      <h6 class="text-muted mb-2">Option A: Search Existing Units</h6>
+      <div class="mb-3">
+        <label class="form-label small mb-1" for="{{ form.units.id_for_label }}">Linked Units</label>
+        {{ form.units }}
+        {% if form.units.errors %}<div class="invalid-feedback d-block">{{ form.units.errors.0 }}</div>{% endif %}
+      </div>
+
+      <hr>
+      <h6 class="text-muted mb-2">Option B: Enter Unit Number</h6>
+      <div class="mb-1">
+        <label class="form-label small mb-1" for="id_manual_unit_number">Unit Number</label>
+        <input type="text" class="form-control" id="id_manual_unit_number" name="manual_unit_number"
+               placeholder="Type a unit number to link..."
+               value="{{ manual_unit_number|default:'' }}">
+        <div class="form-text">If the unit exists, it will be linked. If not, a new unit record will be created.</div>
       </div>
     </div>
   </div>
 
-  <div class="d-flex gap-2 mb-4 flex-wrap">
-    <button type="submit" class="btn btn-primary">
-      <i class="bi bi-check-lg"></i> Save Part
-    </button>
-    <a href="{% url 'catalog:part_list' %}" class="btn btn-outline-secondary">Cancel</a>
-    {% if part %}
-    <form method="post" action="{% url 'catalog:part_delete' part.pk %}" class="d-inline ms-auto">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Delete this part? This cannot be undone.');">
-        <i class="bi bi-trash"></i> Delete
-      </button>
-    </form>
-    {% endif %}
+  {# ===== Images ===== #}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Images</div>
+    <div class="card-body">
+      {% if part and part.images.exists %}
+      <div class="row g-2 mb-3">
+        {% for img in part.images.all %}
+        <div class="col-auto">
+          <div class="position-relative d-inline-block">
+            <img src="{{ img.image.url }}" alt="Part image" class="rounded border" style="max-height:100px;">
+            <div class="form-check position-absolute top-0 end-0 m-1">
+              <input type="checkbox" class="form-check-input" name="delete_image" value="{{ img.pk }}" id="del_img_{{ img.pk }}">
+              <label class="form-check-label visually-hidden" for="del_img_{{ img.pk }}">Delete</label>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="text-muted small mb-2">Check images above to remove them on save.</p>
+      {% endif %}
+      <label class="form-label small mb-1">Add Images</label>
+      <input type="file" name="part_images" class="form-control" multiple accept="image/*">
+    </div>
   </div>
+
+
 </form>
+
+{# ===== Action buttons ===== #}
+<div class="d-flex gap-2 flex-wrap me-sticky-actions">
+  <button type="submit" form="part-main-form" class="btn btn-primary">
+    <i class="bi bi-check-lg"></i> Save Part
+  </button>
+  <a href="{% url 'catalog:part_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  {% if part %}
+  <form method="post" action="{% url 'catalog:part_delete' part.pk %}" class="d-inline ms-auto">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline-danger" data-confirm="Delete this part? This cannot be undone.">
+      <i class="bi bi-trash"></i> Delete
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{# ===== Add Custom Field Modal ===== #}
+<div class="modal fade" id="addPartFieldModal" tabindex="-1" aria-labelledby="addPartFieldModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addPartFieldModalLabel">Add Custom Field</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="part-modal-error" class="alert alert-danger d-none"></div>
+        <p class="text-muted small mb-3">Adding field to category: <strong id="part-modal-cat-name"></strong></p>
+        <div class="mb-3">
+          <label for="part-modal-field-label" class="form-label">Field Label</label>
+          <input type="text" class="form-control" id="part-modal-field-label" placeholder="e.g. Weight">
+        </div>
+        <div class="mb-3">
+          <label for="part-modal-field-name" class="form-label">Field Name (internal key)</label>
+          <input type="text" class="form-control" id="part-modal-field-name" placeholder="e.g. weight">
+          <div class="form-text">Lowercase, no spaces (auto-generated from label).</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="part-modal-save-btn">
+          <i class="bi bi-plus-lg"></i> Add Field
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var allCategoryFields = JSON.parse('{{ category_fields_json|escapejs }}');
+  var existingSpecs = JSON.parse('{{ existing_specs_json|escapejs }}');
+
+  var ALWAYS_VISIBLE = [
+    'part_number','part_name','manufacturer_number','yt_number',
+    'j_and_n','oem_number','voltage','item_no','type','oem_type',
+    'item_typ','oem','primary_vendor','catalog','plug_id'
+  ];
+
+  var categorySelect = document.getElementById('id_category');
+  var container = document.getElementById('category-fields');
+  var addFieldBtn = document.getElementById('addPartFieldBtn');
+
+  function toggleAddFieldBtn() {
+    var cat = categorySelect.value;
+    addFieldBtn.disabled = !cat || cat === 'Other';
+  }
+
+  function renderFields(category) {
+    container.innerHTML = '';
+    var catFields = (allCategoryFields[category] || []).filter(function(f) {
+      return ALWAYS_VISIBLE.indexOf(f.name) === -1;
+    });
+
+    if (catFields.length === 0) {
+      container.classList.add('d-none');
+      return;
+    }
+
+    container.classList.remove('d-none');
+    catFields.forEach(function(f) { container.appendChild(buildField(f)); });
+  }
+
+  function buildField(f) {
+    var col = document.createElement('div');
+    col.className = 'col-md-4';
+    var inputName = 'spec_' + f.name;
+    var savedVal = existingSpecs[f.name] || '';
+
+    var lbl = document.createElement('label');
+    lbl.className = 'form-label small mb-1';
+    lbl.setAttribute('for', 'id_' + inputName);
+    lbl.textContent = f.label;
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'form-control';
+    inp.name = inputName;
+    inp.id = 'id_' + inputName;
+    inp.value = (savedVal === true || savedVal === false) ? '' : savedVal;
+    col.appendChild(lbl);
+    col.appendChild(inp);
+    return col;
+  }
+
+  categorySelect.addEventListener('change', function() {
+    renderFields(this.value);
+    toggleAddFieldBtn();
+  });
+
+  if (categorySelect.value) {
+    renderFields(categorySelect.value);
+  }
+  toggleAddFieldBtn();
+
+  // Modal logic
+  var labelInput = document.getElementById('part-modal-field-label');
+  var nameInput = document.getElementById('part-modal-field-name');
+  var catNameSpan = document.getElementById('part-modal-cat-name');
+
+  document.getElementById('addPartFieldModal').addEventListener('show.bs.modal', function() {
+    catNameSpan.textContent = categorySelect.value;
+    labelInput.value = '';
+    nameInput.value = '';
+    document.getElementById('part-modal-error').classList.add('d-none');
+  });
+
+  labelInput.addEventListener('input', function() {
+    nameInput.value = this.value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  });
+
+  document.getElementById('part-modal-save-btn').addEventListener('click', function() {
+    var btn = this;
+    var errorDiv = document.getElementById('part-modal-error');
+    errorDiv.classList.add('d-none');
+    var fieldLabel = labelInput.value.trim();
+    var fieldName = nameInput.value.trim();
+    var catName = categorySelect.value;
+    if (!fieldLabel || !fieldName) {
+      errorDiv.textContent = 'Both label and name are required.';
+      errorDiv.classList.remove('d-none');
+      return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
+
+    var formData = new FormData();
+    formData.append('category_name', catName);
+    formData.append('field_label', fieldLabel);
+    formData.append('field_name', fieldName);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch('{% url "catalog:part_category_custom_field_add_api" %}', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-plus-lg"></i> Add Field';
+      if (data.error) {
+        errorDiv.textContent = data.error;
+        errorDiv.classList.remove('d-none');
+        return;
+      }
+      var newField = {name: data.field_name, label: data.field_label, type: 'text'};
+      if (!allCategoryFields[catName]) allCategoryFields[catName] = [];
+      allCategoryFields[catName].push(newField);
+      container.classList.remove('d-none');
+      container.appendChild(buildField(newField));
+      bootstrap.Modal.getInstance(document.getElementById('addPartFieldModal')).hide();
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-plus-lg"></i> Add Field';
+      errorDiv.textContent = 'Network error. Please try again.';
+      errorDiv.classList.remove('d-none');
+    });
+  });
+})();
+</script>
 {% endblock %}

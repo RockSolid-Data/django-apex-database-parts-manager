@@ -1,16 +1,25 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} — Manchester Electric{% endblock %}
+{% block title %}{{ title }} — Apex Database{% endblock %}
+
+{% block extra_css %}
+<style>
+  #main-content:has(.app-form-header) {
+    padding-top: 0 !important;
+  }
+  .app-form-header {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background-color: var(--me-body-bg);
+    border-bottom: 1px solid var(--me-footer-border);
+    padding: 1.25rem 0 1rem;
+    margin-bottom: 1rem;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="page-heading mb-0">
-    <i class="bi bi-pencil"></i> {{ title }}
-  </h1>
-  <a href="{% url 'catalog:application_list' %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to Applications
-  </a>
-</div>
 
 {% if form.errors %}
 <div class="alert alert-danger">
@@ -19,13 +28,97 @@
 </div>
 {% endif %}
 
-<form method="post">
+<form method="post" id="app-main-form">
   {% csrf_token %}
+
+  {# ===== Sticky header ===== #}
+  <div class="app-form-header">
+    <div class="d-flex justify-content-between align-items-center">
+      <h1 class="page-heading mb-0">
+        <i class="bi bi-pencil"></i> {{ title }}
+      </h1>
+      <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back
+      </button>
+    </div>
+  </div>
+
+  {# ===== Application Details — all fields in a 3-column grid ===== #}
   <div class="card mb-3">
-    <div class="card-header fw-semibold">Application Details</div>
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Application Details</span>
+      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCustomFieldModal">
+        <i class="bi bi-plus-lg"></i> Add Custom Field
+      </button>
+    </div>
     <div class="card-body">
       <div class="row g-3">
-        {% for field in form %}
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.unit_number.id_for_label }}">Unit Number</label>
+          {{ form.unit_number }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.make.id_for_label }}">Make</label>
+          {{ form.make }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.model.id_for_label }}">Model</label>
+          {{ form.model }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.engine.id_for_label }}">Engine</label>
+          {{ form.engine }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.year.id_for_label }}">Year</label>
+          {{ form.year }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.mfr.id_for_label }}">Manufacturer</label>
+          {{ form.mfr }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.volt.id_for_label }}">Voltage</label>
+          {{ form.volt }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.amp.id_for_label }}">Amps</label>
+          {{ form.amp }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.fuel_type.id_for_label }}">Fuel Type</label>
+          {{ form.fuel_type }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.vin.id_for_label }}">VIN</label>
+          {{ form.vin }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.alt_pulley.id_for_label }}">Alt Pulley</label>
+          {{ form.alt_pulley }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.unit_type_name.id_for_label }}">Unit Type</label>
+          {{ form.unit_type_name }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.other_number.id_for_label }}">Other Number</label>
+          {{ form.other_number }}
+        </div>
+      </div>
+
+      {# ===== Custom Fields (dynamic, from ApplicationTypeField) ===== #}
+      <div id="custom-fields-container" class="row g-3 mt-0"></div>
+    </div>
+  </div>
+
+  {# ===== Existing fieldsets (Notes) ===== #}
+  {% for section_title, fields in fieldsets %}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">{{ section_title }}</div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for field in fields %}
         <div class="{% if field.name in 'options,notes' %}col-12{% else %}col-md-4{% endif %}">
           {% if field.field.widget.input_type == "checkbox" %}
             <div class="form-check mt-4">
@@ -40,29 +133,184 @@
               {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
             </label>
             {{ field }}
-            {% if field.errors %}
-              <div class="invalid-feedback d-block">{{ field.errors.0 }}</div>
-            {% endif %}
+          {% endif %}
+          {% if field.errors %}
+            <div class="invalid-feedback d-block">{{ field.errors.0 }}</div>
           {% endif %}
         </div>
         {% endfor %}
       </div>
     </div>
   </div>
+  {% endfor %}
 
-  <div class="d-flex gap-2 mb-4 flex-wrap">
-    <button type="submit" class="btn btn-primary">
-      <i class="bi bi-check-lg"></i> Save Application
-    </button>
-    <a href="{% url 'catalog:application_list' %}" class="btn btn-outline-secondary">Cancel</a>
-    {% if application %}
-    <form method="post" action="{% url 'catalog:application_delete' application.pk %}" class="d-inline ms-auto">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Delete this application? This cannot be undone.');">
-        <i class="bi bi-trash"></i> Delete
-      </button>
-    </form>
-    {% endif %}
+  {# ===== Link Units ===== #}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">
+      <i class="bi bi-link-45deg"></i> Linked Units
+    </div>
+    <div class="card-body">
+      {% if linked_units %}
+      <table class="table table-sm table-hover mb-3">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Unit Number</th>
+            <th>Position</th>
+            <th>Notes</th>
+            <th class="text-center" style="width: 60px;">Keep</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for au in linked_units %}
+          <tr>
+            <td class="ps-3">{{ au.unit.unit_number }}</td>
+            <td>{{ au.position|default:"—" }}</td>
+            <td>{{ au.notes|truncatewords:8|default:"—" }}</td>
+            <td class="text-center">
+              <input type="checkbox" class="form-check-input" name="keep_unit" value="{{ au.unit.pk }}" checked>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      <label class="form-label small mb-1">Add Units</label>
+      <select name="link_units" multiple
+              class="form-select js-ajax-select"
+              data-url="/api/units/autocomplete/"
+              data-placeholder="Search units to link..."
+              {% if application %}data-exclude-app="{{ application.pk }}"{% endif %}>
+      </select>
+      <div class="form-text">Search and select one or more units to link to this application.</div>
+    </div>
   </div>
+
+
 </form>
+
+<div class="d-flex gap-2 flex-wrap me-sticky-actions">
+  <button type="submit" form="app-main-form" class="btn btn-primary">
+    <i class="bi bi-check-lg"></i> Save Application
+  </button>
+  <a href="{% if application %}{% url 'catalog:application_detail' application.pk %}{% else %}{% url 'catalog:application_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+  {% if application %}
+  <form method="post" action="{% url 'catalog:application_delete' application.pk %}" class="d-inline ms-auto">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline-danger" data-confirm="Delete this application? This cannot be undone.">
+      <i class="bi bi-trash"></i> Delete
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{# ===== Add Custom Field Modal ===== #}
+<div class="modal fade" id="addCustomFieldModal" tabindex="-1" aria-labelledby="addCustomFieldModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addCustomFieldModalLabel">Add Custom Field</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-error" class="alert alert-danger d-none"></div>
+        <div class="mb-3">
+          <label for="modal-field-label" class="form-label">Field Label</label>
+          <input type="text" class="form-control" id="modal-field-label" placeholder="e.g. Displacement">
+        </div>
+        <div class="mb-3">
+          <label for="modal-field-name" class="form-label">Field Name (internal key)</label>
+          <input type="text" class="form-control" id="modal-field-name" placeholder="e.g. displacement">
+          <div class="form-text">Lowercase, no spaces (auto-generated from label).</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="modal-save-btn">
+          <i class="bi bi-plus-lg"></i> Add Field
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var customFields = JSON.parse('{{ custom_fields_json|escapejs }}');
+  var existingSpecs = JSON.parse('{{ existing_type_specs_json|escapejs }}');
+  var container = document.getElementById('custom-fields-container');
+
+  function buildField(f) {
+    var col = document.createElement('div');
+    col.className = 'col-md-4';
+    var val = existingSpecs[f.name] || '';
+    col.innerHTML =
+      '<label class="form-label small mb-1" for="spec_' + f.name + '">' + f.label + '</label>' +
+      '<input type="text" class="form-control" id="spec_' + f.name + '" name="spec_' + f.name + '" value="' + val.replace(/"/g, '&quot;') + '">';
+    return col;
+  }
+
+  function renderCustomFields() {
+    container.innerHTML = '';
+    if (!customFields.length) return;
+    customFields.forEach(function(f) { container.appendChild(buildField(f)); });
+  }
+
+  renderCustomFields();
+
+  // Auto-generate field_name from label
+  var labelInput = document.getElementById('modal-field-label');
+  var nameInput = document.getElementById('modal-field-name');
+  labelInput.addEventListener('input', function() {
+    nameInput.value = this.value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  });
+
+  // Save button in modal
+  document.getElementById('modal-save-btn').addEventListener('click', function() {
+    var btn = this;
+    var errorDiv = document.getElementById('modal-error');
+    errorDiv.classList.add('d-none');
+    var fieldLabel = labelInput.value.trim();
+    var fieldName = nameInput.value.trim();
+    if (!fieldLabel || !fieldName) {
+      errorDiv.textContent = 'Both label and name are required.';
+      errorDiv.classList.remove('d-none');
+      return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
+
+    var formData = new FormData();
+    formData.append('field_label', fieldLabel);
+    formData.append('field_name', fieldName);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch('{% url "catalog:application_custom_field_add_api" %}', {
+      method: 'POST',
+      body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-plus-lg"></i> Add Field';
+      if (data.error) {
+        errorDiv.textContent = data.error;
+        errorDiv.classList.remove('d-none');
+        return;
+      }
+      customFields.push({name: data.field_name, label: data.field_label});
+      container.appendChild(buildField({name: data.field_name, label: data.field_label}));
+      labelInput.value = '';
+      nameInput.value = '';
+      var modal = bootstrap.Modal.getInstance(document.getElementById('addCustomFieldModal'));
+      modal.hide();
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-plus-lg"></i> Add Field';
+      errorDiv.textContent = 'Network error. Please try again.';
+      errorDiv.classList.remove('d-none');
+    });
+  });
+})();
+</script>
 {% endblock %}

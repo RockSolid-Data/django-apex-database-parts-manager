@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item.part.part_number }} — {{ bom.name }} — Apex Database{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-box-seam"></i> View BOM Item
+  </h1>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        BOM item in <strong>{{ bom.name }}</strong>
+      </div>
+      <div class="card-body">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Unit Number</label>
+          <div class="form-control bg-light">
+            {% if item.part %}
+            <a href="{% url 'catalog:part_detail' item.part.pk %}">{{ item.part.part_number }}</a>{% if item.part.part_name %} – {{ item.part.part_name }}{% endif %}
+            {% else %}—{% endif %}
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Unit Qty</label>
+          <div class="form-control bg-light">{{ item.unit_qty }}</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Description (override)</label>
+          <div class="form-control bg-light">{{ item.description|default:"—" }}</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Notes</label>
+          <div class="form-control bg-light" style="min-height:4.5rem;height:auto;white-space:pre-wrap;">{{ item.notes|default:"—" }}</div>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">Stock Qty</label>
+            <div class="form-control bg-light">{% if item.stock_qty %}{{ item.stock_qty }}{% else %}0{% endif %}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">Bin Number</label>
+            <div class="form-control bg-light">{{ item.bin_number|default:"—" }}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">OEM #</label>
+            <div class="form-control bg-light">{{ item.oem_number|default:item.part.oem_number|default:"—" }}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">J&N</label>
+            <div class="form-control bg-light">{{ item.j_and_n|default:item.part.j_and_n|default:"—" }}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">YT Number</label>
+            <div class="form-control bg-light">{{ item.yt_number|default:item.part.yt_number|default:"—" }}</div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap me-sticky-actions">
+          <a href="{% url 'catalog:bom_item_edit' bom.pk item.pk %}" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> Edit
+          </a>
+          <a href="{% url 'catalog:bom_detail' bom.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          <form method="post" action="{% url 'catalog:bom_item_delete' bom.pk item.pk %}" class="d-inline ms-auto">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger" data-confirm="Remove this part from the BOM?">
+              <i class="bi bi-trash"></i> Delete
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

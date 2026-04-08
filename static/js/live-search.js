@@ -4,19 +4,24 @@
  * so the active input keeps focus the entire time.
  *
  * Classes used:
- *   .js-live-search-form   – the <form>
- *   .js-search-with-clear  – wrapper around an input that has a clear (×) button
+ *   .js-live-search-form              – the <form>
+ *   .js-search-with-clear            – wrapper around an input that has a clear (×) button
+ *   [data-live-search-key]          – optional; when set, last query is kept in sessionStorage
+ *                                     until the user clears (×) or a .js-live-search-clear-persisted link
+ *
+ * Storage: sessionStorage key meLiveSearch:<data-live-search-key>
  */
 (function () {
   'use strict';
 
-  /* ---- helpers ---- */
+  const STORAGE_PREFIX = 'meLiveSearch:';
+
   function debounce(fn, delay) {
-    var timer;
+    let timer;
     return function () {
-      var ctx = this, args = arguments;
+      const ctx = this, args = arguments;
       clearTimeout(timer);
-      timer = setTimeout(function () { fn.apply(ctx, args); }, delay);
+      timer = setTimeout(() => fn.apply(ctx, args), delay);
     };
   }
 
@@ -24,107 +29,216 @@
     return new URLSearchParams(new FormData(form)).toString();
   }
 
-  /* ---- AJAX search (only replaces #live-search-results) ---- */
-  function doLiveSearch(form) {
-    var resultsEl = document.getElementById('live-search-results');
-    var main      = document.getElementById('main-content');
-    if (!resultsEl && !main) return;          // nothing to update
+  function storageId(form) {
+    const k = form.getAttribute('data-live-search-key');
+    return k ? STORAGE_PREFIX + k : null;
+  }
 
-    var action = form.getAttribute('action') || window.location.pathname;
-    var query  = serializeForm(form);
-    var url    = action + '?' + query;
+  function persistLiveSearch(form, relativeUrl) {
+    const sid = storageId(form);
+    if (!sid) return;
+    try {
+      const u = new URL(relativeUrl, window.location.origin);
+      sessionStorage.setItem(sid, u.pathname + u.search);
+    } catch (e) { /* ignore */ }
+  }
 
-    fetch(url, {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(function (resp) { return resp.text(); })
-    .then(function (html) {
-      var doc = new DOMParser().parseFromString(html, 'text/html');
+  function clearPersistedSearch(form) {
+    const sid = storageId(form);
+    if (!sid) return;
+    try {
+      sessionStorage.removeItem(sid);
+    } catch (e) { /* ignore */ }
+  }
 
-      /* Prefer replacing only the results region so the form (and focus) stays */
-      if (resultsEl) {
-        var fresh = doc.getElementById('live-search-results');
-        if (fresh) resultsEl.innerHTML = fresh.innerHTML;
-      } else if (main) {
-        var freshMain = doc.getElementById('main-content');
-        if (freshMain) main.innerHTML = freshMain.innerHTML;
-        /* Re-bind because the form was replaced */
-        bindAll();
+  /** @returns {boolean} true if restored from session (needs follow-up fetch) */
+  function syncRestoreForm(form) {
+    const sid = storageId(form);
+    if (!sid) return false;
+
+    if (window.location.search && window.location.search.length > 1) {
+      try {
+        sessionStorage.setItem(sid, window.location.pathname + window.location.search);
+      } catch (e) { /* ignore */ }
+      return false;
+    }
+
+    let stored;
+    try {
+      stored = sessionStorage.getItem(sid);
+    } catch (e) {
+      return false;
+    }
+    if (!stored) return false;
+
+    let u;
+    try {
+      u = new URL(stored, window.location.origin);
+    } catch (e) {
+      return false;
+    }
+    if (u.pathname !== window.location.pathname) return false;
+
+    applySearchParamsToForm(form, u.searchParams);
+    if (history.replaceState) {
+      history.replaceState(null, '', u.pathname + u.search);
+    }
+    return true;
+  }
+
+  function applySearchParamsToForm(form, params) {
+    params.forEach((value, name) => {
+      const el = form.elements.namedItem(name);
+      if (!el) return;
+      if (el instanceof RadioNodeList) {
+        for (let i = 0; i < el.length; i++) {
+          if (el[i].value === value) {
+            el[i].checked = true;
+            break;
+          }
+        }
+        return;
       }
-
-      /* Update URL bar (no reload) */
-      if (history.replaceState) history.replaceState(null, '', url);
-    })
-    .catch(function () {
-      /* Network error → fall back to normal GET submission */
-      form.submit();
+      if (el.type === 'checkbox') {
+        el.checked = value === 'on' || value === '1' || value === 'true';
+        return;
+      }
+      el.value = value;
     });
   }
 
-  /* ---- bind events on every .js-live-search-form ---- */
-  function bindAll() {
-    document.querySelectorAll('.js-live-search-form').forEach(function (form) {
-      if (form._lsBound) return;              // don't double-bind
+  function setLoading(form, loading) {
+    const indicator = form.querySelector('.js-search-loading');
+    if (indicator) indicator.style.display = loading ? 'inline-block' : 'none';
+  }
+
+  function doLiveSearch(form) {
+    const resultsEl = document.getElementById('live-search-results');
+    const main      = document.getElementById('main-content');
+    if (!resultsEl && !main) return;
+
+    const action = form.getAttribute('action') || window.location.pathname;
+    const query  = serializeForm(form);
+    const url    = action + '?' + query;
+
+    setLoading(form, true);
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(resp => resp.text())
+      .then(html => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+
+        if (resultsEl) {
+          const fresh = doc.getElementById('live-search-results');
+          if (fresh) resultsEl.innerHTML = fresh.innerHTML;
+        } else if (main) {
+          const freshMain = doc.getElementById('main-content');
+          if (freshMain) main.innerHTML = freshMain.innerHTML;
+          bindFormHandlers();
+        }
+
+        if (history.replaceState) history.replaceState(null, '', url);
+        persistLiveSearch(form, url);
+      })
+      .catch(() => {
+        form.submit();
+      })
+      .finally(() => {
+        setLoading(form, false);
+      });
+  }
+
+  function bindPersistClearLinks() {
+    document.querySelectorAll('a.js-live-search-clear-persisted').forEach(a => {
+      if (a._lsClearBound) return;
+      a._lsClearBound = true;
+      a.addEventListener('click', () => {
+        const key = a.getAttribute('data-live-search-key');
+        if (key) {
+          try {
+            sessionStorage.removeItem(STORAGE_PREFIX + key);
+          } catch (e) { /* ignore */ }
+        }
+      });
+    });
+  }
+
+  function bindFormHandlers() {
+    document.querySelectorAll('.js-live-search-form').forEach(form => {
+      if (form._lsBound) return;
       form._lsBound = true;
 
-      var debouncedSearch = debounce(function () { doLiveSearch(form); }, 400);
+      const debouncedSearch = debounce(() => doLiveSearch(form), 400);
 
-      /* Text inputs: live search on typing + Enter */
-      form.querySelectorAll('input[type="text"], input[type="search"]').forEach(function (input) {
+      form.querySelectorAll('input[type="text"], input[type="search"]').forEach(input => {
         input.addEventListener('input', debouncedSearch);
-        input.addEventListener('keydown', function (e) {
+        input.addEventListener('keydown', e => {
           if (e.key === 'Enter') { e.preventDefault(); doLiveSearch(form); }
         });
       });
 
-      /* Selects, checkboxes, dates → immediate search */
-      form.querySelectorAll('select').forEach(function (sel) {
-        sel.addEventListener('change', function () { doLiveSearch(form); });
+      form.querySelectorAll('select').forEach(sel => {
+        sel.addEventListener('change', () => doLiveSearch(form));
       });
-      form.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
-        cb.addEventListener('change', function () { doLiveSearch(form); });
+      form.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => doLiveSearch(form));
       });
-      form.querySelectorAll('input[type="date"]').forEach(function (d) {
-        d.addEventListener('change', function () { doLiveSearch(form); });
+      form.querySelectorAll('input[type="date"]').forEach(d => {
+        d.addEventListener('change', () => doLiveSearch(form));
       });
 
-      /* Search button (type=submit) */
-      form.addEventListener('submit', function (e) {
+      form.addEventListener('submit', e => {
         e.preventDefault();
         doLiveSearch(form);
       });
     });
 
-    /* Clear (×) buttons inside .js-search-with-clear wrappers */
-    document.querySelectorAll('.js-search-with-clear').forEach(function (wrapper) {
+    document.querySelectorAll('.js-search-with-clear').forEach(wrapper => {
       if (wrapper._lsBound) return;
       wrapper._lsBound = true;
 
-      var input = wrapper.querySelector('input');
-      var btn   = wrapper.querySelector('.search-clear-btn');
+      const input = wrapper.querySelector('input');
+      const btn   = wrapper.querySelector('.search-clear-btn');
       if (!input || !btn) return;
 
-      function toggleClear() {
-        btn.classList.toggle('invisible', !input.value.trim());
-      }
+      const toggleClear = () => btn.classList.toggle('invisible', !input.value.trim());
       toggleClear();
       input.addEventListener('input', toggleClear);
       input.addEventListener('focus', toggleClear);
 
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', () => {
         input.value = '';
         input.focus();
         toggleClear();
-        var form = input.closest('form');
-        if (form) doLiveSearch(form);
+        const form = input.closest('form');
+        if (form) {
+          clearPersistedSearch(form);
+          doLiveSearch(form);
+        }
       });
     });
+
+    bindPersistClearLinks();
   }
 
-  /* ---- boot ---- */
+  function init() {
+    const restoredForms = [];
+    document.querySelectorAll('.js-live-search-form[data-live-search-key]').forEach(form => {
+      if (syncRestoreForm(form)) restoredForms.push(form);
+    });
+
+    bindFormHandlers();
+
+    if (restoredForms.length) {
+      setTimeout(() => {
+        restoredForms.forEach(f => doLiveSearch(f));
+      }, 0);
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bindAll);
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    bindAll();
+    init();
   }
 })();

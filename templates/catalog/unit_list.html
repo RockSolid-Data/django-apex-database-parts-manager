@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Unit List — Manchester Electric{% endblock %}
+{% block title %}Unit List — Apex Database{% endblock %}
+{% block main_class %}{% endblock %}
 
 {% block content %}
 
-{# ===== Header row with title and action buttons ===== #}
+{# ===== Header + tabs + search (sticky) ===== #}
+<div class="me-sticky-toolbar">
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h1 class="page-heading mb-0">
@@ -21,17 +23,17 @@
     </a>
   </div>
 </div>
-
-{# ===== Unit-type tabs ===== #}
 <ul class="nav nav-pills mb-3">
   <li class="nav-item">
-    <a class="nav-link {% if not selected_type %}active{% endif %}"
+    <a class="nav-link {% if not selected_type %}active{% endif %} js-live-search-clear-persisted"
+       data-live-search-key="catalog:unit_list"
        href="{% url 'catalog:unit_list' %}">All</a>
   </li>
-  {% for ut in unit_types %}
+  {% for cat in unit_type_categories %}
   <li class="nav-item">
-    <a class="nav-link {% if selected_type == ut.id|stringformat:'d' %}active{% endif %}"
-       href="{% url 'catalog:unit_list' %}?type={{ ut.id }}">{{ ut.name }}s</a>
+    <a class="nav-link {% if selected_type == cat %}active{% endif %} js-live-search-clear-persisted"
+       data-live-search-key="catalog:unit_list"
+       href="{% url 'catalog:unit_list' %}?type={{ cat }}">{{ cat }}s</a>
   </li>
   {% endfor %}
 </ul>
@@ -39,7 +41,8 @@
 {# ===== Search and filters ===== #}
 <div class="card mb-3">
   <div class="card-body py-2">
-    <form method="get" action="{% url 'catalog:unit_list' %}" class="js-live-search-form">
+    <form method="get" action="{% url 'catalog:unit_list' %}" class="js-live-search-form"
+          data-live-search-key="catalog:unit_list">
       <div class="row g-2 align-items-end">
         {# Search #}
         <div class="col-md-2">
@@ -54,18 +57,19 @@
         {# Unit Type dropdown #}
         <div class="col-md-2">
           <label class="form-label small mb-0">Unit Type</label>
-          <select name="type" class="form-select form-select-sm">
+          <select name="type" class="form-select form-select-sm js-searchable-select">
             <option value="">All Types</option>
-            {% for ut in unit_types %}
-            <option value="{{ ut.id }}" {% if selected_type == ut.id|stringformat:'d' %}selected{% endif %}>{{ ut.name }}</option>
+            {% for cat in unit_type_categories %}
+            <option value="{{ cat }}" {% if selected_type == cat %}selected{% endif %}>{{ cat }}</option>
             {% endfor %}
+            <option value="__blank__" {% if selected_type == "__blank__" %}selected{% endif %}>— No Type —</option>
           </select>
         </div>
 
         {# Family dropdown #}
         <div class="col-md-2">
           <label class="form-label small mb-0">Family</label>
-          <select name="family" class="form-select form-select-sm">
+          <select name="family" class="form-select form-select-sm js-searchable-select">
             <option value="">All Families</option>
             {% for val in family_choices %}
             <option value="{{ val }}" {% if filter_family == val %}selected{% endif %}>{{ val }}</option>
@@ -76,7 +80,7 @@
         {# OEM dropdown #}
         <div class="col-md-2">
           <label class="form-label small mb-0">OEM</label>
-          <select name="oem" class="form-select form-select-sm">
+          <select name="oem" class="form-select form-select-sm js-searchable-select">
             <option value="">All OEMs</option>
             {% for val in oem_choices %}
             <option value="{{ val }}" {% if filter_oem == val %}selected{% endif %}>{{ val }}</option>
@@ -87,7 +91,7 @@
         {# Voltage dropdown #}
         <div class="col-md-2">
           <label class="form-label small mb-0">Voltage</label>
-          <select name="voltage" class="form-select form-select-sm">
+          <select name="voltage" class="form-select form-select-sm js-searchable-select">
             <option value="">All Voltages</option>
             {% for val in voltage_choices %}
             <option value="{{ val }}" {% if filter_voltage == val %}selected{% endif %}>{{ val }}</option>
@@ -95,21 +99,27 @@
           </select>
         </div>
 
-        {# Results count #}
-        <div class="col-md-2 d-flex align-items-center">
-          <span class="text-muted small">{{ units|length }} result{{ units|length|pluralize }} found</span>
+        {# Results count + Clear #}
+        <div class="col-md-2 d-flex align-items-center gap-2">
+          <span class="text-muted small">{{ total_count }} result{{ total_count|pluralize }}</span>
+          <a href="{% url 'catalog:unit_list' %}{% if selected_type %}?type={{ selected_type }}{% endif %}"
+             class="btn btn-outline-secondary btn-sm js-live-search-clear-persisted"
+             data-live-search-key="catalog:unit_list">
+            <i class="bi bi-x-lg"></i> Clear
+          </a>
         </div>
       </div>
     </form>
   </div>
 </div>
+</div>{# /.me-sticky-toolbar #}
 
 {# ===== Section heading and table (only this section replaced on live search; form stays to preserve focus) ===== #}
 <div id="live-search-results">
 {% if selected_unit_type_name %}
-<h5 class="mb-2">{{ selected_unit_type_name }} — Showing 1-{{ units|length }} of {{ units|length }} unit{{ units|length|pluralize }}</h5>
+<h5 class="mb-2">{{ selected_unit_type_name }} — Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ total_count }} unit{{ total_count|pluralize }}</h5>
 {% else %}
-<h5 class="mb-2">Showing 1-{{ units|length }} of {{ units|length }} unit{{ units|length|pluralize }}</h5>
+<h5 class="mb-2">Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ total_count }} unit{{ total_count|pluralize }}</h5>
 {% endif %}
 
 <div class="table-responsive">
@@ -117,49 +127,36 @@
     <thead class="table-dark">
       <tr>
         <th>Unit Type</th>
+        <th>Family</th>
         <th>YT Number</th>
         <th>OEM</th>
+        <th>Manufacturer</th>
         <th>Model/Cat #</th>
         <th>Voltage</th>
-        <th>KW/HP</th>
-        <th>Phase</th>
-        <th>F.L.A.</th>
-        <th>R.P.M</th>
-        <th>Frame</th>
-        <th>Enclosure</th>
-        <th>Service Factor</th>
-        <th class="text-center">Details</th>
+        <th>Description</th>
       </tr>
     </thead>
     <tbody>
       {% for unit in units %}
-      <tr>
+      <tr data-href="{% url 'catalog:unit_detail' unit.pk %}">
         <td>
-          {% if unit.unit_type %}
-          <span class="badge bg-unit-type">{{ unit.unit_type }}</span>
+          {% if unit.unit_type_category %}
+          <span class="badge bg-unit-type">{{ unit.unit_type_category }}</span>
           {% else %}
           —
           {% endif %}
         </td>
+        <td>{{ unit.family|default:"—" }}</td>
         <td>{{ unit.yt_number|default:unit.unit_number|default:"—" }}</td>
         <td>{{ unit.oem|default:"—" }}</td>
+        <td>{{ unit.manufacturer|default:"—" }}</td>
         <td>{{ unit.model_cat_number|default:"—" }}</td>
         <td>{{ unit.voltage|default:"—" }}</td>
-        <td>{{ unit.kw_hp|default:"—" }}</td>
-        <td>{{ unit.phase|default:"—" }}</td>
-        <td>{{ unit.fla|default:"—" }}</td>
-        <td>{{ unit.rpm|default:"—" }}</td>
-        <td>{{ unit.frame|default:"—" }}</td>
-        <td>{{ unit.enclosure|default:"—" }}</td>
-        <td>{{ unit.service_factor|default:"—" }}</td>
-        <td class="text-center">
-          <a href="{% url 'catalog:unit_detail' unit.pk %}" class="btn btn-sm btn-outline-primary">View</a>
-          <a href="{% url 'catalog:unit_edit' unit.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
-        </td>
+        <td>{{ unit.description|default:"—" }}</td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="13" class="text-center text-muted py-4">
+        <td colspan="8" class="text-center text-muted py-4">
           <i class="bi bi-inbox fs-3 d-block mb-2"></i>
           No units found.
         </td>
@@ -168,5 +165,6 @@
     </tbody>
   </table>
 </div>
+{% include "includes/pagination.html" %}
 </div>
 {% endblock %}

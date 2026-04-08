@@ -80,7 +80,7 @@
 <body class="{% if company_settings.invoice_layout_style == 'compact' %}invoice-layout-compact{% endif %}">
 
 <div class="no-print">
-  <a href="{% url 'invoicing:invoice_detail' invoice.pk %}">&larr; Back to Invoice</a>
+  <a href="#" onclick="history.back(); return false;">&larr; Back</a>
   &nbsp;|&nbsp;
   <button onclick="window.print();">Print</button>
 </div>
@@ -90,21 +90,23 @@
 <div class="paid-stamp">PAID</div>
 {% endif %}
 <div class="header">
-  <div class="company-info">
+  <div class="company-info" style="display:flex; align-items:flex-start; gap:0.75rem;">
     {% if company_settings.logo %}
-    <img src="{{ company_settings.logo.url }}" alt="{{ company_settings.company_name }}" style="max-height: 60px; margin-bottom: 0.5rem;">
+    <img src="{{ company_settings.logo.url }}" alt="{{ company_settings.company_name }}" style="max-height:60px; flex-shrink:0;">
     {% endif %}
-    <div class="company-name">{{ company_settings.company_name }}</div>
-    {% if company_settings.address %}
-    <div class="company-detail" style="white-space: pre-line;">{{ company_settings.address }}</div>
-    {% endif %}
-    {% if company_settings.phone or company_settings.email %}
-    <div class="company-detail mt-1">
-      {% if company_settings.phone %}{{ company_settings.phone }}{% endif %}
-      {% if company_settings.phone and company_settings.email %} · {% endif %}
-      {% if company_settings.email %}{{ company_settings.email }}{% endif %}
+    <div>
+      <div class="company-name">{{ company_settings.company_name }}</div>
+      {% if company_settings.address %}
+      <div class="company-detail" style="white-space: pre-line;">{{ company_settings.address }}</div>
+      {% endif %}
+      {% if company_settings.phone or company_settings.email %}
+      <div class="company-detail" style="margin-top:0.25rem;">
+        {% if company_settings.phone %}{{ company_settings.phone }}{% endif %}
+        {% if company_settings.phone and company_settings.email %} · {% endif %}
+        {% if company_settings.email %}{{ company_settings.email }}{% endif %}
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
   <div class="invoice-meta">
     <div class="invoice-title">INVOICE</div>
@@ -122,17 +124,21 @@
 <table>
   <thead>
     <tr>
+      <th class="text-end" style="width:60px">Qty</th>
+      <th style="width:140px">Unit #</th>
+      <th style="width:140px">Part #</th>
       <th>Description</th>
-      <th class="text-end" style="width:80px">Qty</th>
-      <th class="text-end" style="width:100px">Unit Price</th>
-      <th class="text-end" style="width:110px">Total</th>
+      <th class="text-end" style="width:90px">Rate</th>
+      <th class="text-end" style="width:100px">Total</th>
     </tr>
   </thead>
   <tbody>
     {% for item in invoice.items.all %}
     <tr>
-      <td>{{ item.description|default:"—" }}</td>
       <td class="text-end">{{ item.quantity }}</td>
+      <td>{% if item.unit %}{{ item.unit.unit_number }}{% else %}—{% endif %}</td>
+      <td>{% if item.part %}{{ item.part.part_number }}{% else %}—{% endif %}</td>
+      <td>{{ item.description|default:"—" }}</td>
       <td class="text-end">{{ company_settings.invoice_currency_symbol }}{{ item.unit_price|floatformat:2 }}</td>
       <td class="text-end">{{ company_settings.invoice_currency_symbol }}{{ item.line_total|floatformat:2 }}</td>
     </tr>

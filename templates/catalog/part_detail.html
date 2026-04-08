@@ -1,13 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Part {{ part.part_number }} — Manchester Electric{% endblock %}
+{% block title %}Part {{ part_display_number }} — Apex Database{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 small">
+  <li class="breadcrumb-item"><a href="{% url 'catalog:part_list' %}">Parts</a></li>
+  <li class="breadcrumb-item active" aria-current="page">{{ part_display_number }}</li>
+</ol></nav>
+{% endblock %}
 
 {% block content %}
 
 {# ===== Header with action buttons (4.5) ===== #}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
   <h1 class="page-heading mb-0">
-    <i class="bi bi-box-seam"></i> {{ part.part_number }}
+    <i class="bi bi-box-seam"></i> {{ part_display_number }}
   </h1>
   <div class="d-flex gap-2">
     <a href="{% url 'invoicing:add_to_invoice' %}?part={{ part.pk }}" class="btn btn-success">
@@ -16,9 +23,9 @@
     <a href="{% url 'catalog:part_edit' part.pk %}" class="btn btn-primary">
       <i class="bi bi-pencil"></i> Edit
     </a>
-    <a href="{% url 'catalog:part_list' %}" class="btn btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Back to Parts List
-    </a>
+    <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </button>
   </div>
 </div>
 
@@ -26,24 +33,27 @@
   {# ===== LEFT COLUMN ===== #}
   <div class="col-lg-8">
 
-    {# Basic Information (4.5) ===== #}
+    {# Basic Information ===== #}
     <div class="card mb-3">
       <div class="card-header fw-semibold">Basic Information</div>
       <div class="card-body p-0">
         <table class="table table-sm mb-0">
           <tbody>
-            <tr><th class="ps-3" style="width: 30%;">Item No</th><td>{{ part.item_no|default:"—" }}</td></tr>
-            <tr><th class="ps-3">Name</th><td>{{ part.part_name|default:"—" }}</td></tr>
-            <tr><th class="ps-3">Part Number</th><td>{{ part.part_number }}</td></tr>
+            <tr><th class="ps-3" style="width: 30%;">Item Number</th><td>{{ part.part_number|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Part Name</th><td>{{ part.part_name|default:"—" }}</td></tr>
             <tr><th class="ps-3">Category</th><td>{{ part.category|default:"—" }}</td></tr>
-            <tr><th class="ps-3">Type</th><td>{{ part.type|default:"—" }}</td></tr>
-            <tr><th class="ps-3">Price</th><td>{% if part.price != None %}${{ part.price }}{% else %}—{% endif %}</td></tr>
-            <tr><th class="ps-3">Item Typ</th><td>{{ part.item_typ|default:"—" }}</td></tr>
-            <tr><th class="ps-3">Bin Location</th><td>{{ part.bin_number|default:"—" }}</td></tr>
-            <tr><th class="ps-3">Key</th><td>{{ part.key|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Manufacturer Number</th><td>{{ part.manufacturer_number|default:"—" }}</td></tr>
             <tr><th class="ps-3">YT Number</th><td>{{ part.yt_number|default:"—" }}</td></tr>
             <tr><th class="ps-3">J&N</th><td>{{ part.j_and_n|default:"—" }}</td></tr>
             <tr><th class="ps-3">OEM #</th><td>{{ part.oem_number|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Voltage</th><td>{{ part.voltage|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Type</th><td>{{ part.type|default:"—" }}</td></tr>
+            <tr><th class="ps-3">OEM</th><td>{{ part.oem|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Primary Vendor</th><td>{{ part.primary_vendor|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Bin Location</th><td>{{ part.bin_number|default:"—" }}</td></tr>
+            {% for item in spec_display %}
+            <tr><th class="ps-3">{{ item.label }}</th><td>{{ item.value }}</td></tr>
+            {% endfor %}
           </tbody>
         </table>
       </div>
@@ -55,42 +65,219 @@
       <div class="card-body p-0">
         <table class="table table-sm mb-0">
           <tbody>
-            <tr><th class="ps-3" style="width: 30%;">Reorder Qty</th><td>{{ part.reorder_qty }}</td></tr>
+            <tr><th class="ps-3" style="width: 30%;">Sale Price</th><td>{% if part.price != None %}${{ part.price|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+            <tr><th class="ps-3">Reorder Qty</th><td>{{ part.reorder_qty }}</td></tr>
             <tr><th class="ps-3">In Stock</th><td>{{ part.stock_quantity }}</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    {# Compatibility (4.5) ===== #}
+    {# ===== Substitutes ===== #}
     <div class="card mb-3">
-      <div class="card-header fw-semibold">Compatibility</div>
-      <div class="card-body">
-        <div class="mb-3">
-          <h6 class="text-muted small mb-2">Substitutes</h6>
-          <p class="mb-0 text-muted">No substitutes listed.</p>
-          <a href="#" class="btn btn-sm btn-outline-secondary mt-2">Add</a>
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>Substitutes</span>
+        <a href="{% url 'catalog:part_substitute_add' part.pk %}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-plus-lg"></i> Add Substitute
+        </a>
+      </div>
+      <div class="card-body p-0 me-scrollable-table">
+        {% if part_substitutes %}
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Part Number</th>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Notes</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in part_substitutes %}
+            <tr>
+              {% if s.part %}
+              <td class="ps-3">{{ s.part.part_number|default:s.part.yt_number|default:"—" }}</td>
+              <td>{{ s.part.part_name|default:"—" }}</td>
+              <td>{{ s.part.category|default:"—" }}</td>
+              <td>{{ s.ref.notes|default:"—" }}</td>
+              <td class="text-center">
+                <a href="{% url 'catalog:part_detail' s.part.pk %}" class="btn btn-sm btn-outline-primary me-1" title="View">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <form method="post" action="{% url 'catalog:part_substitute_delete' part.pk s.ref.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this substitute?">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+              {% else %}
+              <td class="ps-3">{{ s.ref.substitute_number }}</td>
+              <td>—</td>
+              <td>—</td>
+              <td>{{ s.ref.notes|default:"—" }}</td>
+              <td class="text-center">
+                <span class="text-muted me-2"><small>manual entry</small></span>
+                <form method="post" action="{% url 'catalog:part_substitute_delete' part.pk s.ref.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this substitute?">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-arrow-left-right fs-3 d-block mb-2"></i>
+          No substitutes linked.
         </div>
-        <hr>
-        <div class="mb-3">
-          <h6 class="text-muted small mb-2">Interchange</h6>
-          {% if part.has_interchange %}
-          <p class="mb-0 text-muted">Interchange information available.</p>
-          {% else %}
-          <p class="mb-0 text-muted">No interchange listed.</p>
-          {% endif %}
-          <a href="#" class="btn btn-sm btn-outline-secondary mt-2">Add</a>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ===== Interchange ===== #}
+    <div class="card mb-3" id="part-interchange-card" data-part-pk="{{ part.pk }}">
+      <div class="card-header fw-semibold d-flex flex-wrap align-items-center gap-2">
+        <span class="me-1">Interchange</span>
+        {% if part_interchanges %}
+        <div class="d-flex align-items-center gap-1 ms-auto">
+          <label class="visually-hidden" for="part-ix-filter-{{ part.pk }}">Filter interchanges</label>
+          <div class="input-group input-group-sm" style="max-width: 15rem;">
+            <span class="input-group-text py-0 px-2 bg-body-secondary"><i class="bi bi-search small"></i></span>
+            <input type="search" class="form-control form-control-sm" id="part-ix-filter-{{ part.pk }}"
+                   placeholder="# or source…" autocomplete="off" inputmode="search">
+            <button type="button" class="btn btn-outline-secondary px-2 js-part-ix-filter-clear" title="Clear filter" aria-label="Clear filter">
+              <i class="bi bi-x-lg small"></i>
+            </button>
+          </div>
         </div>
-        <hr>
-        <div>
-          <h6 class="text-muted small mb-2">Superseding</h6>
-          {% if part.has_superseding %}
-          <p class="mb-0 text-muted">Superseding information available.</p>
-          {% else %}
-          <p class="mb-0 text-muted">No superseding listed.</p>
-          {% endif %}
-          <a href="#" class="btn btn-sm btn-outline-secondary mt-2">Add</a>
+        {% endif %}
+        <a href="{% url 'catalog:part_interchange_add' part.pk %}" class="btn btn-sm btn-outline-primary {% if part_interchanges %}ms-sm-0{% else %}ms-auto{% endif %}">
+          <i class="bi bi-plus-lg"></i> Add Interchange
+        </a>
+      </div>
+      <div class="card-body p-0 me-scrollable-table">
+        {% if part_interchanges %}
+        <table class="table table-sm table-hover mb-0" id="part-interchange-table">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Reference Number</th>
+              <th>Linked Part</th>
+              <th>Source / Name</th>
+              <th>Notes</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for i in part_interchanges %}
+            <tr class="js-interchange-edit-row cursor-pointer"
+                title="Double-click to edit"
+                data-edit-url="{% url 'catalog:part_interchange_edit' part.pk i.ref.pk %}">
+              {% if i.part %}
+              <td class="ps-3">{{ i.ref.interchange_number|default:i.part.part_number|default:i.part.yt_number|default:"—" }}</td>
+              <td>
+                <a href="{% url 'catalog:part_detail' i.part.pk %}">
+                  {{ i.part.part_number|default:i.part.yt_number|default:"—" }}
+                </a>
+                {% if i.part.part_name %}
+                <div class="small text-muted">{{ i.part.part_name }}</div>
+                {% endif %}
+              </td>
+              <td>{{ i.ref.source_name|default:"—" }}</td>
+              <td>{{ i.ref.notes|default:"—" }}</td>
+              <td class="text-center">
+                <a href="{% url 'catalog:part_detail' i.part.pk %}" class="btn btn-sm btn-outline-primary me-1" title="View linked part">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <form method="post" action="{% url 'catalog:part_interchange_delete' part.pk i.ref.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this interchange?">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+              {% else %}
+              <td class="ps-3">{{ i.ref.interchange_number|default:"—" }}</td>
+              <td>—</td>
+              <td>{{ i.ref.source_name|default:"—" }}</td>
+              <td>{{ i.ref.notes|default:"—" }}</td>
+              <td class="text-center">
+                <span class="text-muted me-2"><small>manual entry</small></span>
+                <form method="post" action="{% url 'catalog:part_interchange_delete' part.pk i.ref.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this interchange?">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-arrow-repeat fs-3 d-block mb-2"></i>
+          No interchange parts linked.
         </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ===== Superseding ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>Superseding</span>
+        <a href="{% url 'catalog:part_superseding_add' part.pk %}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-plus-lg"></i> Add Superseding
+        </a>
+      </div>
+      <div class="card-body p-0 me-scrollable-table">
+        {% if part_supersedings %}
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Old Part Number</th>
+              <th>Linked Part</th>
+              <th>Notes</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sup in part_supersedings %}
+            <tr>
+              <td class="ps-3">{{ sup.old_part_number }}</td>
+              <td>
+                {% if sup.old_part %}
+                  <a href="{% url 'catalog:part_detail' sup.old_part.pk %}">{{ sup.old_part.part_number|default:sup.old_part.yt_number|default:"—" }}</a>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>{{ sup.notes|default:"—" }}</td>
+              <td class="text-center">
+                <form method="post" action="{% url 'catalog:part_superseding_delete' part.pk sup.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this superseding entry?">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-arrow-down-up fs-3 d-block mb-2"></i>
+          No superseding parts listed.
+        </div>
+        {% endif %}
       </div>
     </div>
 
@@ -104,28 +291,7 @@
     </div>
     {% endif %}
 
-    {# Part Specifications table (4.5) ===== #}
-    <div class="card mb-3">
-      <div class="card-header fw-semibold">Part Specifications</div>
-      <div class="card-body p-0">
-        <table class="table table-sm mb-0">
-          <thead class="table-light">
-            <tr>
-              <th class="ps-3">Category</th>
-              <th>Type</th>
-              <th>Specification</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="ps-3">{{ part.category|default:"—" }}</td>
-              <td>{{ part.type|default:"—" }}</td>
-              <td>{{ part.description|truncatewords:15|default:part.oem_type|default:part.item_typ|default:"—" }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    {# Category specs are now merged into Basic Information above #}
 
     {# Description & Footnotes ===== #}
     {% if part.description or part.foot_notes %}
@@ -149,30 +315,43 @@
   {# ===== RIGHT COLUMN ===== #}
   <div class="col-lg-4">
 
-    {# Picture (4.5) ===== #}
+    {# Images ===== #}
     <div class="card mb-3">
-      <div class="card-header fw-semibold">Picture</div>
+      <div class="card-header fw-semibold">Images</div>
       <div class="card-body text-center">
-        {% if part.image %}
+        {% if part.images.exists %}
+          <div class="row g-2 justify-content-center">
+            {% for img in part.images.all %}
+            <div class="col-auto">
+              <img src="{{ img.image.url }}" alt="Part image"
+                   class="img-fluid rounded border" style="max-height: 200px;">
+            </div>
+            {% endfor %}
+          </div>
+        {% elif part.image %}
           <img src="{{ part.image.url }}" alt="Part image"
                class="img-fluid rounded" style="max-height: 250px;">
         {% else %}
           <div class="text-muted py-4">
             <i class="bi bi-image fs-1 d-block mb-2"></i>
-            No image available
+            No images
           </div>
         {% endif %}
       </div>
     </div>
 
-    {# Linked Unit ===== #}
+    {# Linked Units ===== #}
     <div class="card mb-3">
-      <div class="card-header fw-semibold">Linked Unit</div>
-      <div class="card-body text-center">
-        {% if part.unit %}
+      <div class="card-header fw-semibold">Linked Units</div>
+      <div class="card-body">
+        {% if part.units.exists %}
+          {% for u in part.units.all %}
+          <a href="{% url 'catalog:unit_detail' u.pk %}" class="d-block">{{ u.unit_number }}</a>
+          {% endfor %}
+        {% elif part.unit %}
           <a href="{% url 'catalog:unit_detail' part.unit.pk %}">{{ part.unit.unit_number }}</a>
         {% else %}
-          <span class="text-muted">Not linked</span>
+          <span class="text-muted">No units linked</span>
         {% endif %}
       </div>
     </div>
@@ -202,4 +381,81 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var IX_STORAGE = 'mePartIxFilter:';
+
+  document.querySelectorAll('.js-interchange-edit-row').forEach(function (row) {
+    row.addEventListener('dblclick', function (e) {
+      if (e.target.closest('a, button, input, label')) return;
+      var url = row.getAttribute('data-edit-url');
+      if (url) window.location.href = url;
+    });
+  });
+
+  var card = document.getElementById('part-interchange-card');
+  if (!card) return;
+  var partPk = card.getAttribute('data-part-pk');
+  var input = document.getElementById('part-ix-filter-' + partPk);
+  var table = document.getElementById('part-interchange-table');
+  if (!input || !table) return;
+
+  var rows = table.querySelectorAll('tbody tr.js-interchange-edit-row');
+  var clearBtn = card.querySelector('.js-part-ix-filter-clear');
+  var storageKey = IX_STORAGE + partPk;
+
+  function rowMatches(row, q) {
+    if (!q) return true;
+    var cells = row.querySelectorAll('td');
+    var text = '';
+    for (var i = 0; i < Math.min(4, cells.length); i++) {
+      text += ' ' + (cells[i].innerText || '').toLowerCase();
+    }
+    return text.indexOf(q) !== -1;
+  }
+
+  function applyFilter() {
+    var q = (input.value || '').trim().toLowerCase();
+    try {
+      if (q) sessionStorage.setItem(storageKey, input.value);
+      else sessionStorage.removeItem(storageKey);
+    } catch (e) {}
+    rows.forEach(function (row) {
+      row.classList.toggle('d-none', !rowMatches(row, q));
+    });
+  }
+
+  var t;
+  input.addEventListener('input', function () {
+    clearTimeout(t);
+    t = setTimeout(applyFilter, 180);
+  });
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      input.value = '';
+      applyFilter();
+      input.blur();
+    }
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function () {
+      input.value = '';
+      applyFilter();
+      input.focus();
+    });
+  }
+
+  try {
+    var saved = sessionStorage.getItem(storageKey);
+    if (saved) {
+      input.value = saved;
+      applyFilter();
+    }
+  } catch (e) {}
+})();
+</script>
 {% endblock %}

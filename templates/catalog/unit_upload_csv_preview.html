@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% load catalog_tags %}
+
+{% block title %}Preview Unit CSV Import — Apex Database{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-eye"></i> Preview Unit CSV Import
+  </h1>
+  <a href="{% url 'catalog:unit_upload_csv' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Upload
+  </a>
+</div>
+
+<div class="alert alert-info d-flex align-items-center mb-3">
+  <i class="bi bi-info-circle me-2"></i>
+  <div>
+    <strong>{{ filename }}</strong> — {{ rows|length }} row{{ rows|length|pluralize }} found.
+    Review the data below. You can edit any cell before importing.
+  </div>
+</div>
+
+{% if header_warning %}
+<div class="alert alert-danger mb-3">
+  <strong><i class="bi bi-exclamation-octagon"></i> Column Mapping Issue:</strong>
+  {{ header_warning }}
+</div>
+{% endif %}
+
+{% if warnings_by_row %}
+<div class="alert alert-warning mb-3">
+  <strong><i class="bi bi-exclamation-triangle"></i> Warnings:</strong>
+  <ul class="mb-0 mt-1">
+    {% for row_num, msg in warnings_by_row.items %}
+    <li>Row {{ row_num }}: {{ msg }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" action="{% url 'catalog:unit_upload_csv' %}">
+  {% csrf_token %}
+  <input type="hidden" name="step" value="confirm">
+  <input type="hidden" name="columns" value='{{ columns_json }}'>
+  <input type="hidden" name="row_count" value="{{ rows|length }}">
+
+  <div class="card mb-3">
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:70vh; overflow:auto;">
+        <table class="table table-bordered table-hover table-sm align-middle mb-0" style="font-size:0.82rem;">
+          <thead class="table-dark" style="position:sticky;top:0;z-index:2;">
+            <tr>
+              <th class="text-center" style="width:50px;">#</th>
+              <th class="text-center" style="width:40px;">
+                <i class="bi bi-info-circle" title="Status"></i>
+              </th>
+              {% for col in columns %}
+              <th class="text-nowrap">{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td class="text-center text-muted">{{ forloop.counter0|add:2 }}</td>
+              <td class="text-center">
+                {% if row|get_item:"unit_number" %}
+                <i class="bi bi-check-circle text-success" title="Ready to import"></i>
+                {% else %}
+                <i class="bi bi-plus-circle text-info" title="Unit Number will be auto-generated"></i>
+                {% endif %}
+              </td>
+              {% for col in columns %}
+              <td>
+                <input type="text" name="row_{{ forloop.parentloop.counter0 }}_{{ col }}"
+                       value="{{ row|get_item:col }}"
+                       class="form-control form-control-sm border-0 bg-transparent px-1"
+                       style="min-width:80px;">
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mb-4">
+    <button type="submit" class="btn btn-success btn-lg">
+      <i class="bi bi-cloud-upload"></i> Confirm &amp; Import {{ rows|length }} Row{{ rows|length|pluralize }}
+    </button>
+    <a href="{% url 'catalog:unit_upload_csv' %}" class="btn btn-secondary btn-lg">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -18,4 +18,6 @@ urlpatterns = [
     path("customers/add/", views.customer_create, name="customer_create"),
     path("customers/<int:pk>/edit/", views.customer_edit, name="customer_edit"),
     path("customers/<int:pk>/delete/", views.customer_delete, name="customer_delete"),
+    path("api/parts-search/", views.api_parts_search, name="api_parts_search"),
+    path("api/units-search/", views.api_units_search, name="api_units_search"),
 ]

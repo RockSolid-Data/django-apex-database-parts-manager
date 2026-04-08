@@ -1,145 +1,123 @@
 {% extends "base.html" %}
 
-{% block title %}Unit Search — Manchester Electric{% endblock %}
+{% block title %}Search &amp; References — Apex Database{% endblock %}
 
 {% block content %}
 
+<div class="me-sticky-toolbar">
 <h1 class="page-heading mb-1">
-  <i class="bi bi-search"></i> Unit Search
+  <i class="bi bi-search"></i> Search &amp; References
 </h1>
-<p class="text-muted mb-4">Search for units, applications, and parts across the entire system.</p>
+<p class="text-muted mb-3">Search for units, applications, and parts across the entire system.</p>
 
 {# ===== Tabs ===== #}
-<ul class="nav nav-pills mb-4">
+<ul class="nav nav-pills mb-0">
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'crossref' %}active{% endif %}"
+       href="?tab=crossref">Cross Ref</a>
+  </li>
   <li class="nav-item">
     <a class="nav-link {% if tab == 'units' %}active{% endif %}"
        href="?tab=units">Units</a>
   </li>
   <li class="nav-item">
-    <a class="nav-link {% if tab == 'applications' %}active{% endif %}"
-       href="?tab=applications">Applications</a>
-  </li>
-  <li class="nav-item">
     <a class="nav-link {% if tab == 'parts' %}active{% endif %}"
        href="?tab=parts">Parts</a>
   </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'applications' %}active{% endif %}"
+       href="?tab=applications">Applications</a>
+  </li>
 </ul>
+</div>
 
-{% if tab == 'units' %}
-{# ===== Units search form ===== #}
-<form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form">
-  <input type="hidden" name="tab" value="units">
+{% if tab == 'crossref' %}
+{# ===== Cross Reference lookup ===== #}
+<div style="max-width:900px;">
+<form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form"
+      data-live-search-key="catalog:unit_search:crossref">
+  <input type="hidden" name="tab" value="crossref">
   <div class="card mb-4">
     <div class="card-body">
+      <p class="text-muted small mb-3">
+        Enter any number or code to search the <strong>entire catalog</strong>: unit IDs and all unit text fields,
+        part numbers (YT, J&amp;N, OEM, interchanges, superseding, substitutes, BOM lines),
+        applications, application specification lines, unit cross-references, unit substitutes, and gear-reduction entries.
+      </p>
       <div class="row g-3">
-        <div class="col-md-3">
-          <label class="form-label small">Manufacturer</label>
+        <div class="col-12">
+          <label class="form-label small">Cross Ref / Interchange #</label>
           <div class="search-input-wrapper js-search-with-clear">
-            <input type="text" name="q_manufacturer" class="form-control form-control-sm"
-                   placeholder="Enter manufacturer..." value="{{ get_params.q_manufacturer }}">
+            <input type="text" name="q_cross_ref" class="form-control"
+                   placeholder="e.g. LRS00203, SD-283, 6185..."
+                   value="{{ get_params.q_cross_ref }}" autofocus>
             <button type="button" class="search-clear-btn" aria-label="Clear"><i class="bi bi-x"></i></button>
           </div>
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Mount Type</label>
-          <input type="text" name="q_mount_type" class="form-control form-control-sm"
-                 placeholder="Enter mount type..." value="{{ get_params.q_mount_type }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Nose Type</label>
-          <input type="text" name="q_nose_type" class="form-control form-control-sm"
-                 placeholder="Enter nose type..." value="{{ get_params.q_nose_type }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Weight</label>
-          <input type="text" name="q_weight" class="form-control form-control-sm"
-                 placeholder="Enter weight..." value="{{ get_params.q_weight }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Clocking Degrees</label>
-          <input type="text" name="q_clocking_degrees" class="form-control form-control-sm"
-                 placeholder="Enter clocking degrees..." value="{{ get_params.q_clocking_degrees }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Housing</label>
-          <input type="text" name="q_housing" class="form-control form-control-sm"
-                 placeholder="Enter housing..." value="{{ get_params.q_housing }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Design</label>
-          <input type="text" name="q_design" class="form-control form-control-sm"
-                 placeholder="Enter design..." value="{{ get_params.q_design }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Tooth Quantity</label>
-          <input type="text" name="q_tooth_quantity" class="form-control form-control-sm"
-                 placeholder="Enter tooth quantity..." value="{{ get_params.q_tooth_quantity }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Over Crank Protection</label>
-          <input type="text" name="q_over_crank_protection" class="form-control form-control-sm"
-                 placeholder="Enter over crank protection..." value="{{ get_params.q_over_crank_protection }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">With Mounting Shims</label>
-          <input type="text" name="q_with_mounting_shims" class="form-control form-control-sm"
-                 placeholder="Enter value..." value="{{ get_params.q_with_mounting_shims }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Power Rating</label>
-          <input type="text" name="q_power_rating" class="form-control form-control-sm"
-                 placeholder="Enter power rating..." value="{{ get_params.q_power_rating }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Grounding</label>
-          <input type="text" name="q_grounding" class="form-control form-control-sm"
-                 placeholder="Enter grounding..." value="{{ get_params.q_grounding }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Voltage</label>
-          <input type="text" name="q_voltage" class="form-control form-control-sm"
-                 placeholder="Enter voltage..." value="{{ get_params.q_voltage }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Reclockable Flange</label>
-          <input type="text" name="q_reclockable_flange" class="form-control form-control-sm"
-                 placeholder="Enter value..." value="{{ get_params.q_reclockable_flange }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">With Hardware</label>
-          <input type="text" name="q_with_hardware" class="form-control form-control-sm"
-                 placeholder="Enter value..." value="{{ get_params.q_with_hardware }}">
-        </div>
-        <div class="col-md-3">
+      </div>
+    </div>
+  </div>
+  <div class="d-flex gap-2 mb-4">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-search"></i> Look Up Cross Reference
+    </button>
+    <a href="?tab=crossref" class="btn btn-secondary js-live-search-clear-persisted"
+       data-live-search-key="catalog:unit_search:crossref">Clear</a>
+  </div>
+</form>
+</div>
+
+{% elif tab == 'units' %}
+{# ===== Units search form — matches Add Unit layout ===== #}
+<div style="max-width:900px;">
+<form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form"
+      data-live-search-key="catalog:unit_search:units">
+  <input type="hidden" name="tab" value="units">
+  <div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Identification</span>
+      <div class="d-flex align-items-center gap-2">
+        <label class="form-label mb-0 fw-semibold text-nowrap small" for="search-unit-type">Unit Type:</label>
+        <select name="q_unit_type" id="search-unit-type" class="form-select form-select-sm" style="width:auto;">
+          <option value="">— All Unit Types —</option>
+          {% for cat in unit_type_category_choices %}
+          <option value="{{ cat }}" {% if get_params.q_unit_type == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
           <label class="form-label small">Unit Number</label>
           <input type="text" name="q_unit_number" class="form-control form-control-sm"
                  placeholder="Enter unit number..." value="{{ get_params.q_unit_number }}">
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Family</label>
-          <input type="text" name="q_family" class="form-control form-control-sm"
-                 placeholder="Enter family..." value="{{ get_params.q_family }}">
+        <div class="col-md-4">
+          <label class="form-label small">YT Number</label>
+          <input type="text" name="q_yt_number" class="form-control form-control-sm"
+                 placeholder="Enter YT number..." value="{{ get_params.q_yt_number }}">
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Rotation</label>
-          <input type="text" name="q_rotation" class="form-control form-control-sm"
-                 placeholder="Enter rotation..." value="{{ get_params.q_rotation }}">
+        <div class="col-md-4">
+          <label class="form-label small">OEM</label>
+          <input type="text" name="q_oem" class="form-control form-control-sm"
+                 placeholder="Enter OEM..." value="{{ get_params.q_oem }}">
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Solenoid Attached</label>
-          <input type="text" name="q_solenoid_attached" class="form-control form-control-sm"
-                 placeholder="Enter value..." value="{{ get_params.q_solenoid_attached }}">
+        <div class="col-md-6">
+          <label class="form-label small">Model / Cat Number</label>
+          <input type="text" name="q_model_cat_number" class="form-control form-control-sm"
+                 placeholder="Enter model / cat number..." value="{{ get_params.q_model_cat_number }}">
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Bolt Holes</label>
-          <input type="text" name="q_bolt_holes" class="form-control form-control-sm"
-                 placeholder="Enter bolt holes..." value="{{ get_params.q_bolt_holes }}">
+        <div class="col-md-6">
+          <label class="form-label small">Voltage</label>
+          <input type="text" name="q_voltage" class="form-control form-control-sm"
+                 placeholder="Enter voltage..." value="{{ get_params.q_voltage }}">
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Drive</label>
-          <input type="text" name="q_drive" class="form-control form-control-sm"
-                 placeholder="Enter drive..." value="{{ get_params.q_drive }}">
-        </div>
+      </div>
+      <div id="unit-type-placeholder" class="text-center text-muted py-3{% if get_params.q_unit_type %} d-none{% endif %}">
+        Select a unit type above to see additional type-specific search fields.
+      </div>
+      <div id="unit-type-fields" class="row g-3 mt-2{% if not get_params.q_unit_type %} d-none{% endif %}">
       </div>
     </div>
   </div>
@@ -147,107 +125,198 @@
     <button type="submit" class="btn btn-primary">
       <i class="bi bi-search"></i> Search Units
     </button>
-    <a href="?tab=units" class="btn btn-secondary">Clear</a>
+    <a href="?tab=units" class="btn btn-secondary js-live-search-clear-persisted"
+       data-live-search-key="catalog:unit_search:units">Clear</a>
   </div>
 </form>
+</div>
 
-{% elif tab == 'applications' %}
-{# ===== Applications search form — layout matches screenshot ===== #}
-<form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form">
-  <input type="hidden" name="tab" value="applications">
+{% elif tab == 'parts' %}
+{# ===== Parts search form — matches Add Part layout ===== #}
+<div style="max-width:900px;">
+<form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form"
+      data-live-search-key="catalog:unit_search:parts">
+  <input type="hidden" name="tab" value="parts">
   <div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Identification</span>
+      <div class="d-flex align-items-center gap-2">
+        <label class="form-label mb-0 fw-semibold text-nowrap small" for="search-category">Category:</label>
+        <select name="q_category" id="search-category" class="form-select form-select-sm" style="width:auto;">
+          <option value="">— All Categories —</option>
+          {% for c in part_category_choices %}
+          <option value="{{ c }}" {% if get_params.q_category == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
     <div class="card-body">
       <div class="row g-3">
-        {# Row 1: Make, Engine, Year, Mfr #}
-        <div class="col-md-3">
-          <label class="form-label small">Make</label>
-          <div class="search-input-wrapper js-search-with-clear">
-            <input type="text" name="q_make" class="form-control form-control-sm"
-                   placeholder="Enter make..." value="{{ get_params.q_make }}">
-            <button type="button" class="search-clear-btn" aria-label="Clear"><i class="bi bi-x"></i></button>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Engine</label>
-          <input type="text" name="q_engine" class="form-control form-control-sm"
-                 placeholder="Enter engine..." value="{{ get_params.q_engine }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Year</label>
-          <input type="text" name="q_year" class="form-control form-control-sm"
-                 placeholder="Enter year..." value="{{ get_params.q_year }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Mfr</label>
-          <input type="text" name="q_mfr" class="form-control form-control-sm"
-                 placeholder="Enter mfr..." value="{{ get_params.q_mfr }}">
-        </div>
-        {# Row 2: Volt, Amp, Part #, Other # #}
-        <div class="col-md-3">
-          <label class="form-label small">Volt</label>
-          <input type="text" name="q_volt" class="form-control form-control-sm"
-                 placeholder="Enter volt..." value="{{ get_params.q_volt }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Amp</label>
-          <input type="text" name="q_amp" class="form-control form-control-sm"
-                 placeholder="Enter amp..." value="{{ get_params.q_amp }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Part #</label>
+        <div class="col-md-4">
+          <label class="form-label small">Part Number</label>
           <input type="text" name="q_part_number" class="form-control form-control-sm"
                  placeholder="Enter part number..." value="{{ get_params.q_part_number }}">
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Other #</label>
-          <input type="text" name="q_other_number" class="form-control form-control-sm"
-                 placeholder="Enter other number..." value="{{ get_params.q_other_number }}">
+        <div class="col-md-4">
+          <label class="form-label small">Part Name</label>
+          <input type="text" name="q_part_name" class="form-control form-control-sm"
+                 placeholder="Enter part name..." value="{{ get_params.q_part_name }}">
         </div>
-        {# Row 3: Unit Number, Options, Notes, Linked Unit #}
-        <div class="col-md-3">
+        <div class="col-md-4">
+          <label class="form-label small">Manufacturer #</label>
+          <input type="text" name="q_manufacturer_number" class="form-control form-control-sm"
+                 placeholder="Enter manufacturer number..." value="{{ get_params.q_manufacturer_number }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">YT Number</label>
+          <input type="text" name="q_yt_number" class="form-control form-control-sm"
+                 placeholder="Enter YT number..." value="{{ get_params.q_yt_number }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">J&amp;N</label>
+          <input type="text" name="q_j_and_n" class="form-control form-control-sm"
+                 placeholder="Enter J&amp;N..." value="{{ get_params.q_j_and_n }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">OEM #</label>
+          <input type="text" name="q_oem_number" class="form-control form-control-sm"
+                 placeholder="Enter OEM number..." value="{{ get_params.q_oem_number }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Voltage</label>
+          <input type="text" name="q_voltage" class="form-control form-control-sm"
+                 placeholder="Enter voltage..." value="{{ get_params.q_voltage }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Type</label>
+          <input type="text" name="q_type" class="form-control form-control-sm"
+                 placeholder="Enter type..." value="{{ get_params.q_type }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">OEM</label>
+          <input type="text" name="q_oem" class="form-control form-control-sm"
+                 placeholder="Enter OEM..." value="{{ get_params.q_oem }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Primary Vendor</label>
+          <input type="text" name="q_primary_vendor" class="form-control form-control-sm"
+                 placeholder="Enter vendor..." value="{{ get_params.q_primary_vendor }}">
+        </div>
+      </div>
+      <div id="category-fields" class="row g-3 mt-2 d-none"></div>
+    </div>
+  </div>
+  <div class="d-flex gap-2 mb-4">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-search"></i> Search Parts
+    </button>
+    <a href="?tab=parts" class="btn btn-secondary js-live-search-clear-persisted"
+       data-live-search-key="catalog:unit_search:parts">Clear</a>
+  </div>
+</form>
+</div>
+
+{% elif tab == 'applications' %}
+{# ===== Applications search form — matches Add Application layout ===== #}
+<div style="max-width:900px;">
+<form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form"
+      data-live-search-key="catalog:unit_search:applications">
+  <input type="hidden" name="tab" value="applications">
+  <div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Application Details</span>
+      <div class="d-flex align-items-center gap-2">
+        <label class="form-label mb-0 fw-semibold text-nowrap small" for="search-app-type">Application Type:</label>
+        <select name="q_app_type" id="search-app-type" class="form-select form-select-sm" style="width:auto;">
+          <option value="">— All Types —</option>
+          {% for at in app_type_choices %}
+          <option value="{{ at }}" {% if get_params.q_app_type == at %}selected{% endif %}>{{ at }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
           <label class="form-label small">Unit Number</label>
           <input type="text" name="q_unit_number" class="form-control form-control-sm"
                  placeholder="Enter unit number..." value="{{ get_params.q_unit_number }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-4">
+          <label class="form-label small">Make</label>
+          <input type="text" name="q_make" class="form-control form-control-sm"
+                 placeholder="Enter make..." value="{{ get_params.q_make }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Model</label>
+          <input type="text" name="q_model" class="form-control form-control-sm"
+                 placeholder="Enter model..." value="{{ get_params.q_model }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Engine</label>
+          <input type="text" name="q_engine" class="form-control form-control-sm"
+                 placeholder="Enter engine..." value="{{ get_params.q_engine }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Year</label>
+          <input type="text" name="q_year" class="form-control form-control-sm"
+                 placeholder="Enter year..." value="{{ get_params.q_year }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Manufacturer</label>
+          <input type="text" name="q_mfr" class="form-control form-control-sm"
+                 placeholder="Enter mfr..." value="{{ get_params.q_mfr }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Voltage</label>
+          <input type="text" name="q_volt" class="form-control form-control-sm"
+                 placeholder="Enter volt..." value="{{ get_params.q_volt }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Amps</label>
+          <input type="text" name="q_amp" class="form-control form-control-sm"
+                 placeholder="Enter amps..." value="{{ get_params.q_amp }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Fuel Type</label>
+          <input type="text" name="q_fuel_type" class="form-control form-control-sm"
+                 placeholder="Enter fuel type..." value="{{ get_params.q_fuel_type }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">VIN</label>
+          <input type="text" name="q_vin" class="form-control form-control-sm"
+                 placeholder="Enter VIN..." value="{{ get_params.q_vin }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Alt Pulley</label>
+          <input type="text" name="q_alt_pulley" class="form-control form-control-sm"
+                 placeholder="Enter alt pulley..." value="{{ get_params.q_alt_pulley }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Unit Type</label>
+          <input type="text" name="q_unit_type_name" class="form-control form-control-sm"
+                 placeholder="Enter unit type..." value="{{ get_params.q_unit_type_name }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Other Number</label>
+          <input type="text" name="q_other_number" class="form-control form-control-sm"
+                 placeholder="Enter other number..." value="{{ get_params.q_other_number }}">
+        </div>
+        <div class="col-12">
           <label class="form-label small">Options</label>
           <input type="text" name="q_options" class="form-control form-control-sm"
                  placeholder="Enter options..." value="{{ get_params.q_options }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-12">
           <label class="form-label small">Notes</label>
           <input type="text" name="q_notes" class="form-control form-control-sm"
                  placeholder="Enter notes..." value="{{ get_params.q_notes }}">
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Linked Unit</label>
-          <select name="q_linked_unit" class="form-select form-select-sm">
-            <option value="">All Applications</option>
-            <option value="linked" {% if get_params.q_linked_unit == 'linked' %}selected{% endif %}>Linked</option>
-            <option value="not_linked" {% if get_params.q_linked_unit == 'not_linked' %}selected{% endif %}>Not Linked</option>
-          </select>
-        </div>
-        {# Row 4: Created From, Created To, Updated From, Updated To (date fields) #}
-        <div class="col-md-3">
-          <label class="form-label small">Created From</label>
-          <input type="date" name="q_created_from" class="form-control form-control-sm"
-                 placeholder="mm/dd/yyyy" value="{{ get_params.q_created_from }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Created To</label>
-          <input type="date" name="q_created_to" class="form-control form-control-sm"
-                 placeholder="mm/dd/yyyy" value="{{ get_params.q_created_to }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Updated From</label>
-          <input type="date" name="q_updated_from" class="form-control form-control-sm"
-                 placeholder="mm/dd/yyyy" value="{{ get_params.q_updated_from }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Updated To</label>
-          <input type="date" name="q_updated_to" class="form-control form-control-sm"
-                 placeholder="mm/dd/yyyy" value="{{ get_params.q_updated_to }}">
-        </div>
+      </div>
+      <div id="app-type-placeholder" class="text-center text-muted py-3{% if get_params.q_app_type %} d-none{% endif %}">
+        Select an application type above to see additional type-specific search fields.
+      </div>
+      <div id="app-type-fields" class="row g-3 mt-2{% if not get_params.q_app_type %} d-none{% endif %}">
       </div>
     </div>
   </div>
@@ -255,225 +324,48 @@
     <button type="submit" class="btn btn-primary">
       <i class="bi bi-search"></i> Search Applications
     </button>
-    <a href="?tab=applications" class="btn btn-secondary">Clear</a>
+    <a href="?tab=applications" class="btn btn-secondary js-live-search-clear-persisted"
+       data-live-search-key="catalog:unit_search:applications">Clear</a>
   </div>
 </form>
-
-{% elif tab == 'parts' %}
-{# ===== Parts search form — layout matches screenshot ===== #}
-<form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form">
-  <input type="hidden" name="tab" value="parts">
-  <div class="card mb-4">
-    <div class="card-body">
-      <div class="row g-3">
-        {# Row 1: Search Parts, Key, YT Number, J&N #}
-        <div class="col-md-3">
-          <label class="form-label small">Search Parts</label>
-          <div class="search-input-wrapper js-search-with-clear">
-            <input type="text" name="q_part_search" class="form-control form-control-sm"
-                   placeholder="Search by key, J&N, OEM #..." value="{{ get_params.q_part_search }}">
-            <button type="button" class="search-clear-btn" aria-label="Clear"><i class="bi bi-x"></i></button>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Key</label>
-          <input type="text" name="q_key" class="form-control form-control-sm"
-                 placeholder="Enter key..." value="{{ get_params.q_key }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">YT Number</label>
-          <input type="text" name="q_yt_number" class="form-control form-control-sm"
-                 placeholder="Enter YT number..." value="{{ get_params.q_yt_number }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">J&N</label>
-          <input type="text" name="q_j_and_n" class="form-control form-control-sm"
-                 placeholder="Enter J&N..." value="{{ get_params.q_j_and_n }}">
-        </div>
-        {# Row 2: OEM #, Item No, Name, Category #}
-        <div class="col-md-3">
-          <label class="form-label small">OEM #</label>
-          <input type="text" name="q_oem_number" class="form-control form-control-sm"
-                 placeholder="Enter OEM number..." value="{{ get_params.q_oem_number }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Item No</label>
-          <input type="text" name="q_item_no" class="form-control form-control-sm"
-                 placeholder="Enter item number..." value="{{ get_params.q_item_no }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Name</label>
-          <input type="text" name="q_name" class="form-control form-control-sm"
-                 placeholder="Enter part name..." value="{{ get_params.q_name }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Category</label>
-          <select name="q_category" class="form-select form-select-sm">
-            <option value="">All Categories</option>
-            {% for c in part_category_choices %}
-            <option value="{{ c }}" {% if get_params.q_category == c %}selected{% endif %}>{{ c }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        {# Row 3: Type, OEM Type, Primary Vendor, Plug ID #}
-        <div class="col-md-3">
-          <label class="form-label small">Type</label>
-          <input type="text" name="q_type" class="form-control form-control-sm"
-                 placeholder="Enter type..." value="{{ get_params.q_type }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">OEM Type</label>
-          <input type="text" name="q_oem_type" class="form-control form-control-sm"
-                 placeholder="Enter OEM type..." value="{{ get_params.q_oem_type }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Primary Vendor</label>
-          <input type="text" name="q_primary_vendor" class="form-control form-control-sm"
-                 placeholder="Enter vendor..." value="{{ get_params.q_primary_vendor }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Plug ID</label>
-          <input type="text" name="q_plug_id" class="form-control form-control-sm"
-                 placeholder="Enter plug ID..." value="{{ get_params.q_plug_id }}">
-        </div>
-        {# Row 4: Catalog, Price, In Stock, Item Typ #}
-        <div class="col-md-3">
-          <label class="form-label small">Catalog</label>
-          <input type="text" name="q_catalog" class="form-control form-control-sm"
-                 placeholder="Enter catalog..." value="{{ get_params.q_catalog }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Price</label>
-          <input type="text" name="q_price" class="form-control form-control-sm"
-                 placeholder="Enter price..." value="{{ get_params.q_price }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">In Stock</label>
-          <select name="q_in_stock" class="form-select form-select-sm">
-            <option value="">All Stock Levels</option>
-            <option value="in_stock" {% if get_params.q_in_stock == 'in_stock' %}selected{% endif %}>In Stock</option>
-            <option value="out_of_stock" {% if get_params.q_in_stock == 'out_of_stock' %}selected{% endif %}>Out of Stock</option>
-            <option value="low_stock" {% if get_params.q_in_stock == 'low_stock' %}selected{% endif %}>Low Stock</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Item Typ</label>
-          <input type="text" name="q_item_typ" class="form-control form-control-sm"
-                 placeholder="Enter item typ..." value="{{ get_params.q_item_typ }}">
-        </div>
-        {# Row 5: OEM, Unit, Description, Reorder Qty #}
-        <div class="col-md-3">
-          <label class="form-label small">OEM</label>
-          <input type="text" name="q_oem" class="form-control form-control-sm"
-                 placeholder="Enter OEM..." value="{{ get_params.q_oem }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Unit</label>
-          <input type="text" name="q_unit" class="form-control form-control-sm"
-                 placeholder="Enter unit..." value="{{ get_params.q_unit }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Description</label>
-          <input type="text" name="q_description" class="form-control form-control-sm"
-                 placeholder="Enter description..." value="{{ get_params.q_description }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Reorder Qty</label>
-          <input type="text" name="q_reorder_qty" class="form-control form-control-sm"
-                 placeholder="Enter reorder qty..." value="{{ get_params.q_reorder_qty }}">
-        </div>
-        {# Row 6: Foot Notes, Superseding Notes, Part Number, Part Name #}
-        <div class="col-md-3">
-          <label class="form-label small">Foot Notes</label>
-          <input type="text" name="q_foot_notes" class="form-control form-control-sm"
-                 placeholder="Enter foot notes..." value="{{ get_params.q_foot_notes }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Superseding Notes</label>
-          <input type="text" name="q_superseding_notes" class="form-control form-control-sm"
-                 placeholder="Enter superseding notes..." value="{{ get_params.q_superseding_notes }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Part Number</label>
-          <input type="text" name="q_part_number" class="form-control form-control-sm"
-                 placeholder="Enter part number..." value="{{ get_params.q_part_number }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Part Name</label>
-          <input type="text" name="q_part_name" class="form-control form-control-sm"
-                 placeholder="Enter part name..." value="{{ get_params.q_part_name }}">
-        </div>
-        {# Row 7: Stock Quantity, Created From, Created To, Updated From #}
-        <div class="col-md-3">
-          <label class="form-label small">Stock Quantity</label>
-          <input type="text" name="q_stock_quantity" class="form-control form-control-sm"
-                 placeholder="Enter stock quantity..." value="{{ get_params.q_stock_quantity }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Created From</label>
-          <input type="date" name="q_created_from" class="form-control form-control-sm"
-                 placeholder="mm/dd/yyyy" value="{{ get_params.q_created_from }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Created To</label>
-          <input type="date" name="q_created_to" class="form-control form-control-sm"
-                 placeholder="mm/dd/yyyy" value="{{ get_params.q_created_to }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Updated From</label>
-          <input type="date" name="q_updated_from" class="form-control form-control-sm"
-                 placeholder="mm/dd/yyyy" value="{{ get_params.q_updated_from }}">
-        </div>
-        {# Row 8: Updated To, Has Picture, Has Interchange, Has Superseding #}
-        <div class="col-md-3">
-          <label class="form-label small">Updated To</label>
-          <input type="date" name="q_updated_to" class="form-control form-control-sm"
-                 placeholder="mm/dd/yyyy" value="{{ get_params.q_updated_to }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Has Picture</label>
-          <select name="q_has_picture" class="form-select form-select-sm">
-            <option value="">All Parts</option>
-            <option value="yes" {% if get_params.q_has_picture == 'yes' %}selected{% endif %}>Yes</option>
-            <option value="no" {% if get_params.q_has_picture == 'no' %}selected{% endif %}>No</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Has Interchange</label>
-          <select name="q_has_interchange" class="form-select form-select-sm">
-            <option value="">All Parts</option>
-            <option value="yes" {% if get_params.q_has_interchange == 'yes' %}selected{% endif %}>Yes</option>
-            <option value="no" {% if get_params.q_has_interchange == 'no' %}selected{% endif %}>No</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">Has Superseding</label>
-          <select name="q_has_superseding" class="form-select form-select-sm">
-            <option value="">All Parts</option>
-            <option value="yes" {% if get_params.q_has_superseding == 'yes' %}selected{% endif %}>Yes</option>
-            <option value="no" {% if get_params.q_has_superseding == 'no' %}selected{% endif %}>No</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="d-flex gap-2 mb-4">
-    <button type="submit" class="btn btn-primary">
-      <i class="bi bi-search"></i> Search Parts
-    </button>
-    <a href="?tab=parts" class="btn btn-secondary">Clear</a>
-  </div>
-</form>
+</div>
 {% endif %}
 
-{# ===== Results (only this section is replaced on live search; form stays to preserve focus) ===== #}
+{# ===== Results ===== #}
 <div id="live-search-results">
 {% if results_count > 0 %}
 <p class="text-muted mb-2">{{ results_count }} result{{ results_count|pluralize }} found</p>
 
-{% if tab == 'units' %}
+{% if tab == 'crossref' %}
 <div class="table-responsive">
-  <table class="table table-striped table-hover align-middle">
+  <table class="table table-striped table-hover align-middle" style="table-layout:fixed;width:100%">
+    <thead class="table-dark">
+      <tr>
+        <th style="width:11rem;">Record type</th>
+        <th>Match</th>
+        <th>Detail</th>
+        <th>Primary</th>
+        <th>Secondary</th>
+        <th>More</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for hit in results %}
+      <tr data-href="{{ hit.href }}" style="cursor:pointer">
+        <td><span class="badge bg-secondary text-wrap">{{ hit.hit_type }}</span></td>
+        <td><strong>{{ hit.match }}</strong></td>
+        <td class="small text-muted">{{ hit.detail|default:"—" }}</td>
+        <td>{{ hit.primary|default:"—" }}</td>
+        <td class="small">{{ hit.secondary|default:"—" }}</td>
+        <td class="small text-muted">{{ hit.tertiary|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif tab == 'units' %}
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle" style="table-layout:fixed;width:100%">
     <thead class="table-dark">
       <tr>
         <th>Unit Type</th>
@@ -481,47 +373,16 @@
         <th>OEM</th>
         <th>Voltage</th>
         <th>Unit #</th>
-        <th class="text-center">Details</th>
       </tr>
     </thead>
     <tbody>
       {% for unit in results %}
-      <tr>
+      <tr data-href="{% url 'catalog:unit_detail' unit.pk %}" style="cursor:pointer">
         <td>{{ unit.unit_type|default:"—" }}</td>
         <td>{{ unit.yt_number|default:"—" }}</td>
         <td>{{ unit.oem|default:"—" }}</td>
         <td>{{ unit.voltage|default:"—" }}</td>
         <td>{{ unit.unit_number }}</td>
-        <td class="text-center">
-          <a href="{% url 'catalog:unit_detail' unit.pk %}" class="btn btn-sm btn-outline-primary">View</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% elif tab == 'applications' %}
-<div class="table-responsive">
-  <table class="table table-striped table-hover align-middle">
-    <thead class="table-dark">
-      <tr>
-        <th>Name</th>
-        <th>Make</th>
-        <th>Engine</th>
-        <th>Year</th>
-        <th class="text-center">Details</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for app in results %}
-      <tr>
-        <td>{{ app.name }}</td>
-        <td>{{ app.make|default:"—" }}</td>
-        <td>{{ app.engine|default:"—" }}</td>
-        <td>{{ app.year|default:"—" }}</td>
-        <td class="text-center">
-          <a href="{% url 'catalog:application_detail' app.pk %}" class="btn btn-sm btn-outline-primary">View</a>
-        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -529,28 +390,49 @@
 </div>
 {% elif tab == 'parts' %}
 <div class="table-responsive">
-  <table class="table table-striped table-hover align-middle">
+  <table class="table table-striped table-hover align-middle" style="table-layout:fixed;width:100%">
     <thead class="table-dark">
       <tr>
         <th>Part #</th>
         <th>Name</th>
-        <th>J&N</th>
+        <th>J&amp;N</th>
         <th>OEM #</th>
         <th>Category</th>
-        <th class="text-center">Details</th>
       </tr>
     </thead>
     <tbody>
       {% for part in results %}
-      <tr>
+      <tr data-href="{% url 'catalog:part_detail' part.pk %}" style="cursor:pointer">
         <td>{{ part.part_number }}</td>
         <td>{{ part.part_name|default:"—" }}</td>
         <td>{{ part.j_and_n|default:"—" }}</td>
         <td>{{ part.oem_number|default:"—" }}</td>
         <td>{{ part.category|default:"—" }}</td>
-        <td class="text-center">
-          <a href="{% url 'catalog:part_detail' part.pk %}" class="btn btn-sm btn-outline-primary">View</a>
-        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif tab == 'applications' %}
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle" style="table-layout:fixed;width:100%">
+    <thead class="table-dark">
+      <tr>
+        <th>Unit #</th>
+        <th>Make</th>
+        <th>Model</th>
+        <th>Engine</th>
+        <th>Year</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for app in results %}
+      <tr data-href="{% url 'catalog:application_detail' app.pk %}" style="cursor:pointer">
+        <td>{{ app.unit_number|default:"—" }}</td>
+        <td>{{ app.make|default:"—" }}</td>
+        <td>{{ app.model|default:"—" }}</td>
+        <td>{{ app.engine|default:"—" }}</td>
+        <td>{{ app.year|default:"—" }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -560,4 +442,165 @@
 {% endif %}
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+{% if tab == 'units' %}
+(function() {
+  var categoryFieldsJson = JSON.parse('{{ unit_type_fields_json|escapejs }}');
+  var params = new URLSearchParams(window.location.search);
+
+  var select = document.getElementById('search-unit-type');
+  var container = document.getElementById('unit-type-fields');
+  var placeholder = document.getElementById('unit-type-placeholder');
+
+  function buildField(f) {
+    var div = document.createElement('div');
+    div.className = 'col-md-4';
+    var label = document.createElement('label');
+    label.className = 'form-label small';
+    label.textContent = f.label;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.name = 'q_spec_' + f.name;
+    input.className = 'form-control form-control-sm';
+    input.placeholder = 'Enter ' + f.label.toLowerCase() + '...';
+    input.value = params.get('q_spec_' + f.name) || '';
+    div.appendChild(label);
+    div.appendChild(input);
+    return div;
+  }
+
+  function renderFields() {
+    var cat = select.value;
+    container.innerHTML = '';
+
+    var catFields = (cat && categoryFieldsJson[cat]) ? categoryFieldsJson[cat] : [];
+    if (!catFields.length) {
+      placeholder.classList.toggle('d-none', !!cat);
+      container.classList.add('d-none');
+      return;
+    }
+
+    placeholder.classList.add('d-none');
+    container.classList.remove('d-none');
+    catFields.forEach(function(f) { container.appendChild(buildField(f)); });
+  }
+
+  select.addEventListener('change', renderFields);
+  renderFields();
+})();
+{% elif tab == 'applications' %}
+(function () {
+  var appTypeFieldsJson = JSON.parse('{{ app_type_fields_json|escapejs }}');
+  var params = new URLSearchParams(window.location.search);
+
+  var ALWAYS_VISIBLE = [
+    'unit_number','make','model','engine','year','mfr','volt',
+    'amp','fuel_type','vin','alt_pulley','unit_type_name',
+    'other_number','options','notes'
+  ];
+
+  var select = document.getElementById('search-app-type');
+  var container = document.getElementById('app-type-fields');
+  var placeholder = document.getElementById('app-type-placeholder');
+
+  function buildField(f) {
+    var div = document.createElement('div');
+    div.className = 'col-md-4';
+    var label = document.createElement('label');
+    label.className = 'form-label small';
+    label.textContent = f.label;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.name = 'q_spec_' + f.name;
+    input.className = 'form-control form-control-sm';
+    input.placeholder = 'Enter ' + f.label.toLowerCase() + '...';
+    input.value = params.get('q_spec_' + f.name) || '';
+    div.appendChild(label);
+    div.appendChild(input);
+    return div;
+  }
+
+  function renderFields() {
+    var appType = select.value;
+    container.innerHTML = '';
+
+    var typeFields = (appType && appTypeFieldsJson[appType]) ? appTypeFieldsJson[appType] : [];
+    var customFields = typeFields.filter(function(f) {
+      return ALWAYS_VISIBLE.indexOf(f.name) === -1;
+    });
+
+    if (!customFields.length) {
+      placeholder.classList.toggle('d-none', !!appType);
+      container.classList.add('d-none');
+      return;
+    }
+
+    placeholder.classList.add('d-none');
+    container.classList.remove('d-none');
+    customFields.forEach(function(f) { container.appendChild(buildField(f)); });
+  }
+
+  select.addEventListener('change', renderFields);
+  renderFields();
+})();
+{% elif tab == 'parts' %}
+(function () {
+  var allCategoryFields = JSON.parse('{{ part_category_fields_json|escapejs }}');
+  var params = new URLSearchParams(window.location.search);
+
+  var ALWAYS_VISIBLE = [
+    'part_number','part_name','manufacturer_number','yt_number',
+    'j_and_n','oem_number','voltage','type','oem','primary_vendor'
+  ];
+
+  var categorySelect = document.getElementById('search-category');
+  var container = document.getElementById('category-fields');
+
+  function buildField(f) {
+    var col = document.createElement('div');
+    col.className = 'col-md-4';
+    var lbl = document.createElement('label');
+    lbl.className = 'form-label small';
+    lbl.textContent = f.label;
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'form-control form-control-sm';
+    inp.name = 'q_spec_' + f.name;
+    inp.placeholder = 'Enter ' + f.label.toLowerCase() + '...';
+    inp.value = params.get('q_spec_' + f.name) || '';
+    col.appendChild(lbl);
+    col.appendChild(inp);
+    return col;
+  }
+
+  function renderFields(category) {
+    container.innerHTML = '';
+    var catFields = (allCategoryFields[category] || []).filter(function(f) {
+      return ALWAYS_VISIBLE.indexOf(f.name) === -1;
+    });
+
+    if (!catFields.length) {
+      container.classList.add('d-none');
+      return;
+    }
+
+    container.classList.remove('d-none');
+    catFields.forEach(function(f) { container.appendChild(buildField(f)); });
+  }
+
+  categorySelect.addEventListener('change', function() {
+    renderFields(this.value);
+  });
+
+  if (categorySelect.value) {
+    renderFields(categorySelect.value);
+  }
+})();
+{% endif %}
+});
+</script>
 {% endblock %}

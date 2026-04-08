@@ -1,13 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Unit {{ unit.unit_number }} — Manchester Electric{% endblock %}
+{% block title %}Unit {{ unit.yt_number|default:unit.unit_number }} — Apex Database{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 small">
+  <li class="breadcrumb-item"><a href="{% url 'catalog:unit_list' %}">Units</a></li>
+  <li class="breadcrumb-item active" aria-current="page">{{ unit.yt_number|default:unit.unit_number }}</li>
+</ol></nav>
+{% endblock %}
 
 {% block content %}
 
 {# ===== Header with title and action buttons (2.2) ===== #}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
   <h1 class="page-heading mb-0">
-    <i class="bi bi-cpu"></i> Unit {{ unit.unit_number }}
+    <i class="bi bi-cpu"></i> Unit {{ unit.yt_number|default:unit.unit_number }}
   </h1>
   <div class="d-flex gap-2">
     <a href="{% url 'invoicing:add_to_invoice' %}?unit={{ unit.pk }}" class="btn btn-success">
@@ -19,9 +26,9 @@
     <a href="{% url 'catalog:unit_edit' unit.pk %}" class="btn btn-outline-primary">
       <i class="bi bi-pencil"></i> Edit
     </a>
-    <a href="{% url 'catalog:unit_list' %}" class="btn btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Back to List
-    </a>
+    <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </button>
     <a href="{% url 'catalog:unit_search' %}" class="btn btn-outline-secondary">
       <i class="bi bi-search"></i> Search Units
     </a>
@@ -64,14 +71,33 @@
     </div>
     {% endif %}
 
-    {# Descriptive fields #}
-    {% if unit.unit_attributes or unit.notes %}
+    {# Unit Type Specifications (dynamic per unit type category) #}
+    {% if unit_spec_display %}
     <div class="card mb-3">
-      <div class="card-header fw-semibold">Notes &amp; Attributes</div>
+      <div class="card-header fw-semibold">Unit Type Specifications{% if unit.unit_type_category %} — {{ unit.unit_type_category }}{% endif %}</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            {% for item in unit_spec_display %}
+            <tr>
+              <th class="ps-3" style="width: 30%;">{{ item.label }}</th>
+              <td>{{ item.value }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Notes section #}
+    {% if unit.description or unit.notes %}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Notes</div>
       <div class="card-body">
-        {% if unit.unit_attributes %}
-        <h6 class="text-muted small">Unit Attributes</h6>
-        <p>{{ unit.unit_attributes|linebreaksbr }}</p>
+        {% if unit.description %}
+        <h6 class="text-muted small">Description</h6>
+        <p>{{ unit.description|linebreaksbr }}</p>
         {% endif %}
         {% if unit.notes %}
         <h6 class="text-muted small">Notes</h6>
@@ -81,40 +107,55 @@
     </div>
     {% endif %}
 
-    {# ===== Cross Reference List (2.3) ===== #}
+    {# Attributes section #}
+    {% if unit.unit_attributes %}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Attributes</div>
+      <div class="card-body">
+        <p class="mb-0">{{ unit.unit_attributes|linebreaksbr }}</p>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ===== Cross Reference Units (2.3) ===== #}
     <div class="card mb-3">
       <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span>Cross Reference Units</span>
         <a href="{% url 'catalog:cross_reference_add' unit.pk %}" class="btn btn-sm btn-outline-primary">
-          <i class="bi bi-plus-lg"></i> Add Unit
+          <i class="bi bi-plus-lg"></i> Add Cross Reference
         </a>
       </div>
-      <div class="card-body p-0">
-        {% if cross_ref_units %}
+      <div class="card-body p-0 me-scrollable-table">
+        {% if cross_ref_all %}
         <table class="table table-sm table-hover mb-0">
           <thead class="table-light">
             <tr>
-              <th class="ps-3">Unit Number</th>
+              <th class="ps-3">Unit / Part Number</th>
               <th>Unit Type</th>
+              <th>Manufacturer / Source</th>
               <th>OEM</th>
               <th>Voltage</th>
               <th>Notes</th>
-              <th class="text-center">Details</th>
             </tr>
           </thead>
           <tbody>
-            {% for cr in cross_ref_units %}
-            <tr>
+            {% for cr in cross_ref_all %}
+            <tr data-href="{% url 'catalog:cross_reference_detail' unit.pk cr.ref.pk %}">
+              {% if cr.unit %}
               <td class="ps-3">{{ cr.unit.unit_number }}</td>
               <td>{{ cr.unit.unit_type|default:"—" }}</td>
+              <td>{{ cr.ref.interchange_type|default:"—" }}</td>
               <td>{{ cr.unit.oem|default:"—" }}</td>
               <td>{{ cr.unit.voltage|default:"—" }}</td>
               <td>{{ cr.ref.notes|default:"—" }}</td>
-              <td class="text-center">
-                <a href="{% url 'catalog:unit_detail' cr.unit.pk %}" class="btn btn-sm btn-outline-primary">
-                  <i class="bi bi-eye"></i>
-                </a>
-              </td>
+              {% else %}
+              <td class="ps-3">{{ cr.ref.cross_ref_number }}</td>
+              <td>—</td>
+              <td>{{ cr.ref.interchange_type|default:"—" }}</td>
+              <td>—</td>
+              <td>—</td>
+              <td>{{ cr.ref.notes|default:"—" }}</td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
@@ -122,7 +163,7 @@
         {% else %}
         <div class="text-center text-muted py-4">
           <i class="bi bi-link-45deg fs-3 d-block mb-2"></i>
-          No cross reference units found.
+          No cross references found.
         </div>
         {% endif %}
       </div>
@@ -136,7 +177,7 @@
           <i class="bi bi-plus-lg"></i> Add Substitutes
         </a>
       </div>
-      <div class="card-body p-0">
+      <div class="card-body p-0 me-scrollable-table">
         {% if substitute_units %}
         <table class="table table-sm table-hover mb-0">
           <thead class="table-light">
@@ -152,6 +193,7 @@
           <tbody>
             {% for s in substitute_units %}
             <tr>
+              {% if s.unit %}
               <td class="ps-3">{{ s.unit.unit_number }}</td>
               <td>{{ s.unit.unit_type|default:"—" }}</td>
               <td>{{ s.unit.oem|default:"—" }}</td>
@@ -162,6 +204,14 @@
                   <i class="bi bi-eye"></i>
                 </a>
               </td>
+              {% else %}
+              <td class="ps-3">{{ s.ref.substitute_number }}</td>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+              <td>{{ s.ref.notes|default:"—" }}</td>
+              <td class="text-center text-muted"><small>manual entry</small></td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
@@ -175,7 +225,8 @@
       </div>
     </div>
 
-    {# ===== Gear Reduction Substitutions (2.5) ===== #}
+    {# ===== Gear Reduction Substitutions (2.5) — hidden for Alternators ===== #}
+    {% if unit.unit_type_category != "Alternator" %}
     <div class="card mb-3">
       <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span>Gear Reduction Substitutions</span>
@@ -183,7 +234,7 @@
           <i class="bi bi-plus-lg"></i> Add Gear Reduction
         </a>
       </div>
-      <div class="card-body p-0">
+      <div class="card-body p-0 me-scrollable-table">
         {% if gear_reductions %}
         <table class="table table-sm table-hover mb-0">
           <thead class="table-light">
@@ -207,7 +258,7 @@
                 <form method="post" action="{% url 'catalog:gear_reduction_delete' unit.pk gr.pk %}" class="d-inline">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"
-                    onclick="return confirm('Delete this gear reduction?');">
+                    data-confirm="Delete this gear reduction?">
                     <i class="bi bi-trash"></i>
                   </button>
                 </form>
@@ -224,6 +275,7 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
 
   </div>
 

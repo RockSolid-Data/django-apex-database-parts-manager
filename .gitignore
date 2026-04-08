@@ -13,7 +13,13 @@ env/
 *.log
 db.sqlite3
 db.sqlite3-journal
+seed.sqlite3
 /media/
+
+# External data files
+LesterCD_Decrypted.db
+*.secret_key
+.secret_key
 
 # Static files (collected)
 /staticfiles/
@@ -23,6 +29,17 @@ db.sqlite3-journal
 .idea/
 *.swp
 *.swo
+
+# Build artifacts
+build/
+dist/
+*.msi
+
+# Database backups
+*.backup
+
+# Dev archive (one-off scripts and intermediate data)
+_dev_archive/
 
 # OS
 .DS_Store

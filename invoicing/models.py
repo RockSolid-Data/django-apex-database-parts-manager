@@ -42,8 +42,8 @@ class NetTerms:
 class CompanySettings(models.Model):
     """Company info, logo, and default payment terms. One row expected."""
 
-    company_name = models.CharField(max_length=255, default="Manchester Electric")
-    tagline = models.CharField(max_length=255, blank=True, default="Professional electrical solutions")
+    company_name = models.CharField(max_length=255, default="")
+    tagline = models.CharField(max_length=255, blank=True, default="")
     logo = models.ImageField(upload_to="company", blank=True, null=True)
     email = models.EmailField(blank=True, default="")
     phone = models.CharField(max_length=50, blank=True, default="")
@@ -165,8 +165,8 @@ class CompanySettings(models.Model):
         obj = cls.objects.first()
         if obj is None:
             obj = cls.objects.create(
-                company_name="Manchester Electric",
-                tagline="Professional electrical solutions",
+                company_name="",
+                tagline="",
                 default_net_terms=NetTerms.NET_30,
                 default_net_days=30,
                 default_tax_rate=0,
@@ -181,13 +181,25 @@ class Customer(models.Model):
     """Customer / company for invoicing."""
 
     name = models.CharField(max_length=255)
-    email = models.EmailField(blank=True, default="")
+    contact_name = models.CharField("Contact Name", max_length=150, blank=True, default="")
     phone = models.CharField(max_length=50, blank=True, default="")
-    address_line1 = models.CharField("Address Line 1", max_length=255, blank=True, default="")
-    address_line2 = models.CharField("Address Line 2", max_length=255, blank=True, default="")
-    city = models.CharField(max_length=100, blank=True, default="")
-    state = models.CharField("State / Province", max_length=100, blank=True, default="")
-    zip_code = models.CharField("ZIP / Postal Code", max_length=20, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    fax = models.CharField(max_length=50, blank=True, default="")
+
+    # Bill-to address
+    bill_to_line1 = models.CharField("Address Line 1", max_length=255, blank=True, default="")
+    bill_to_line2 = models.CharField("Address Line 2", max_length=255, blank=True, default="")
+    bill_to_city = models.CharField("City", max_length=100, blank=True, default="")
+    bill_to_state = models.CharField("State / Province", max_length=100, blank=True, default="")
+    bill_to_zip = models.CharField("ZIP / Postal Code", max_length=20, blank=True, default="")
+
+    # Ship-to address
+    ship_to_line1 = models.CharField("Address Line 1", max_length=255, blank=True, default="")
+    ship_to_line2 = models.CharField("Address Line 2", max_length=255, blank=True, default="")
+    ship_to_city = models.CharField("City", max_length=100, blank=True, default="")
+    ship_to_state = models.CharField("State / Province", max_length=100, blank=True, default="")
+    ship_to_zip = models.CharField("ZIP / Postal Code", max_length=20, blank=True, default="")
+
     notes = models.TextField(blank=True, default="")
     is_active = models.BooleanField(default=True)
     net_terms = models.CharField(
@@ -210,6 +222,8 @@ class Customer(models.Model):
         blank=True,
         help_text="Override default tax rate for this customer. Leave blank to use company default.",
     )
+    is_tax_exempt = models.BooleanField("Tax Exempt", default=False)
+    has_st105 = models.BooleanField("ST105 on file", default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -218,6 +232,9 @@ class Customer(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_primary_contact(self):
+        return self.contacts.filter(is_primary=True).first() or self.contacts.first()
 
     def get_effective_net_days(self):
         """Days before payment due. Uses customer override or company default."""
@@ -233,10 +250,31 @@ class Customer(models.Model):
 
     def get_effective_tax_rate(self):
         """Tax rate for invoices. Uses customer override or company default."""
+        if self.is_tax_exempt:
+            return Decimal("0")
         if self.tax_rate is not None:
             return self.tax_rate
         settings = CompanySettings.get()
         return settings.default_tax_rate
+
+
+class CustomerContact(models.Model):
+    """Contact person for a customer. First entry is primary."""
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="contacts")
+    name = models.CharField(max_length=255)
+    phone = models.CharField(max_length=50, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    fax = models.CharField(max_length=50, blank=True, default="")
+    department = models.CharField(max_length=100, blank=True, default="")
+    is_primary = models.BooleanField(default=False)
+    ordering = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-is_primary", "ordering", "pk"]
+
+    def __str__(self):
+        return f"{self.name} ({self.customer.name})"
 
 
 # ---------------------------------------------------------------------------
@@ -315,9 +353,13 @@ class Invoice(models.Model):
         if self.address:
             return self.address.strip()
         if self.customer:
-            parts = [self.customer.address_line1, self.customer.address_line2]
-            if self.customer.city or self.customer.state or self.customer.zip_code:
-                parts.append(f"{self.customer.city or ''}, {self.customer.state or ''} {self.customer.zip_code or ''}".strip().strip(','))
+            parts = [self.customer.bill_to_line1, self.customer.bill_to_line2]
+            if self.customer.bill_to_city or self.customer.bill_to_state or self.customer.bill_to_zip:
+                parts.append(
+                    f"{self.customer.bill_to_city or ''}, "
+                    f"{self.customer.bill_to_state or ''} "
+                    f"{self.customer.bill_to_zip or ''}".strip().strip(",")
+                )
             return "\n".join(p for p in parts if p)
         return ""
 
@@ -377,6 +419,9 @@ class InvoiceItem(models.Model):
     description = models.CharField(max_length=500, blank=True, default="")
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_pct = models.DecimalField(
+        "Discount %", max_digits=5, decimal_places=2, default=0,
+    )
     line_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -388,8 +433,8 @@ class InvoiceItem(models.Model):
         return f"{self.invoice.invoice_number} — {self.description[:50]}"
 
     def save(self, *args, **kwargs):
-        """Auto-calculate line_total = quantity × unit_price."""
-        self.line_total = round(
-            Decimal(str(self.quantity)) * Decimal(str(self.unit_price)), 2
-        )
+        """Auto-calculate line_total = quantity × unit_price × (1 - discount/100)."""
+        gross = Decimal(str(self.quantity)) * Decimal(str(self.unit_price))
+        discount = Decimal(str(self.discount_pct or 0))
+        self.line_total = round(gross * (1 - discount / 100), 2)
         super().save(*args, **kwargs)

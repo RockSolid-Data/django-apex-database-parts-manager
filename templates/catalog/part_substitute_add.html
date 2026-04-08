@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Add Substitute — {{ part.part_number }} — Apex Database{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-arrow-left-right"></i> Add Substitute
+  </h1>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
+</div>
+
+<div class="row">
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        Add a substitute to <strong>{{ part.part_number }}</strong>
+      </div>
+      <div class="card-body">
+        {% if form.errors %}
+        <div class="alert alert-danger">
+          <strong>Please correct the errors below.</strong>
+          {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <p class="text-muted small mb-3">
+            Link to an existing part in the system, or enter a part number manually.
+            At least one of the two must be provided.
+          </p>
+
+          <hr>
+          <h6 class="text-muted mb-3">Option A: Link to Existing Part</h6>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.substitute_part.id_for_label }}">
+              {{ form.substitute_part.label }}
+            </label>
+            {{ form.substitute_part }}
+            {% if form.substitute_part.errors %}
+              <div class="invalid-feedback d-block">{{ form.substitute_part.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <hr>
+          <h6 class="text-muted mb-3">Option B: Part Number</h6>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.substitute_number.id_for_label }}">
+              {{ form.substitute_number.label }}
+            </label>
+            {{ form.substitute_number }}
+            {% if form.substitute_number.errors %}
+              <div class="invalid-feedback d-block">{{ form.substitute_number.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <hr>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>
+            {{ form.notes }}
+          </div>
+
+          <div class="d-flex gap-2 me-sticky-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i> Add Substitute
+            </button>
+            <a href="{% url 'catalog:part_detail' part.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

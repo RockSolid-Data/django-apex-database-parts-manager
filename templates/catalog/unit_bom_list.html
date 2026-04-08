@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}BOMs for Unit {{ unit.unit_number }} — Manchester Electric{% endblock %}
+{% block title %}BOMs for Unit {{ unit.unit_number }} — Apex Database{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -11,9 +11,9 @@
     <a href="{% url 'catalog:bom_create' %}?unit={{ unit.pk }}" class="btn btn-primary">
       <i class="bi bi-plus-lg"></i> Create BOM
     </a>
-    <a href="{% url 'catalog:unit_detail' unit.pk %}" class="btn btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Back to Unit
-    </a>
+    <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </button>
   </div>
 </div>
 

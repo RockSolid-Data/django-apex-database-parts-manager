@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Customer List — Manchester Electric</title>
+  <title>Customer List — Apex Database</title>
   <style>
     @page { size: letter; margin: 0.5in; }
     body { font-family: sans-serif; font-size: 10pt; max-width: 7.5in; margin: 0 auto; }
@@ -14,16 +14,16 @@
   </style>
 </head>
 <body>
-<h1>Customer List — Manchester Electric</h1>
+<h1>Customer List — Apex Database</h1>
 <p>{{ customers|length }} customer{{ customers|length|pluralize }} found</p>
 <table>
   <thead>
     <tr>
-      <th>Name</th>
-      <th>Email</th>
+      <th>Company Name</th>
+      <th>Contact Name</th>
       <th>Phone</th>
-      <th>City</th>
-      <th>State</th>
+      <th>Email</th>
+      <th>Fax</th>
       <th class="text-center">Status</th>
     </tr>
   </thead>
@@ -31,10 +31,10 @@
     {% for c in customers %}
     <tr>
       <td>{{ c.name }}</td>
-      <td>{{ c.email|default:"—" }}</td>
+      <td>{{ c.contact_name|default:"—" }}</td>
       <td>{{ c.phone|default:"—" }}</td>
-      <td>{{ c.city|default:"—" }}</td>
-      <td>{{ c.state|default:"—" }}</td>
+      <td>{{ c.email|default:"—" }}</td>
+      <td>{{ c.fax|default:"—" }}</td>
       <td class="text-center">{% if c.is_active %}Active{% else %}Inactive{% endif %}</td>
     </tr>
     {% empty %}

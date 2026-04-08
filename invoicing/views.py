@@ -1,28 +1,36 @@
+import logging
 from datetime import date, datetime, timedelta
 
 from decimal import Decimal
 
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.db.models import Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from catalog.models import Part, Unit
 
-from .forms import CompanySettingsForm, CustomerForm, InvoiceCreateForm, InvoiceItemFormSet
-from .models import CompanySettings, Customer, Invoice, InvoiceItem
+from .forms import (
+    CompanySettingsForm, CustomerForm, CustomerContactFormSet,
+    InvoiceCreateForm, InvoiceItemFormSet,
+)
+from .models import CompanySettings, Customer, CustomerContact, Invoice, InvoiceItem
+
+logger = logging.getLogger(__name__)
 
 
 def _format_customer_address(customer):
-    """Format customer address fields into inline text for Invoice.address."""
+    """Format customer bill-to address fields into inline text for Invoice.address."""
     parts = []
-    if customer.address_line1:
-        parts.append(customer.address_line1)
-    if customer.address_line2:
-        parts.append(customer.address_line2)
-    if customer.city or customer.state or customer.zip_code:
+    if customer.bill_to_line1:
+        parts.append(customer.bill_to_line1)
+    if customer.bill_to_line2:
+        parts.append(customer.bill_to_line2)
+    if customer.bill_to_city or customer.bill_to_state or customer.bill_to_zip:
         line = ", ".join(
-            x for x in [customer.city, customer.state, customer.zip_code] if x
+            x for x in [customer.bill_to_city, customer.bill_to_state, customer.bill_to_zip] if x
         )
         if line:
             parts.append(line)
@@ -31,13 +39,17 @@ def _format_customer_address(customer):
 
 def invoice_list(request):
     """Invoice list with search, filters, table with View/Edit actions."""
-    # Auto-update overdue: past due_date and not PAID/CANCELLED → OVERDUE
-    today = date.today()
-    Invoice.objects.filter(
-        due_date__lt=today,
-        status__in=[Invoice.Status.DRAFT, Invoice.Status.SENT]
-    ).update(status=Invoice.Status.OVERDUE)
+    # Auto-update overdue at most once per session (avoid UPDATE on every page load)
+    last_check = request.session.get("_overdue_check")
+    today_str = str(date.today())
+    if last_check != today_str:
+        Invoice.objects.filter(
+            due_date__lt=date.today(),
+            status__in=[Invoice.Status.DRAFT, Invoice.Status.SENT],
+        ).update(status=Invoice.Status.OVERDUE)
+        request.session["_overdue_check"] = today_str
 
+    today = date.today()
     invoices = Invoice.objects.select_related("customer").order_by("-date")
 
     # --- Text search (invoice #, customer, supplier via items) ---
@@ -55,37 +67,36 @@ def invoice_list(request):
     if filter_status:
         invoices = invoices.filter(status=filter_status)
 
-    # --- Date From filter ---
+    # --- Date filters ---
     filter_date_from = request.GET.get("date_from", "").strip()
+    filter_date_to = request.GET.get("date_to", "").strip()
     if filter_date_from:
         invoices = invoices.filter(date__gte=filter_date_from)
+    if filter_date_to:
+        invoices = invoices.filter(date__lte=filter_date_to)
 
-    # --- Supplier filter (invoices with items from this supplier) ---
-    filter_supplier = request.GET.get("supplier", "").strip()
-    if filter_supplier:
-        invoices = invoices.filter(
-            items__part__primary_vendor=filter_supplier
-        ).distinct()
-
-    # --- Build filter choices ---
     status_choices = Invoice.Status.choices
-    supplier_choices = (
-        Part.objects.filter(invoice_items__isnull=False)
-        .exclude(primary_vendor="")
-        .values_list("primary_vendor", flat=True)
-        .distinct()
-        .order_by("primary_vendor")
-    )
 
     due_soon_end = today + timedelta(days=7)
+    total_count = invoices.count()
+    try:
+        per_page = min(int(request.GET.get("per_page", 50)), 100)
+    except (ValueError, TypeError):
+        per_page = 50
+    paginator = Paginator(invoices, per_page)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
     context = {
-        "invoices": invoices,
+        "invoices": page_obj,
+        "page_obj": page_obj,
+        "total_count": total_count,
+        "per_page": per_page,
         "q": q,
         "filter_status": filter_status,
         "filter_date_from": filter_date_from,
-        "filter_supplier": filter_supplier,
+        "filter_date_to": filter_date_to,
         "status_choices": status_choices,
-        "supplier_choices": supplier_choices,
         "today": today,
         "due_soon_end": due_soon_end,
         "company_settings": CompanySettings.get(),
@@ -214,6 +225,7 @@ def add_to_invoice(request):
             unit_price=item_price,
         )
         invoice.recalculate_totals()
+        logger.info("[Invoice] Added %s to %s", item_label, invoice.invoice_number)
         messages.success(request, f"{item_label} added to {invoice.invoice_number}.")
         return redirect("invoicing:invoice_edit", pk=invoice.pk)
 
@@ -246,6 +258,7 @@ def invoice_cancel(request, pk):
     if invoice.status != Invoice.Status.CANCELLED:
         invoice.status = Invoice.Status.CANCELLED
         invoice.save(update_fields=["status", "updated_at"])
+        logger.info("[Invoice] Cancelled %s", invoice.invoice_number)
         messages.success(request, f"Invoice {invoice.invoice_number} cancelled.")
     return redirect(reverse("invoicing:invoice_list") + "?status=CANCELLED")
 
@@ -291,25 +304,17 @@ def invoice_edit(request, pk):
             form.save()
             formset.save()
             invoice.recalculate_totals()
+            logger.info("[Invoice] Updated %s", invoice.invoice_number)
             messages.success(request, f"Invoice {invoice.invoice_number} updated.")
             return redirect("invoicing:invoice_detail", pk=invoice.pk)
     else:
         form = InvoiceCreateForm(instance=invoice, edit=True)
         formset = InvoiceItemFormSet(instance=invoice)
 
-    parts_data = list(
-        Part.objects.filter(is_active=True)
-        .values("id", "part_number", "part_name", "price")
-        .order_by("part_number")
-    )
-    for p in parts_data:
-        p["price"] = str(p["price"]) if p["price"] is not None else "0"
-
     return render(request, "invoicing/invoice_edit.html", {
         "form": form,
         "formset": formset,
         "invoice": invoice,
-        "parts_data": parts_data,
         "company_settings": CompanySettings.get(),
     })
 
@@ -339,11 +344,27 @@ def invoice_create(request, invoice=None):
             inv = form.save(commit=False)
             if not inv.pk:
                 inv.invoice_number = CompanySettings.get().get_next_invoice_number()
+
+            if not inv.customer_id and inv.customer_name:
+                existing = Customer.objects.filter(name__iexact=inv.customer_name.strip()).first()
+                if existing:
+                    inv.customer = existing
+                else:
+                    new_cust = Customer.objects.create(
+                        name=inv.customer_name.strip(),
+                        contact_name=inv.contact_name or "",
+                        phone=inv.phone or "",
+                        email=inv.email or "",
+                        bill_to_line1=inv.address or "",
+                    )
+                    inv.customer = new_cust
+
             inv.save()
             formset = InvoiceItemFormSet(request.POST, instance=inv)
             if formset.is_valid():
                 formset.save()
                 inv.recalculate_totals()
+                logger.info("[Invoice] Created %s for %s", inv.invoice_number, inv.customer)
                 messages.success(request, f"Invoice {inv.invoice_number} created.")
                 return redirect("invoicing:invoice_detail", pk=inv.pk)
             else:
@@ -366,7 +387,7 @@ def invoice_create(request, invoice=None):
                     "tax_rate": tax_rate,
                     "status": Invoice.Status.DRAFT,
                     "customer_name": prefill_customer.name,
-                    "contact_name": "",
+                    "contact_name": prefill_customer.contact_name or "",
                     "phone": prefill_customer.phone or "",
                     "email": prefill_customer.email or "",
                     "address": _format_customer_address(prefill_customer),
@@ -385,38 +406,23 @@ def invoice_create(request, invoice=None):
         inv_instance = invoice or Invoice()
         initial_forms = []
         if prefill_unit:
-            desc = prefill_unit.unit_number
-            if prefill_unit.unit_type:
-                desc = f"{prefill_unit.unit_type.name} — {prefill_unit.unit_number}"
             price = prefill_unit.rebuilt_unit_price or prefill_unit.new_unit_price or Decimal("0")
             initial_forms.append({
                 "unit": prefill_unit,
-                "description": desc[:500],
                 "unit_price": price,
             })
         elif prefill_part:
-            desc = prefill_part.part_name or prefill_part.part_number
             price = prefill_part.price or Decimal("0")
             initial_forms.append({
                 "part": prefill_part,
-                "description": (desc or "")[:500],
                 "unit_price": price,
             })
         formset = InvoiceItemFormSet(instance=inv_instance, initial=initial_forms if initial_forms else None)
-
-    parts_data = list(
-        Part.objects.filter(is_active=True)
-        .values("id", "part_number", "part_name", "price")
-        .order_by("part_number")
-    )
-    for p in parts_data:
-        p["price"] = str(p["price"]) if p["price"] is not None else "0"
 
     return render(request, "invoicing/invoice_create.html", {
         "form": form,
         "formset": formset,
         "invoice": invoice,
-        "parts_data": parts_data,
         "prefill_customer": prefill_customer,
         "company_settings": CompanySettings.get(),
     })
@@ -430,10 +436,12 @@ def customer_list(request):
     if q:
         customers = customers.filter(
             Q(name__icontains=q)
-            | Q(email__icontains=q)
+            | Q(contact_name__icontains=q)
             | Q(phone__icontains=q)
-            | Q(city__icontains=q)
-            | Q(state__icontains=q)
+            | Q(email__icontains=q)
+            | Q(fax__icontains=q)
+            | Q(bill_to_city__icontains=q)
+            | Q(bill_to_state__icontains=q)
             | Q(notes__icontains=q)
         )
 
@@ -441,7 +449,23 @@ def customer_list(request):
     if not show_inactive:
         customers = customers.filter(is_active=True)
 
-    context = {"customers": customers, "q": q, "show_inactive": show_inactive}
+    total_count = customers.count()
+    try:
+        per_page = min(int(request.GET.get("per_page", 50)), 100)
+    except (ValueError, TypeError):
+        per_page = 50
+    paginator = Paginator(customers, per_page)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        "customers": page_obj,
+        "page_obj": page_obj,
+        "total_count": total_count,
+        "per_page": per_page,
+        "q": q,
+        "show_inactive": show_inactive,
+    }
     if request.GET.get("print") == "1":
         return render(request, "invoicing/customer_list_print.html", context)
     return render(request, "invoicing/customer_list.html", context)
@@ -451,15 +475,25 @@ def customer_create(request):
     """Create a new customer."""
     if request.method == "POST":
         form = CustomerForm(request.POST)
-        if form.is_valid():
+        contact_formset = CustomerContactFormSet(request.POST, prefix="contacts")
+        if form.is_valid() and contact_formset.is_valid():
             customer = form.save()
+            contact_formset.instance = customer
+            contacts = contact_formset.save()
+            if contacts and not any(c.is_primary for c in contacts):
+                first = contacts[0]
+                first.is_primary = True
+                first.save(update_fields=["is_primary"])
+            logger.info("[Customer] Created '%s' (pk=%s)", customer.name, customer.pk)
             messages.success(request, f"Customer '{customer.name}' created.")
             return redirect("invoicing:customer_list")
     else:
         form = CustomerForm()
+        contact_formset = CustomerContactFormSet(prefix="contacts")
 
     return render(request, "invoicing/customer_form.html", {
         "form": form,
+        "contact_formset": contact_formset,
         "customer": None,
         "title": "Add New Customer",
     })
@@ -470,15 +504,25 @@ def customer_edit(request, pk):
     customer = get_object_or_404(Customer, pk=pk)
     if request.method == "POST":
         form = CustomerForm(request.POST, instance=customer)
-        if form.is_valid():
+        contact_formset = CustomerContactFormSet(request.POST, prefix="contacts", instance=customer)
+        if form.is_valid() and contact_formset.is_valid():
             form.save()
+            contacts = contact_formset.save()
+            remaining = customer.contacts.all()
+            if remaining.exists() and not remaining.filter(is_primary=True).exists():
+                first = remaining.first()
+                first.is_primary = True
+                first.save(update_fields=["is_primary"])
+            logger.info("[Customer] Updated '%s' (pk=%s)", customer.name, customer.pk)
             messages.success(request, f"Customer '{customer.name}' updated.")
             return redirect("invoicing:customer_list")
     else:
         form = CustomerForm(instance=customer)
+        contact_formset = CustomerContactFormSet(prefix="contacts", instance=customer)
 
     return render(request, "invoicing/customer_form.html", {
         "form": form,
+        "contact_formset": contact_formset,
         "customer": customer,
         "title": "Edit Customer",
     })
@@ -490,6 +534,7 @@ def customer_delete(request, pk):
     if request.method == "POST":
         name = customer.name
         customer.delete()
+        logger.info("[Customer] Deleted '%s' (pk=%s)", name, pk)
         messages.success(request, f"Customer '{name}' deleted.")
         return redirect("invoicing:customer_list")
     return redirect("invoicing:customer_edit", pk=pk)
@@ -502,6 +547,7 @@ def settings_view(request):
         form = CompanySettingsForm(request.POST, request.FILES, instance=settings_obj)
         if form.is_valid():
             form.save()
+            logger.info("[Settings] Company settings saved")
             messages.success(request, "Settings saved.")
             return redirect("invoicing:settings")
     else:
@@ -511,3 +557,78 @@ def settings_view(request):
         "form": form,
         "settings_obj": settings_obj,
     })
+
+
+def api_parts_search(request):
+    """AJAX endpoint for searching parts (Tom Select remote loading)."""
+    q = request.GET.get("q", "").strip()
+    if len(q) < 1:
+        return JsonResponse([], safe=False)
+    parts = (
+        Part.objects.filter(is_active=True)
+        .filter(
+            Q(part_number__icontains=q)
+            | Q(part_name__icontains=q)
+            | Q(manufacturer_number__icontains=q)
+            | Q(j_and_n__icontains=q)
+            | Q(oem_number__icontains=q)
+            | Q(category__icontains=q)
+            | Q(description__icontains=q)
+        )
+        .values("id", "part_number", "part_name", "category", "price")[:50]
+    )
+    results = []
+    for p in parts:
+        label_parts = []
+        if p["part_number"]:
+            label_parts.append(p["part_number"])
+        if p["part_name"]:
+            label_parts.append(p["part_name"])
+        if p["category"]:
+            label_parts.append(p["category"])
+        results.append({
+            "value": str(p["id"]),
+            "text": " — ".join(label_parts) if label_parts else f"Part #{p['id']}",
+            "part_number": p["part_number"],
+            "part_name": p["part_name"] or "",
+            "price": str(p["price"]) if p["price"] is not None else "0",
+        })
+    return JsonResponse(results, safe=False)
+
+
+def api_units_search(request):
+    """AJAX endpoint for searching units (Tom Select remote loading)."""
+    q = request.GET.get("q", "").strip()
+    if len(q) < 1:
+        return JsonResponse([], safe=False)
+    units = (
+        Unit.objects.filter(is_active=True)
+        .filter(
+            Q(unit_number__icontains=q)
+            | Q(yt_number__icontains=q)
+            | Q(oem__icontains=q)
+            | Q(unit_type__name__icontains=q)
+            | Q(unit_type_category__icontains=q)
+            | Q(manufacturer__icontains=q)
+            | Q(voltage__icontains=q)
+        )
+        .select_related("unit_type")[:50]
+    )
+    results = []
+    for u in units:
+        type_label = u.unit_type_category or (u.unit_type.name if u.unit_type else "")
+        label_parts = [u.unit_number]
+        if type_label:
+            label_parts.append(type_label)
+        if u.yt_number:
+            label_parts.append(f"YT: {u.yt_number}")
+        if u.oem:
+            label_parts.append(u.oem)
+        text = " — ".join(label_parts)
+        price = u.rebuilt_unit_price or u.new_unit_price or 0
+        results.append({
+            "value": str(u.id),
+            "text": text,
+            "price": str(price),
+        })
+    return JsonResponse(results, safe=False)

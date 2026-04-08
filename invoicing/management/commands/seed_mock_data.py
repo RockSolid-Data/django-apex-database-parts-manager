@@ -43,6 +43,7 @@ class Command(BaseCommand):
                 self._seed_data()
                 self.stdout.write(self.style.SUCCESS("Mock data seeded successfully."))
             else:
+                self._reset_company_settings()
                 self.stdout.write(self.style.SUCCESS("Data cleared."))
 
     def _clear_data(self):
@@ -62,6 +63,31 @@ class Command(BaseCommand):
         Customer.objects.all().delete()
         Vendor.objects.all().delete()
         self.stdout.write("Cleared existing data.")
+
+    def _reset_company_settings(self):
+        """Reset CompanySettings to factory defaults for clean delivery."""
+        settings = CompanySettings.get()
+        settings.company_name = ""
+        settings.tagline = ""
+        settings.email = ""
+        settings.phone = ""
+        settings.address = ""
+        settings.default_net_terms = NetTerms.NET_30
+        settings.default_net_days = 30
+        settings.default_tax_rate = Decimal("0")
+        settings.invoice_number_prefix = "INV-"
+        settings.invoice_number_include_year = True
+        settings.invoice_number_include_month = False
+        settings.invoice_number_padding = 4
+        settings.invoice_paper_size = CompanySettings.PAPER_LETTER
+        settings.invoice_layout_style = CompanySettings.LAYOUT_STANDARD
+        settings.invoice_date_format = CompanySettings.DATE_FMT_FULL
+        settings.invoice_currency_symbol = "$"
+        if settings.logo:
+            settings.logo.delete(save=False)
+        settings.logo = None
+        settings.save()
+        self.stdout.write("Reset company settings to defaults.")
 
     def _seed_data(self):
         today = date.today()
@@ -123,16 +149,22 @@ class Command(BaseCommand):
         for c in customers_data:
             cust = Customer.objects.create(
                 name=c[0],
-                email=c[1],
-                phone=c[2],
-                address_line1=c[3],
-                address_line2=c[4],
-                city=c[5],
-                state=c[6],
-                zip_code=c[7],
+                bill_to_line1=c[3],
+                bill_to_line2=c[4],
+                bill_to_city=c[5],
+                bill_to_state=c[6],
+                bill_to_zip=c[7],
                 net_terms=c[8],
                 net_days=c[9],
                 tax_rate=c[10],
+            )
+            from invoicing.models import CustomerContact
+            CustomerContact.objects.create(
+                customer=cust,
+                name="Contact for " + c[0],
+                phone=c[2],
+                email=c[1],
+                is_primary=True,
             )
             customers.append(cust)
 
@@ -243,10 +275,10 @@ class Command(BaseCommand):
                 customer=customer,
                 customer_name=customer.name,
                 contact_name="",
-                phone=customer.phone or "",
-                email=customer.email or "",
-                address="\n".join(filter(None, [customer.address_line1, customer.address_line2,
-                    f"{customer.city or ''}, {customer.state or ''} {customer.zip_code or ''}".strip().strip(",")])),
+                phone="",
+                email="",
+                address="\n".join(filter(None, [customer.bill_to_line1, customer.bill_to_line2,
+                    f"{customer.bill_to_city or ''}, {customer.bill_to_state or ''} {customer.bill_to_zip or ''}".strip().strip(",")])),
                 date=inv_date,
                 due_date=due_date,
                 status=status,

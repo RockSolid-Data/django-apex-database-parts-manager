@@ -1,112 +1,112 @@
 {% extends "base.html" %}
 
-{% block title %}Home — Manchester Electric{% endblock %}
+{% block title %}Home — Apex Database{% endblock %}
 
 {% block content %}
 <div class="text-center py-5">
   <h1 class="page-heading">
-    <i class="bi bi-lightning-charge-fill"></i> Manchester Electric
+    <i class="bi bi-lightning-charge-fill"></i> Apex Database
   </h1>
   <p class="lead text-muted mb-4">
     Motor repair, parts sales, and motor sales management system.
   </p>
-  <div class="row justify-content-center g-3 mt-3">
-    <div class="col-6 col-md-4 col-lg-3">
+  <div class="row justify-content-center g-4 mt-3" style="max-width: 1100px; margin-left: auto; margin-right: auto;">
+    <div class="col-6 col-md-4">
       <a href="{% url 'catalog:unit_search' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-search fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Unit Search</h5>
-          <p class="card-text text-muted small">Find units by number, OEM, or specs.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-search display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Search &amp; References</h5>
+          <p class="card-text text-muted small mb-0">Find units by number, OEM, or specs.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'catalog:unit_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-list-ul fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Unit List</h5>
-          <p class="card-text text-muted small">Browse all motor units.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-list-ul display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Unit List</h5>
+          <p class="card-text text-muted small mb-0">Browse all motor units.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'catalog:application_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-gear fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Applications</h5>
-          <p class="card-text text-muted small">Browse engines, machines, and vehicles.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-gear display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Applications</h5>
+          <p class="card-text text-muted small mb-0">Browse engines, machines, and vehicles.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'catalog:part_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-box-seam fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Parts</h5>
-          <p class="card-text text-muted small">Search and manage parts inventory.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-box-seam display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Parts</h5>
+          <p class="card-text text-muted small mb-0">Search and manage parts inventory.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'catalog:bom_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-diagram-3 fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">BOMs</h5>
-          <p class="card-text text-muted small">Manage bills of materials.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-diagram-3 display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">BOMs</h5>
+          <p class="card-text text-muted small mb-0">Manage bills of materials.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'inventory:reorder_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-arrow-repeat fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Reorder</h5>
-          <p class="card-text text-muted small">Items needing reorder.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-arrow-repeat display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Reorder</h5>
+          <p class="card-text text-muted small mb-0">Items needing reorder.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'inventory:inventory_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-clipboard-data fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Inventory</h5>
-          <p class="card-text text-muted small">View and manage inventory.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-clipboard-data display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Inventory</h5>
+          <p class="card-text text-muted small mb-0">View and manage inventory.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'inventory:vendor_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-truck fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Vendors</h5>
-          <p class="card-text text-muted small">Manage suppliers and vendors.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-truck display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Vendors</h5>
+          <p class="card-text text-muted small mb-0">Manage suppliers and vendors.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'invoicing:invoice_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-receipt fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Invoices</h5>
-          <p class="card-text text-muted small">Create and manage customer invoices.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-receipt display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Invoices</h5>
+          <p class="card-text text-muted small mb-0">Create and manage customer invoices.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'invoicing:customer_list' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-people fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Customers</h5>
-          <p class="card-text text-muted small">Manage customer records.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-people display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Customers</h5>
+          <p class="card-text text-muted small mb-0">Manage customer records.</p>
         </div>
       </a>
     </div>
-    <div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4">
       <a href="{% url 'invoicing:settings' %}" class="me-home-card card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <i class="bi bi-gear fs-2 text-primary"></i>
-          <h5 class="card-title mt-2">Settings</h5>
-          <p class="card-text text-muted small">Company info, logo, and payment terms.</p>
+        <div class="card-body text-center py-4">
+          <i class="bi bi-gear display-5 text-primary"></i>
+          <h5 class="card-title mt-3 mb-1">Settings</h5>
+          <p class="card-text text-muted small mb-0">Company info, logo, and payment terms.</p>
         </div>
       </a>
     </div>

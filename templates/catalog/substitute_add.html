@@ -1,22 +1,22 @@
 {% extends "base.html" %}
 
-{% block title %}Add Substitute — {{ unit.unit_number }} — Manchester Electric{% endblock %}
+{% block title %}Add Substitute — {{ unit.unit_number }} — Apex Database{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="page-heading mb-0">
     <i class="bi bi-arrow-left-right"></i> Add Substitute
   </h1>
-  <a href="{% url 'catalog:unit_detail' unit.pk %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to Unit {{ unit.unit_number }}
-  </a>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
 </div>
 
 <div class="row">
-  <div class="col-md-6">
+  <div class="col-md-7">
     <div class="card">
       <div class="card-header fw-semibold">
-        Link a substitute unit to <strong>{{ unit.unit_number }}</strong>
+        Add a substitute to <strong>{{ unit.unit_number }}</strong>
       </div>
       <div class="card-body">
         {% if form.errors %}
@@ -29,9 +29,17 @@
         <form method="post">
           {% csrf_token %}
 
+          <p class="text-muted small mb-3">
+            Link to an existing unit in the system, or enter a unit number manually.
+            At least one of the two must be provided.
+          </p>
+
+          <hr>
+          <h6 class="text-muted mb-3">Option A: Link to Existing Unit</h6>
+
           <div class="mb-3">
             <label class="form-label" for="{{ form.substitute_unit.id_for_label }}">
-              Substitute Unit <span class="text-danger">*</span>
+              {{ form.substitute_unit.label }}
             </label>
             {{ form.substitute_unit }}
             {% if form.substitute_unit.errors %}
@@ -39,12 +47,27 @@
             {% endif %}
           </div>
 
+          <hr>
+          <h6 class="text-muted mb-3">Option B: Unit Number</h6>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.substitute_number.id_for_label }}">
+              {{ form.substitute_number.label }}
+            </label>
+            {{ form.substitute_number }}
+            {% if form.substitute_number.errors %}
+              <div class="invalid-feedback d-block">{{ form.substitute_number.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <hr>
+
           <div class="mb-3">
             <label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>
             {{ form.notes }}
           </div>
 
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 me-sticky-actions">
             <button type="submit" class="btn btn-primary">
               <i class="bi bi-check-lg"></i> Add Substitute
             </button>

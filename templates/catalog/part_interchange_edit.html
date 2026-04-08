@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Interchange — {{ part_display_number }} — Apex Database{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-arrow-repeat"></i> Edit Interchange
+  </h1>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
+</div>
+
+<div class="row">
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        Edit interchange on <strong>{{ part_display_number }}</strong>
+      </div>
+      <div class="card-body">
+        {% if form.errors %}
+        <div class="alert alert-danger">
+          <strong>Please correct the errors below.</strong>
+          {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <p class="text-muted small mb-3">
+            Update the linked part, reference number, source, and notes. At least one of linked part or reference number is required.
+          </p>
+
+          <hr>
+          <h6 class="text-muted mb-3">Option A: Link to Existing Part</h6>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.interchange_part.id_for_label }}">
+              {{ form.interchange_part.label }}
+            </label>
+            {{ form.interchange_part }}
+            {% if form.interchange_part.errors %}
+              <div class="invalid-feedback d-block">{{ form.interchange_part.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <hr>
+          <h6 class="text-muted mb-3">Option B: Reference Number</h6>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.interchange_number.id_for_label }}">
+              {{ form.interchange_number.label }}
+            </label>
+            {{ form.interchange_number }}
+            {% if form.interchange_number.errors %}
+              <div class="invalid-feedback d-block">{{ form.interchange_number.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <hr>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.source_name.id_for_label }}">{{ form.source_name.label }}</label>
+            {{ form.source_name }}
+            {% if form.source_name.errors %}
+              <div class="invalid-feedback d-block">{{ form.source_name.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <hr>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>
+            {{ form.notes }}
+            {% if form.notes.errors %}
+              <div class="invalid-feedback d-block">{{ form.notes.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="d-flex gap-2 me-sticky-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i> Save Changes
+            </button>
+            <a href="{% url 'catalog:part_detail' part.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

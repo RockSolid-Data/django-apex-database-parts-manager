@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Part Category Settings — Apex Database{% endblock %}
+
+{% block content %}
+
+<div class="me-sticky-toolbar">
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-sliders"></i> Part Category Settings
+  </h1>
+  <div class="d-flex gap-2">
+    <a href="{% url 'catalog:part_category_create' %}" class="btn btn-primary">
+      <i class="bi bi-plus-lg"></i> Add New Category
+    </a>
+    <button type="button" onclick="smartBack()" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </button>
+  </div>
+</div>
+</div>
+<script>
+function smartBack() {
+  if (window.opener || window.history.length <= 1) { window.close(); } else { history.back(); }
+}
+</script>
+
+<p class="text-muted mb-2">{{ categories|length }} categor{{ categories|length|pluralize:"y,ies" }} defined</p>
+
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th class="ps-3">Category Name</th>
+        <th>Number of Fields</th>
+        <th>Date Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cat in categories %}
+      <tr data-href="{% url 'catalog:part_category_detail' cat.pk %}">
+        <td class="ps-3 fw-semibold">{{ cat.name }}</td>
+        <td>{{ cat.fields.count }} field{{ cat.fields.count|pluralize }}</td>
+        <td>{{ cat.created_at|date:"M j, Y" }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="3" class="text-center text-muted py-4">
+          <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+          No categories defined yet. Click <strong>Add New Category</strong> to create one.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

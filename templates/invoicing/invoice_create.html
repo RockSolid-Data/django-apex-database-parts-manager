@@ -1,18 +1,21 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Create Invoice — Manchester Electric{% endblock %}
+{% block title %}Create Invoice — Apex Database{% endblock %}
 
 {% block extra_css %}
-<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'vendor/tom-select/tom-select.min.css' %}">
 <style>
-  #item-rows .ts-wrapper { min-width: 100%; }
+  .invoice-items-table { table-layout: fixed; width: 100%; }
+  .invoice-items-table .ts-wrapper { width: 100%; }
+  .invoice-items-table .ts-control { overflow: hidden; text-overflow: ellipsis; }
   .ts-dropdown { z-index: 1060 !important; }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
   <h1 class="page-heading mb-0">
     <i class="bi bi-receipt"></i> Create New Invoice
   </h1>
@@ -20,9 +23,9 @@
     <a href="#" class="btn btn-success" id="print-invoice-btn" style="pointer-events:none" title="Save invoice first to print">
       <i class="bi bi-printer"></i> Print Invoice
     </a>
-    <a href="{% url 'invoicing:invoice_list' %}" class="btn btn-primary">
-      <i class="bi bi-arrow-left"></i> Back to Invoices
-    </a>
+    <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </button>
   </div>
 </div>
 
@@ -97,16 +100,27 @@
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
+        <table class="table table-hover align-middle mb-0 invoice-items-table">
+          <colgroup>
+            <col style="width:60px">
+            <col style="width:20%">
+            <col style="width:20%">
+            <col>
+            <col style="width:90px">
+            <col style="width:70px">
+            <col style="width:90px">
+            <col style="width:70px">
+          </colgroup>
           <thead class="table-light">
             <tr>
-              <th style="width:90px" class="text-end">Quantity</th>
-              <th style="width:220px">Part Number</th>
+              <th class="text-end">Qty</th>
+              <th>Unit #</th>
+              <th>Part #</th>
               <th>Description</th>
-              <th style="width:160px" class="small text-muted">Unit</th>
-              <th style="width:100px" class="text-end">Unit Price</th>
-              <th style="width:100px" class="text-end">Total</th>
-              <th style="width:80px"></th>
+              <th class="text-end">Rate</th>
+              <th class="text-end">Disc %</th>
+              <th class="text-end">Total</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="item-rows">
@@ -114,10 +128,11 @@
             <tr class="item-row {% if forloop.counter > 1 %}invoice-extra-row d-none{% endif %}" data-index="{{ forloop.counter0 }}">
               {% for hidden in f.hidden_fields %}{{ hidden }}{% endfor %}
               <td class="text-end">{{ f.quantity }}</td>
+              <td>{{ f.unit }}</td>
               <td>{{ f.part }}</td>
               <td>{{ f.description }}</td>
-              <td>{{ f.unit }}</td>
               <td class="text-end">{{ f.unit_price }}</td>
+              <td class="text-end">{{ f.discount_pct }}</td>
               <td class="text-end line-total">—</td>
               <td>
                 {% if f.DELETE %}
@@ -129,7 +144,7 @@
               </td>
             </tr>
             {% if f.errors %}
-            <tr class="{% if forloop.counter > 1 %}invoice-extra-row d-none{% endif %}"><td colspan="7" class="bg-danger bg-opacity-10 small">{{ f.errors }}</td></tr>
+            <tr class="{% if forloop.counter > 1 %}invoice-extra-row d-none{% endif %}"><td colspan="8" class="bg-danger bg-opacity-10 small">{{ f.errors }}</td></tr>
             {% endif %}
             {% endfor %}
           </tbody>
@@ -188,7 +203,7 @@
     </div>
   </div>
 
-  <div class="d-flex gap-2 mb-4">
+  <div class="d-flex gap-2 me-sticky-actions">
     <button type="submit" class="btn btn-primary">
       <i class="bi bi-check-lg"></i> Save Invoice
     </button>
@@ -198,24 +213,20 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
-{{ parts_data|json_script:"parts-data" }}
+<script src="{% static 'vendor/tom-select/tom-select.complete.min.js' %}"></script>
 <script>
 (function() {
-  const partsEl = document.getElementById('parts-data');
-  const partsData = partsEl ? JSON.parse(partsEl.textContent) : [];
-  const partMap = {};
-  partsData.forEach(p => { partMap[String(p.id)] = p; });
-
   const formEl = document.getElementById('invoice-form');
   const currency = formEl?.dataset?.currency || '$';
 
   function updateRowTotal(row) {
     const qtyInp = row.querySelector('input[id*="quantity"]');
     const priceInp = row.querySelector('input[id*="unit_price"]');
+    const discInp = row.querySelector('input[id*="discount_pct"]');
     const qty = parseFloat(qtyInp?.value) || 0;
     const price = parseFloat(priceInp?.value) || 0;
-    const total = qty * price;
+    const disc = parseFloat(discInp?.value) || 0;
+    const total = qty * price * (1 - disc / 100);
     const cell = row.querySelector('.line-total');
     if (cell) cell.textContent = total ? currency + total.toFixed(2) : '—';
     return total;
@@ -268,6 +279,7 @@
       hidden.classList.remove('d-none');
       const delCheck = hidden.querySelector('input[name*="-DELETE"]');
       if (delCheck) delCheck.checked = false;
+      initTomSelects(hidden);
       updateTotals();
     }
   });
@@ -289,34 +301,70 @@
     form.addEventListener('input', updateTotals);
     form.addEventListener('change', updateTotals);
   }
+
+  function initTomSelects(scope) {
+    const root = scope || document;
+    root.querySelectorAll('.item-part').forEach(el => {
+      if (el.tomselect) return;
+      new TomSelect(el, {
+        create: false,
+        placeholder: '— Search parts… —',
+        dropdownParent: 'body',
+        valueField: 'value',
+        labelField: 'text',
+        searchField: ['text'],
+        loadThrottle: 200,
+        load: function(query, callback) {
+          if (!query.length) return callback();
+          fetch('{% url "invoicing:api_parts_search" %}?q=' + encodeURIComponent(query))
+            .then(r => r.json())
+            .then(data => callback(data))
+            .catch(() => callback());
+        },
+        onChange: function(value) {
+          const part = this.options[value];
+          const row = el.closest('tr');
+          if (part && row) {
+            const price = row.querySelector('input[id*="unit_price"]');
+            if (price) price.value = part.price || '0';
+            updateTotals();
+          }
+        }
+      });
+    });
+    root.querySelectorAll('.item-unit').forEach(el => {
+      if (el.tomselect) return;
+      new TomSelect(el, {
+        create: false,
+        placeholder: '— Search units… —',
+        dropdownParent: 'body',
+        valueField: 'value',
+        labelField: 'text',
+        searchField: ['text'],
+        loadThrottle: 200,
+        load: function(query, callback) {
+          if (!query.length) return callback();
+          fetch('{% url "invoicing:api_units_search" %}?q=' + encodeURIComponent(query))
+            .then(r => r.json())
+            .then(data => callback(data))
+            .catch(() => callback());
+        },
+        onChange: function(value) {
+          const unit = this.options[value];
+          const row = el.closest('tr');
+          if (unit && row) {
+            const price = row.querySelector('input[id*="unit_price"]');
+            if (price && unit.price) price.value = unit.price;
+            updateTotals();
+          }
+        }
+      });
+    });
+  }
+
+  initTomSelects(document);
   updateTotals();
 
-  // Searchable Part and Unit dropdowns (Tom Select)
-  document.querySelectorAll('.item-part').forEach(el => {
-    if (el.tomselect) return;
-    new TomSelect(el, {
-      create: false,
-      placeholder: '— Select part —',
-      dropdownParent: 'body',
-      onChange: function(value) {
-        const part = partMap[value];
-        const row = el.closest('tr');
-        if (part && row) {
-          const desc = row.querySelector('input[id*="description"]');
-          const price = row.querySelector('input[id*="unit_price"]');
-          if (desc) desc.value = part.part_name || part.part_number || '';
-          if (price) price.value = part.price || '0';
-          updateTotals();
-        }
-      }
-    });
-  });
-  document.querySelectorAll('.item-unit').forEach(el => {
-    if (el.tomselect) return;
-    new TomSelect(el, { create: false, placeholder: '— Select unit —', dropdownParent: 'body' });
-  });
-
-  // When customer selected, reload to prefill and set due date from net terms
   const customerSelect = document.getElementById('{{ form.customer.id_for_label }}');
   if (customerSelect) {
     customerSelect.addEventListener('change', function() {

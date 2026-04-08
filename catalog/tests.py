@@ -1,8 +1,20 @@
-# Catalog tests
+import json
+
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Application, ApplicationSpecification, ApplicationUnit, BOM, BOMItem, Part, Unit, UnitType
+from .models import (
+    Application,
+    ApplicationSpecification,
+    ApplicationUnit,
+    BOM,
+    BOMItem,
+    Part,
+    PartInterchange,
+    Unit,
+    UnitType,
+)
+from .pdf_utils import _apply_manual_entry_adjustments, _finalize_entries, _parse_column_lines, _parse_page
 
 
 class HomeViewTest(TestCase):
@@ -12,7 +24,7 @@ class HomeViewTest(TestCase):
         """Home page loads."""
         resp = self.client.get(reverse("catalog:home"))
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Manchester Electric")
+        self.assertContains(resp, "Apex Database")
         self.assertContains(resp, "Motor repair, parts sales")
 
     def test_home_has_all_shortcut_links(self):
@@ -55,7 +67,7 @@ class PartModelTest(TestCase):
         part = Part.objects.create(
             part_number="PN-001",
             part_name="Test Part",
-            key="KEY-1",
+            manufacturer_number="KEY-1",
             yt_number="YT-123",
             j_and_n="JN-456",
             oem_number="OEM-789",
@@ -90,14 +102,476 @@ class PartModelTest(TestCase):
         self.assertIsNotNone(part.created_at)
         self.assertIsNotNone(part.updated_at)
 
-    def test_part_minimal_required_fields(self):
-        """Part requires only part_number; stock fields default, unit optional."""
-        part = Part.objects.create(part_number="PN-MIN")
-        self.assertEqual(part.part_number, "PN-MIN")
+    def test_part_can_be_created_without_part_number(self):
+        """Part number may be blank so PDF imports can store YT only."""
+        part = Part.objects.create(yt_number="YT-MIN")
+        self.assertIsNone(part.part_number)
         self.assertEqual(part.stock_quantity, 0)
         self.assertEqual(part.reorder_qty, 0)
         self.assertIsNone(part.unit)
-        self.assertEqual(part.part_name, "")
+        self.assertEqual(part.yt_number, "YT-MIN")
+
+
+class YouTechPdfParserTest(TestCase):
+    """Verify YouTech PDF parsing edge cases."""
+
+    class _StubPage:
+        def __init__(self, words, width=512):
+            self._words = words
+            self.width = width
+
+        def extract_words(self, **kwargs):
+            return list(self._words)
+
+    def _word(self, text, x0, fontname="Regular", top=0):
+        return {"text": text, "x0": x0, "fontname": fontname, "top": top}
+
+    def test_parse_column_lines_keeps_wrapped_vendor_name(self):
+        """Vendor names that wrap should merge into one source/name."""
+        lines = [
+            [self._word("0A-00547", 0, "Bold")],
+            [self._word("Rectifier", 0, "Bold"), self._word("Bridge", 30, "Bold"), self._word("Nut", 65, "Bold")],
+            [self._word("Romaine", 0)],
+            [self._word("Electric", 0), self._word("949056-3300", 70)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=1)
+
+        self.assertEqual(entries[0]["yt_number"], "0A-00547")
+        self.assertEqual(entries[0]["page_number"], 1)
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "Romaine Electric", "number": "949056-3300"}],
+        )
+
+    def test_parse_column_lines_splits_embedded_vendor_number(self):
+        """Embedded vendor/source text should split into separate interchange rows."""
+        lines = [
+            [self._word("0A-13002", 0, "Bold"), self._word("Thru", 30, "Bold"), self._word("Bolt", 60, "Bold")],
+            [self._word("Delco-Remy", 0), self._word("!2501", 70)],
+            [self._word("Voltux", 0), self._word("V4-DR260", 70), self._word("Just", 120), self._word("Parts", 145), self._word("D1-6033", 185)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=1)
+
+        self.assertNotIn("Check interchange number '!2501'.", entries[0]["issues"])
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [
+                {"vendor": "Delco-Remy", "number": "!2501"},
+                {"vendor": "Voltux", "number": "V4-DR260"},
+                {"vendor": "Just Parts", "number": "D1-6033"},
+            ],
+        )
+
+    def test_parse_column_lines_appends_trailing_vendor_fragment(self):
+        """Trailing vendor fragments should be attached to the last interchange vendor."""
+        lines = [
+            [self._word("0A-60019", 0, "Bold"), self._word("Connector", 30, "Bold")],
+            [self._word("Romaine", 0), self._word("028172-0370", 70)],
+            [self._word("Electric", 0)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=4)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "Romaine Electric", "number": "028172-0370"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_merges_trailing_vendor_fragment_before_number_only_row(self):
+        """Wrapped fragments like Electric should merge before a number-only continuation."""
+        lines = [
+            [self._word("0A-00547", 0, "Bold")],
+            [self._word("Rectifier", 0, "Bold")],
+            [self._word("Romaine", 0), self._word("949056-3300", 70)],
+            [self._word("Electric", 0)],
+            [self._word("949056-3301", 70)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=1)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [
+                {"vendor": "Romaine Electric", "number": "949056-3300"},
+                {"vendor": "Romaine Electric", "number": "949056-3301"},
+            ],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_reuses_vendor_for_number_only_rows(self):
+        """Number-only rows should inherit the previous vendor."""
+        lines = [
+            [self._word("0A-00547", 0, "Bold")],
+            [self._word("Rectifier", 0, "Bold")],
+            [self._word("J&N", 0), self._word("462-64004", 70)],
+            [self._word("462-64004-20", 70)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=1)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [
+                {"vendor": "J&N", "number": "462-64004"},
+                {"vendor": "J&N", "number": "462-64004-20"},
+            ],
+        )
+
+    def test_parse_column_lines_merges_hyphenated_number_fragments(self):
+        """Hyphen-ended numbers should merge with the next numeric fragment."""
+        lines = [
+            [self._word("0A-00548", 0, "Bold")],
+            [self._word("Rectifier", 0, "Bold")],
+            [self._word("Daihatsu", 0), self._word("27794-87501-", 70)],
+            [self._word("000", 70)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=1)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "Daihatsu", "number": "27794-87501-000"}],
+        )
+
+    def test_parse_column_lines_splits_compact_right_side_vendor_number(self):
+        """When vendor and number both land on the right side, split them back apart."""
+        lines = [
+            [self._word("1A-1307", 0, "Bold")],
+            [self._word("Brush", 0, "Bold")],
+            [self._word("NRG", 80), self._word("1207", 100)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=24)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "NRG", "number": "1207"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_allows_spaced_numeric_reference(self):
+        """References made of spaced numeric groups should not be flagged."""
+        lines = [
+            [self._word("1A-50090", 0, "Bold")],
+            [self._word("Pulley", 0, "Bold")],
+            [self._word("INA", 0), self._word("CA", 20), self._word("-", 35), self._word("535", 75), self._word("0226", 92), self._word("10", 113)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=61)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "INA CA -", "number": "535 0226 10"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_strips_repeated_vendor_prefix(self):
+        """Duplicate vendor text repeated on the number side should be removed."""
+        lines = [
+            [self._word("1A-1307", 0, "Bold")],
+            [self._word("Brush", 0, "Bold")],
+            [self._word("NRG", 0), self._word("NRG", 80), self._word("1207", 100)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=24)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "NRG", "number": "1207"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_keeps_exact_spaced_reference_when_vendor_is_clear(self):
+        """If the source/name is clear, keep the exact spaced reference text."""
+        lines = [
+            [self._word("1A-12042", 0, "Bold")],
+            [self._word("Rectifier", 0, "Bold")],
+            [self._word("Model", 0), self._word("Number", 20), self._word("7SI", 80), self._word("Korea", 95)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=18)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "Model Number", "number": "7SI Korea"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_splits_embedded_second_vendor(self):
+        """A second vendor embedded in the number text should become a new interchange row."""
+        lines = [
+            [self._word("1G-1200", 0, "Bold")],
+            [self._word("Rectifier", 0, "Bold")],
+            [self._word("Bosch", 0), self._word("1-127-320-355", 70), self._word("Just", 140), self._word("Parts", 165), self._word("BO1-1220", 210)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=185)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [
+                {"vendor": "Bosch", "number": "1-127-320-355"},
+                {"vendor": "Just Parts", "number": "BO1-1220"},
+            ],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_moves_trailing_vendor_fragment_off_number(self):
+        """Trailing vendor suffixes at the end of a number should be attached to the vendor."""
+        lines = [
+            [self._word("1G-50021", 0, "Bold")],
+            [self._word("Pulley", 0, "Bold")],
+            [self._word("Romaine", 0), self._word("24-91107-1", 70), self._word("Electric", 120)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=222)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "Romaine Electric", "number": "24-91107-1"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_replaces_fragment_vendor_with_embedded_vendor(self):
+        """A fragment vendor on the left should be replaced by a real vendor in the number text."""
+        lines = [
+            [self._word("1M-60000", 0, "Bold")],
+            [self._word("Regulator", 0, "Bold")],
+            [self._word("Parts", 0), self._word("J&N", 80), self._word("230-40004", 105)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=434)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "J&N", "number": "230-40004"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_merges_short_alpha_continuation(self):
+        """Short alpha continuations like AA should merge onto a trailing hyphenated number."""
+        lines = [
+            [self._word("1B-6007", 0, "Bold")],
+            [self._word("Regulator", 0, "Bold")],
+            [self._word("Ford", 0), self._word("D2AF-10316-", 70)],
+            [self._word("AA", 70)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=115)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "Ford", "number": "D2AF-10316-AA"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_column_lines_keeps_mgx_reference_together(self):
+        """MGX/MSX references should stay together as one reference number."""
+        lines = [
+            [self._word("1L-30033", 0, "Bold")],
+            [self._word("Rotor", 0, "Bold")],
+            [self._word("MAHLE", 0), self._word("MGX", 80), self._word("871", 102)],
+        ]
+
+        entries = []
+        _parse_column_lines(lines, vendor_num_split=58, entries=entries, page_number=413)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [{"vendor": "MAHLE", "number": "MGX 871"}],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+
+    def test_parse_page_continues_entry_into_inferred_missing_column(self):
+        """Continuation rows before the next bold YT should stay on the current part."""
+        words = [
+            self._word("1B-6007", 0, "Bold", top=0),
+            self._word("Charging", 0, "Bold", top=10),
+            self._word("System", 40, "Bold", top=10),
+            self._word("Voltage", 75, "Bold", top=10),
+            self._word("Ford", 0, top=25),
+            self._word("D2AF-10316-", 70, top=25),
+            self._word("AA", 70, top=35),
+            self._word("J&N", 129, top=0),
+            self._word("230-14004", 205, top=0),
+            self._word("230-14006", 205, top=10),
+            self._word("1B-6008", 258, "Bold", top=60),
+            self._word("Charging", 258, "Bold", top=70),
+            self._word("Voltage", 298, "Bold", top=70),
+            self._word("Transpo", 258, top=85),
+            self._word("F540HD", 335, top=85),
+        ]
+
+        entries = []
+        _parse_page(self._StubPage(words), entries, page_number=115)
+
+        self.assertEqual([entry["yt_number"] for entry in entries], ["1B-6007", "1B-6008"])
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [
+                {"vendor": "Ford", "number": "D2AF-10316-AA"},
+                {"vendor": "J&N", "number": "230-14004"},
+                {"vendor": "J&N", "number": "230-14006"},
+            ],
+        )
+        self.assertEqual(
+            entries[1]["interchanges"],
+            [{"vendor": "Transpo", "number": "F540HD"}],
+        )
+
+    def test_manual_adjustments_convert_aa_reference_and_move_harvester_block(self):
+        """Known final edge cases should be normalized after parsing."""
+        entries = [
+            {
+                "yt_number": "1B-6007",
+                "description": "Charging System Voltage",
+                "category": "Electrical",
+                "interchanges": [
+                    {"vendor": "AA", "number": "F782"},
+                    {"vendor": "Just Parts", "number": "AA"},
+                ],
+                "page_number": 115,
+                "issues": ["Check interchange number 'AA'."],
+            },
+            {
+                "yt_number": "2G-5048",
+                "description": "Starter Drive",
+                "category": "Hardware",
+                "interchanges": [],
+                "page_number": 874,
+                "issues": [],
+            },
+            {
+                "yt_number": "2G-50479",
+                "description": "Starter Drive International 3078 758 R91",
+                "category": "Hardware",
+                "interchanges": [
+                    {"vendor": "", "number": "Harvester (IHC)"},
+                    {"vendor": "Bosch", "number": "2-006-382-060 3078 758 R92"},
+                    {"vendor": "HC CARGO", "number": "135374 3078 960 R91"},
+                ],
+                "page_number": 874,
+                "issues": ["Check interchange number 'Harvester (IHC)'."],
+            },
+        ]
+
+        _apply_manual_entry_adjustments(entries)
+
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [
+                {"vendor": "", "number": "AA F782"},
+                {"vendor": "", "number": "AA"},
+            ],
+        )
+        self.assertEqual(entries[0]["issues"], [])
+        self.assertIn(
+            {"vendor": "Harvester (IHC)", "number": "3078 758 R92"},
+            entries[1]["interchanges"],
+        )
+        self.assertIn(
+            {"vendor": "Harvester (IHC)", "number": "3132 442 R1"},
+            entries[1]["interchanges"],
+        )
+        self.assertEqual(
+            entries[2]["interchanges"],
+            [
+                {"vendor": "Bosch", "number": "2-006-382-060"},
+                {"vendor": "HC CARGO", "number": "135374"},
+            ],
+        )
+        self.assertEqual(entries[2]["issues"], [])
+
+    def test_finalize_entries_merges_page_continuations(self):
+        """Same YT number on the next page should merge into one entry."""
+        entries = [
+            {
+                "yt_number": "1A-1232",
+                "description": "Rectifier DR4000HD",
+                "category": "Electrical",
+                "interchanges": [{"vendor": "Ace Electric", "number": "S-1681"}],
+                "page_number": 22,
+                "issues": [],
+            },
+            {
+                "yt_number": "1A-1232",
+                "description": "Rectifier",
+                "category": "Electrical",
+                "interchanges": [{"vendor": "WAI", "number": "31-136"}],
+                "page_number": 23,
+                "issues": [],
+            },
+        ]
+
+        _finalize_entries(entries)
+
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["description"], "Rectifier DR4000HD")
+        self.assertEqual(
+            entries[0]["interchanges"],
+            [
+                {"vendor": "Ace Electric", "number": "S-1681"},
+                {"vendor": "WAI", "number": "31-136"},
+            ],
+        )
+
+
+class PartImportPdfConfirmTest(TestCase):
+    """Verify the PDF confirm step writes part and interchange data correctly."""
+
+    def test_confirm_import_leaves_part_number_blank_and_saves_source(self):
+        """YT number stays in YT field only, and interchanges store source separately."""
+        response = self.client.post(
+            reverse("catalog:part_import_pdf"),
+            {
+                "step": "confirm",
+                "row_count": "1",
+                "row_0_yt_number": "0A-00547",
+                "row_0_description": "Rectifier Bridge Nut",
+                "row_0_category": "Electrical",
+                "row_0_interchanges": json.dumps(
+                    [
+                        {"vendor": "J&N", "number": "462-64004"},
+                        {"vendor": "PIC", "number": "9590-003"},
+                    ]
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        part = Part.objects.get(yt_number="0A-00547")
+        self.assertIsNone(part.part_number)
+        self.assertEqual(part.part_name, "Rectifier Bridge Nut")
+        self.assertEqual(part.description, "Rectifier Bridge Nut")
+        self.assertTrue(part.has_interchange)
+
+        interchanges = list(
+            PartInterchange.objects.filter(part=part).order_by("source_name", "interchange_number")
+        )
+        self.assertEqual(
+            [(ix.source_name, ix.interchange_number, ix.notes) for ix in interchanges],
+            [
+                ("J&N", "462-64004", ""),
+                ("PIC", "9590-003", ""),
+            ],
+        )
 
 
 class BOMModelTest(TestCase):

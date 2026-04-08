@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ category.name }} — Part Category Settings{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-sliders"></i> {{ category.name }}
+  </h1>
+  <div class="d-flex gap-2">
+    <a href="{% url 'catalog:part_category_edit' category.pk %}" class="btn btn-primary">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+    <form method="post" action="{% url 'catalog:part_category_delete' category.pk %}" class="d-inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-danger" data-confirm="Delete this category? This cannot be undone.">
+        <i class="bi bi-trash"></i> Delete
+      </button>
+    </form>
+    <button type="button" onclick="smartBack()" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </button>
+  </div>
+</div>
+<script>
+function smartBack() {
+  if (window.opener || window.history.length <= 1) { window.close(); } else { history.back(); }
+}
+</script>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span>Fields ({{ category.fields.count }})</span>
+  </div>
+  <div class="card-body p-0">
+    {% if category.fields.all %}
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3" style="width: 10%;">#</th>
+          <th style="width: 45%;">Field Label</th>
+          <th style="width: 45%;">Field Name (internal key)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in category.fields.all %}
+        <tr>
+          <td class="ps-3 text-muted">{{ forloop.counter }}</td>
+          <td class="fw-semibold">{{ f.field_label }}</td>
+          <td class="text-muted"><code>{{ f.field_name }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+      No fields defined. Click <strong>Edit</strong> to add fields.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-4">
+        <small class="text-muted">Date Created</small>
+        <p class="mb-0">{{ category.created_at|date:"F j, Y" }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

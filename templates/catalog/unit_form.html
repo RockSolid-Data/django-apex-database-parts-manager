@@ -1,16 +1,25 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} — Manchester Electric{% endblock %}
+{% block title %}{{ title }} — Apex Database{% endblock %}
+
+{% block extra_css %}
+<style>
+  #main-content:has(.unit-form-header) {
+    padding-top: 0 !important;
+  }
+  .unit-form-header {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background-color: var(--me-body-bg);
+    border-bottom: 1px solid var(--me-footer-border);
+    padding: 1.25rem 0 1rem;
+    margin-bottom: 1rem;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="page-heading mb-0">
-    <i class="bi bi-plus-circle"></i> {{ title }}
-  </h1>
-  <a href="{% url 'catalog:unit_list' %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to Unit List
-  </a>
-</div>
 
 {% if form.errors %}
 <div class="alert alert-danger">
@@ -19,9 +28,66 @@
 </div>
 {% endif %}
 
-<form method="post" enctype="multipart/form-data">
+<form method="post" enctype="multipart/form-data" id="unit-main-form">
   {% csrf_token %}
 
+  {# ===== Sticky header with unit type category dropdown ===== #}
+  <div class="unit-form-header">
+    <div class="d-flex justify-content-between align-items-center">
+      <h1 class="page-heading mb-0">
+        <i class="bi bi-plus-circle"></i> {{ title }}
+      </h1>
+      <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+          <label class="form-label mb-0 fw-semibold text-nowrap" for="id_unit_type_category">Unit Type:</label>
+          {{ form.unit_type_category }}
+        </div>
+        <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Back
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Identification — always-visible default fields + dynamic custom fields ===== #}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Identification</span>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-primary" id="addCustomFieldBtn" data-bs-toggle="modal" data-bs-target="#addUnitFieldModal" disabled>
+          <i class="bi bi-plus-lg"></i> Add Custom Field
+        </button>
+        <a href="{% url 'catalog:unit_type_category_create' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-plus-lg"></i> Add New Unit Type
+        </a>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3">
+        {% for field in form %}
+          {% if field.name == "unit_number" or field.name == "yt_number" or field.name == "oem" or field.name == "model_cat_number" or field.name == "voltage" %}
+          <div class="col-md-4">
+            <label class="form-label small mb-1" for="{{ field.id_for_label }}">
+              {{ field.label }}
+              {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.errors %}
+              <div class="invalid-feedback d-block">{{ field.errors.0 }}</div>
+            {% endif %}
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div id="unit-type-placeholder" class="text-center text-muted py-3{% if form.instance.unit_type_category %} d-none{% endif %}">
+        Select a unit type above to see additional type-specific fields.
+      </div>
+      <div id="unit-type-fields" class="row g-3{% if not form.instance.unit_type_category %} d-none{% endif %}">
+      </div>
+    </div>
+  </div>
+
+  {# ===== Existing fieldsets ===== #}
   {% for section_title, fields in fieldsets %}
   <div class="card mb-3">
     <div class="card-header fw-semibold">{{ section_title }}</div>
@@ -53,19 +119,177 @@
   </div>
   {% endfor %}
 
-  <div class="d-flex gap-2 mb-4 flex-wrap">
-    <button type="submit" class="btn btn-primary">
-      <i class="bi bi-check-lg"></i> Save Unit
-    </button>
-    <a href="{% if unit %}{% url 'catalog:unit_detail' unit.pk %}{% else %}{% url 'catalog:unit_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
-    {% if unit %}
-    <form method="post" action="{% url 'catalog:unit_delete' unit.pk %}" class="d-inline ms-auto">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Delete this unit? This cannot be undone.');">
-        <i class="bi bi-trash"></i> Delete
-      </button>
-    </form>
-    {% endif %}
-  </div>
+
 </form>
+
+<div class="d-flex gap-2 flex-wrap me-sticky-actions">
+  <button type="submit" form="unit-main-form" class="btn btn-primary">
+    <i class="bi bi-check-lg"></i> Save Unit
+  </button>
+  <a href="{% if unit %}{% url 'catalog:unit_detail' unit.pk %}{% else %}{% url 'catalog:unit_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+  {% if unit %}
+  <form method="post" action="{% url 'catalog:unit_delete' unit.pk %}" class="d-inline ms-auto">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline-danger" data-confirm="Delete this unit? This cannot be undone.">
+      <i class="bi bi-trash"></i> Delete
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{# ===== Add Custom Field Modal ===== #}
+<div class="modal fade" id="addUnitFieldModal" tabindex="-1" aria-labelledby="addUnitFieldModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addUnitFieldModalLabel">Add Custom Field</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="unit-modal-error" class="alert alert-danger d-none"></div>
+        <p class="text-muted small mb-3">Adding field to unit type: <strong id="unit-modal-cat-name"></strong></p>
+        <div class="mb-3">
+          <label for="unit-modal-field-label" class="form-label">Field Label</label>
+          <input type="text" class="form-control" id="unit-modal-field-label" placeholder="e.g. Shaft Diameter">
+        </div>
+        <div class="mb-3">
+          <label for="unit-modal-field-name" class="form-label">Field Name (internal key)</label>
+          <input type="text" class="form-control" id="unit-modal-field-name" placeholder="e.g. shaft_diameter">
+          <div class="form-text">Lowercase, no spaces (auto-generated from label).</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="unit-modal-save-btn">
+          <i class="bi bi-plus-lg"></i> Add Field
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var categoryFieldsJson = JSON.parse('{{ category_fields_json|escapejs }}');
+  var existingSpecs = JSON.parse('{{ existing_specs_json|escapejs }}');
+  var ALWAYS_VISIBLE = ['unit_number', 'yt_number', 'oem', 'model_cat_number', 'voltage'];
+
+  var select = document.getElementById('id_unit_type_category');
+  var container = document.getElementById('unit-type-fields');
+  var placeholder = document.getElementById('unit-type-placeholder');
+  var addFieldBtn = document.getElementById('addCustomFieldBtn');
+
+  function toggleAddFieldBtn() {
+    addFieldBtn.disabled = !select.value;
+  }
+
+  function buildField(f) {
+    var div = document.createElement('div');
+    div.className = 'col-md-4';
+    var label = document.createElement('label');
+    label.className = 'form-label small mb-1';
+    label.textContent = f.label;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.name = 'spec_' + f.name;
+    input.className = 'form-control';
+    input.value = existingSpecs[f.name] || '';
+    div.appendChild(label);
+    div.appendChild(input);
+    return div;
+  }
+
+  function renderFields() {
+    var cat = select.value;
+    container.innerHTML = '';
+
+    var catFields = (cat && categoryFieldsJson[cat]) ? categoryFieldsJson[cat] : [];
+    var customFields = catFields.filter(function(f) {
+      return ALWAYS_VISIBLE.indexOf(f.name) === -1;
+    });
+
+    if (!customFields.length) {
+      placeholder.classList.toggle('d-none', !!cat);
+      container.classList.add('d-none');
+      return;
+    }
+
+    placeholder.classList.add('d-none');
+    container.classList.remove('d-none');
+    customFields.forEach(function(f) { container.appendChild(buildField(f)); });
+  }
+
+  select.addEventListener('change', function() {
+    renderFields();
+    toggleAddFieldBtn();
+  });
+  renderFields();
+  toggleAddFieldBtn();
+
+  // Modal logic
+  var labelInput = document.getElementById('unit-modal-field-label');
+  var nameInput = document.getElementById('unit-modal-field-name');
+  var catNameSpan = document.getElementById('unit-modal-cat-name');
+
+  document.getElementById('addUnitFieldModal').addEventListener('show.bs.modal', function() {
+    catNameSpan.textContent = select.value;
+    labelInput.value = '';
+    nameInput.value = '';
+    document.getElementById('unit-modal-error').classList.add('d-none');
+  });
+
+  labelInput.addEventListener('input', function() {
+    nameInput.value = this.value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  });
+
+  document.getElementById('unit-modal-save-btn').addEventListener('click', function() {
+    var btn = this;
+    var errorDiv = document.getElementById('unit-modal-error');
+    errorDiv.classList.add('d-none');
+    var fieldLabel = labelInput.value.trim();
+    var fieldName = nameInput.value.trim();
+    var catName = select.value;
+    if (!fieldLabel || !fieldName) {
+      errorDiv.textContent = 'Both label and name are required.';
+      errorDiv.classList.remove('d-none');
+      return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
+
+    var formData = new FormData();
+    formData.append('category_name', catName);
+    formData.append('field_label', fieldLabel);
+    formData.append('field_name', fieldName);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch('{% url "catalog:unit_type_custom_field_add_api" %}', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-plus-lg"></i> Add Field';
+      if (data.error) {
+        errorDiv.textContent = data.error;
+        errorDiv.classList.remove('d-none');
+        return;
+      }
+      var newField = {name: data.field_name, label: data.field_label, type: 'text'};
+      if (!categoryFieldsJson[catName]) categoryFieldsJson[catName] = [];
+      categoryFieldsJson[catName].push(newField);
+      placeholder.classList.add('d-none');
+      container.classList.remove('d-none');
+      container.appendChild(buildField(newField));
+      bootstrap.Modal.getInstance(document.getElementById('addUnitFieldModal')).hide();
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-plus-lg"></i> Add Field';
+      errorDiv.textContent = 'Network error. Please try again.';
+      errorDiv.classList.remove('d-none');
+    });
+  });
+})();
+</script>
 {% endblock %}

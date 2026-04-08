@@ -1,29 +1,65 @@
 {% extends "base.html" %}
 
-{% block title %}Upload Parts CSV — Manchester Electric{% endblock %}
+{% block title %}Upload Parts CSV — Apex Database{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="page-heading mb-0">
     <i class="bi bi-upload"></i> Upload Parts CSV
   </h1>
-  <a href="{% url 'catalog:part_list' %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to Parts List
-  </a>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
 </div>
 
 <div class="row">
   <div class="col-md-7">
-    <div class="card">
+    {# ===== Step 1: Download Template ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold"><i class="bi bi-file-earmark-arrow-down"></i> Step 1 — Download Template</div>
       <div class="card-body">
+        <p class="small text-muted mb-3">
+          Download a blank CSV template with the correct column headers.
+          By default you get a <strong>master template</strong> with all categories' custom
+          fields included — fill in the <em>Category</em> column per row and only the columns
+          that apply. Or pick a specific category to get a focused template.
+        </p>
+        <div class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small mb-1" for="template-category">Category</label>
+            <select id="template-category" class="form-select form-select-sm" style="width:auto;">
+              <option value="">— All Categories (master template) —</option>
+              {% for cat in categories %}
+              <option value="{{ cat }}">{{ cat }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <a id="template-download-btn" href="{% url 'catalog:part_download_csv_template' %}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-download"></i> Download Template CSV
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ===== Step 2: Upload Filled CSV ===== #}
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-cloud-upload"></i> Step 2 — Upload Filled CSV</div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          Upload your filled-in CSV. You'll get a preview where you can review
+          and edit data before the final import.
+        </p>
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
+          <input type="hidden" name="step" value="upload">
           <div class="mb-3">
             <label for="csv_file" class="form-label">Select CSV file</label>
             <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
           </div>
           <button type="submit" class="btn btn-primary">
-            <i class="bi bi-upload"></i> Upload &amp; Process
+            <i class="bi bi-upload"></i> Upload &amp; Preview
           </button>
         </form>
       </div>
@@ -32,25 +68,49 @@
 
   <div class="col-md-5">
     <div class="card">
-      <div class="card-header fw-semibold">CSV Format</div>
+      <div class="card-header fw-semibold">CSV Format Tips</div>
       <div class="card-body">
         <p class="small text-muted mb-2">
-          The CSV must have a header row. The <strong>part_number</strong> column is required
-          and is used as the unique key (existing parts are updated, new ones are created).
+          <strong>Item Number</strong> is optional. If your CSV includes it,
+          existing parts with the same number will be updated.
+          If it's missing, new parts will be created automatically.
         </p>
-        <p class="small text-muted mb-2">Supported columns:</p>
+        <p class="small text-muted mb-2">
+          The <strong>Category</strong> column sets the Part Category (e.g. "Brushes", "Bearings").
+          Different categories can be mixed in one file.
+        </p>
+        <p class="small text-muted mb-2">
+          Any column that doesn't match a recognised field is stored as a
+          <strong>custom specification</strong> for that part.
+        </p>
+        <p class="small text-muted mb-2">
+          Use <strong>Unit Number</strong> to link a part to an existing unit.
+        </p>
+        <p class="small text-muted mb-2">
+          Common column name variations are recognised automatically
+          (e.g. "Part #", "J&amp;N Number", "Manufacture", "Unit Type").
+        </p>
+        <p class="small text-muted mb-2">Recognised columns:</p>
         <p class="small text-muted mb-0" style="line-height: 1.8;">
-          <code>part_number</code>, <code>part_name</code>, <code>key</code>,
-          <code>yt_number</code>, <code>j_and_n</code>, <code>oem_number</code>,
-          <code>item_no</code>, <code>category</code>, <code>type</code>,
-          <code>oem_type</code>, <code>item_typ</code>, <code>oem</code>,
-          <code>primary_vendor</code>, <code>catalog</code>, <code>plug_id</code>,
-          <code>price</code>, <code>cost_price</code>, <code>stock_quantity</code>,
-          <code>reorder_qty</code>, <code>bin_number</code>, <code>description</code>,
-          <code>foot_notes</code>, <code>superseding_notes</code>, <code>unit_number</code> (links to Unit by unit_number).
+          {% for f in model_fields %}<code>{{ f }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
         </p>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var catSelect = document.getElementById('template-category');
+  var downloadBtn = document.getElementById('template-download-btn');
+  var baseUrl = downloadBtn.href;
+
+  catSelect.addEventListener('change', function() {
+    var cat = this.value;
+    downloadBtn.href = cat ? baseUrl + '?category=' + encodeURIComponent(cat) : baseUrl;
+  });
+})();
+</script>
 {% endblock %}

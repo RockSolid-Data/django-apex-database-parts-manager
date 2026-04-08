@@ -1,9 +1,10 @@
 from decimal import Decimal
 
 from django import forms
+from django.forms import inlineformset_factory
 
 from catalog.models import Part
-from .models import Vendor
+from .models import Vendor, VendorContact
 
 
 class InventoryItemForm(forms.Form):
@@ -79,8 +80,9 @@ class VendorForm(forms.ModelForm):
     class Meta:
         model = Vendor
         fields = [
-            "name", "contact_name", "email", "phone",
+            "name", "contact_name", "email", "phone", "fax", "account_number",
             "address_line1", "address_line2", "city", "state", "zip_code",
+            "remit_line1", "remit_line2", "remit_city", "remit_state", "remit_zip",
             "notes", "is_active",
         ]
         widgets = {
@@ -94,3 +96,27 @@ class VendorForm(forms.ModelForm):
                 field.widget.attrs.setdefault("class", "form-check-input")
             else:
                 field.widget.attrs.setdefault("class", "form-control")
+
+
+class VendorContactForm(forms.ModelForm):
+    """Form for one vendor contact."""
+
+    class Meta:
+        model = VendorContact
+        fields = ["name", "phone", "email", "fax", "department"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name"}),
+            "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "Phone"}),
+            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "Email"}),
+            "fax": forms.TextInput(attrs={"class": "form-control", "placeholder": "Fax"}),
+            "department": forms.TextInput(attrs={"class": "form-control", "placeholder": "Department"}),
+        }
+
+
+VendorContactFormSet = inlineformset_factory(
+    Vendor,
+    VendorContact,
+    form=VendorContactForm,
+    extra=1,
+    can_delete=True,
+)

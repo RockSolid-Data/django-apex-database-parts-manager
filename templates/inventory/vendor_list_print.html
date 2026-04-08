@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vendor List — Manchester Electric</title>
+  <title>Vendor List — Apex Database</title>
   <style>
     @page { size: letter; margin: 0.5in; }
     body { font-family: sans-serif; font-size: 10pt; max-width: 7.5in; margin: 0 auto; }
@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-<h1>Vendor List — Manchester Electric</h1>
+<h1>Vendor List — Apex Database</h1>
 <p>{{ vendors|length }} vendor{{ vendors|length|pluralize }} found</p>
 <table>
   <thead>
@@ -23,8 +23,8 @@
       <th>Contact</th>
       <th>Email</th>
       <th>Phone</th>
-      <th>City</th>
-      <th>State</th>
+      <th>Fax</th>
+      <th>Account #</th>
       <th class="text-center">Status</th>
     </tr>
   </thead>
@@ -35,8 +35,8 @@
       <td>{{ v.contact_name|default:"—" }}</td>
       <td>{{ v.email|default:"—" }}</td>
       <td>{{ v.phone|default:"—" }}</td>
-      <td>{{ v.city|default:"—" }}</td>
-      <td>{{ v.state|default:"—" }}</td>
+      <td>{{ v.fax|default:"—" }}</td>
+      <td>{{ v.account_number|default:"—" }}</td>
       <td class="text-center">{% if v.is_active %}Active{% else %}Inactive{% endif %}</td>
     </tr>
     {% empty %}

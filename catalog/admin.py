@@ -73,8 +73,9 @@ class ApplicationUnitAdmin(admin.ModelAdmin):
 
 @admin.register(CrossReference)
 class CrossReferenceAdmin(admin.ModelAdmin):
-    list_display = ["unit", "cross_ref_unit"]
-    search_fields = ["unit__unit_number", "cross_ref_unit__unit_number"]
+    list_display = ["unit", "cross_ref_unit", "cross_ref_number", "interchange_type"]
+    search_fields = ["unit__unit_number", "cross_ref_unit__unit_number", "cross_ref_number", "interchange_type"]
+    list_filter = ["interchange_type"]
 
 
 @admin.register(Substitute)

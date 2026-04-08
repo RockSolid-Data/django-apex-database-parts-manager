@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — Apex Database{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+  <h1 class="page-heading mb-0">
+    <i class="bi bi-sliders"></i> {{ title }}
+  </h1>
+  <button type="button" onclick="smartBack()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
+</div>
+
+<script>
+function smartBack() {
+  if (window.opener || window.history.length <= 1) {
+    window.close();
+  } else {
+    history.back();
+  }
+}
+</script>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="card mb-4">
+    <div class="card-header fw-semibold">Category Name</div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-6">
+          <input type="text" name="name" class="form-control"
+                 value="{{ category.name|default:'' }}"
+                 placeholder="e.g. Bearings, Brushes, Seals..."
+                 required>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+      <span>Fields</span>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="add-field-btn">
+        <i class="bi bi-plus-lg"></i> Add Field
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0" id="fields-table">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3" style="width: 40%;">Field Label</th>
+            <th style="width: 40%;">Field Name (internal key)</th>
+            <th style="width: 20%;" class="text-center">Delete</th>
+          </tr>
+        </thead>
+        <tbody id="fields-body">
+          {% for f in fields %}
+          <tr data-field-name="{{ f.field_name }}">
+            <td class="ps-3">
+              <input type="text" name="field_label" class="form-control form-control-sm" value="{{ f.field_label }}" placeholder="Display label" required>
+            </td>
+            <td>
+              <input type="text" name="field_name" class="form-control form-control-sm" value="{{ f.field_name }}" placeholder="internal_key" required>
+            </td>
+            <td class="text-center">
+              <button type="button" class="btn btn-sm btn-outline-danger remove-field-btn" title="Delete field">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div id="no-fields-msg" class="text-center text-muted py-3{% if fields %} d-none{% endif %}">
+        No fields added yet. Click <strong>Add Field</strong> to get started.
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 me-sticky-actions">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg"></i> Save Category
+    </button>
+    <a href="{% url 'catalog:part_category_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var tbody = document.getElementById('fields-body');
+  var addBtn = document.getElementById('add-field-btn');
+  var noMsg = document.getElementById('no-fields-msg');
+  var defaultFieldNames = JSON.parse('{{ default_field_names_json|escapejs }}');
+
+  function isDefault(row) {
+    var fname = row.getAttribute('data-field-name') || '';
+    return defaultFieldNames.indexOf(fname) !== -1;
+  }
+
+  function lockDefaultRows() {
+    tbody.querySelectorAll('tr').forEach(function(row) {
+      if (isDefault(row)) {
+        row.querySelector('input[name="field_name"]').readOnly = true;
+        row.querySelector('input[name="field_name"]').classList.add('bg-light');
+        var btn = row.querySelector('.remove-field-btn');
+        if (btn) { btn.style.display = 'none'; }
+      }
+    });
+  }
+
+  function updateMsg() {
+    noMsg.classList.toggle('d-none', tbody.rows.length > 0);
+  }
+
+  function autoSlug(label) {
+    return label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  }
+
+  addBtn.addEventListener('click', function() {
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="ps-3"><input type="text" name="field_label" class="form-control form-control-sm" placeholder="Display label" required></td>' +
+      '<td><input type="text" name="field_name" class="form-control form-control-sm" placeholder="auto-generated from label" required></td>' +
+      '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-field-btn" title="Delete field"><i class="bi bi-trash"></i></button></td>';
+    tbody.appendChild(tr);
+    updateMsg();
+    tr.querySelector('input[name="field_label"]').focus();
+
+    var labelInput = tr.querySelector('input[name="field_label"]');
+    var nameInput = tr.querySelector('input[name="field_name"]');
+    var nameEdited = false;
+    nameInput.addEventListener('input', function() { nameEdited = true; });
+    labelInput.addEventListener('input', function() {
+      if (!nameEdited) {
+        nameInput.value = autoSlug(labelInput.value);
+      }
+    });
+  });
+
+  tbody.addEventListener('click', function(e) {
+    var btn = e.target.closest('.remove-field-btn');
+    if (btn) {
+      var row = btn.closest('tr');
+      if (isDefault(row)) return;
+      var label = row.querySelector('input[name="field_label"]').value || 'this field';
+      if (confirm('Delete "' + label + '"?')) {
+        row.remove();
+        updateMsg();
+      }
+    }
+  });
+
+  lockDefaultRows();
+})();
+</script>
+{% endblock %}

@@ -19,9 +19,26 @@
     return printFrame;
   }
 
+  var overlay = null;
+  function showPrintOverlay() {
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'me-print-overlay';
+      overlay.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"></div> Preparing print\u2026';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.8);z-index:9999;font-size:1.1rem;color:#333;';
+      document.body.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+  }
+  function hidePrintOverlay() {
+    if (overlay) overlay.style.display = 'none';
+  }
+
   function printViaIframe(url) {
     var frame = getPrintFrame();
+    showPrintOverlay();
     frame.onload = function () {
+      hidePrintOverlay();
       try {
         frame.contentWindow.focus();
         frame.contentWindow.print();

@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} — {{ bom.name }} — Manchester Electric{% endblock %}
+{% block title %}{{ title }} — {{ bom.name }} — Apex Database{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="page-heading mb-0">
     <i class="bi bi-plus-lg"></i> {{ title }}
   </h1>
-  <a href="{% url 'catalog:bom_detail' bom.pk %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to {{ bom.name }}
-  </a>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
 </div>
 
 <div class="row">
@@ -26,11 +26,11 @@
         </div>
         {% endif %}
 
-        <form method="post">
+        <form method="post" id="bom-item-form">
           {% csrf_token %}
 
           <div class="mb-3">
-            <label class="form-label" for="{{ form.part.id_for_label }}">Part <span class="text-danger">*</span></label>
+            <label class="form-label" for="{{ form.part.id_for_label }}">Unit Number <span class="text-danger">*</span></label>
             {{ form.part }}
             {% if form.part.errors %}
               <div class="invalid-feedback d-block">{{ form.part.errors.0 }}</div>
@@ -75,23 +75,75 @@
             </div>
           </div>
 
-          <div class="d-flex gap-2 flex-wrap">
-            <button type="submit" class="btn btn-primary">
-              <i class="bi bi-check-lg"></i> {% if item %}Update{% else %}Add Part{% endif %}
-            </button>
-            <a href="{% url 'catalog:bom_detail' bom.pk %}" class="btn btn-outline-secondary">Cancel</a>
-            {% if item %}
-            <form method="post" action="{% url 'catalog:bom_item_delete' bom.pk item.pk %}" class="d-inline ms-auto">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Delete this item from the BOM?');">
-                <i class="bi bi-trash"></i> Delete
-              </button>
-            </form>
-            {% endif %}
-          </div>
+
         </form>
+
+        <div class="d-flex gap-2 flex-wrap me-sticky-actions">
+          <button type="submit" form="bom-item-form" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> {% if item %}Update{% else %}Add Part{% endif %}
+          </button>
+          <a href="{% url 'catalog:bom_detail' bom.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          {% if item %}
+          <form method="post" action="{% url 'catalog:bom_item_delete' bom.pk item.pk %}" class="d-inline ms-auto">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger" data-confirm="Delete this item from the BOM?">
+              <i class="bi bi-trash"></i> Delete
+            </button>
+          </form>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var partSelect = document.getElementById('id_part');
+  if (!partSelect) return;
+
+  var fieldMap = {
+    j_and_n: 'id_j_and_n',
+    yt_number: 'id_yt_number',
+    bin_number: 'id_bin_number',
+    oem_number: 'id_oem_number',
+    stock_quantity: 'id_stock_qty'
+  };
+
+  function fillFromPart(partId) {
+    if (!partId) return;
+    fetch('/api/parts/' + partId + '/detail/')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        Object.keys(fieldMap).forEach(function(key) {
+          var el = document.getElementById(fieldMap[key]);
+          if (el && !el.value && data[key]) {
+            el.value = data[key];
+          }
+        });
+      })
+      .catch(function() {});
+  }
+
+  {% if not item %}
+  var observer = new MutationObserver(function() {
+    var ts = partSelect.tomselect;
+    if (ts) {
+      observer.disconnect();
+      ts.on('change', function(value) { fillFromPart(value); });
+    }
+  });
+  observer.observe(partSelect.parentElement || document.body, { childList: true, subtree: true });
+
+  setTimeout(function() {
+    if (partSelect.tomselect) {
+      observer.disconnect();
+      partSelect.tomselect.on('change', function(value) { fillFromPart(value); });
+    }
+  }, 500);
+  {% endif %}
+})();
+</script>
 {% endblock %}

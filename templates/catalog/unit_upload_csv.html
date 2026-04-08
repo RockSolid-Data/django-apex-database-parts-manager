@@ -1,29 +1,65 @@
 {% extends "base.html" %}
 
-{% block title %}Upload Units CSV — Manchester Electric{% endblock %}
+{% block title %}Upload Units CSV — Apex Database{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="page-heading mb-0">
     <i class="bi bi-upload"></i> Upload Units CSV
   </h1>
-  <a href="{% url 'catalog:unit_list' %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to Unit List
-  </a>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
 </div>
 
 <div class="row">
   <div class="col-md-7">
-    <div class="card">
+    {# ===== Step 1: Download Template ===== #}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold"><i class="bi bi-file-earmark-arrow-down"></i> Step 1 — Download Template</div>
       <div class="card-body">
+        <p class="small text-muted mb-3">
+          Download a blank CSV template with the correct column headers.
+          By default you get a <strong>master template</strong> with all unit types' custom
+          fields included — fill in the <em>Unit Type</em> column per row and only the columns
+          that apply. Or pick a specific type to get a focused template.
+        </p>
+        <div class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small mb-1" for="template-unit-type">Unit Type</label>
+            <select id="template-unit-type" class="form-select form-select-sm" style="width:auto;">
+              <option value="">— All Unit Types (master template) —</option>
+              {% for ut in unit_type_categories %}
+              <option value="{{ ut }}">{{ ut }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <a id="template-download-btn" href="{% url 'catalog:unit_download_csv_template' %}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-download"></i> Download Template CSV
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ===== Step 2: Upload Filled CSV ===== #}
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-cloud-upload"></i> Step 2 — Upload Filled CSV</div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          Upload your filled-in CSV. You'll get a preview where you can review
+          and edit data before the final import.
+        </p>
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
+          <input type="hidden" name="step" value="upload">
           <div class="mb-3">
             <label for="csv_file" class="form-label">Select CSV file</label>
             <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
           </div>
           <button type="submit" class="btn btn-primary">
-            <i class="bi bi-upload"></i> Upload &amp; Process
+            <i class="bi bi-upload"></i> Upload &amp; Preview
           </button>
         </form>
       </div>
@@ -32,25 +68,47 @@
 
   <div class="col-md-5">
     <div class="card">
-      <div class="card-header fw-semibold">CSV Format</div>
+      <div class="card-header fw-semibold">CSV Format Tips</div>
       <div class="card-body">
         <p class="small text-muted mb-2">
-          The CSV must have a header row. The <strong>unit_number</strong> column is required
-          and is used as the unique key (existing units are updated, new ones are created).
+          <strong>Unit Number</strong> is optional. If your CSV includes it,
+          existing units with the same number will be updated.
+          If it's missing, new units will be created automatically.
         </p>
-        <p class="small text-muted mb-2">Supported columns:</p>
+        <p class="small text-muted mb-2">
+          The <strong>Unit Type</strong> column sets both the Unit Type and Unit Type Category
+          (e.g. "Starter", "Generator", "Alternator"). Different types can be mixed in one file.
+        </p>
+        <p class="small text-muted mb-2">
+          Any column that doesn't match a recognised field is stored as a
+          <strong>custom specification</strong> for that unit.
+        </p>
+        <p class="small text-muted mb-2">
+          Common column name variations are recognised automatically
+          (e.g. "Unit #", "J&amp;N Number", "Manufacture", "Tooth Qty").
+        </p>
+        <p class="small text-muted mb-2">Recognised columns:</p>
         <p class="small text-muted mb-0" style="line-height: 1.8;">
-          <code>unit_number</code>, <code>unit_type</code>, <code>yt_number</code>,
-          <code>oem</code>, <code>manufacturer</code>, <code>family</code>,
-          <code>voltage</code>, <code>kw_hp</code>, <code>phase</code>,
-          <code>fla</code>, <code>rpm</code>, <code>frame</code>,
-          <code>enclosure</code>, <code>design</code>, <code>type</code>,
-          <code>rotation</code>, <code>weight</code>, <code>notes</code>,
-          <code>new_unit_price</code>, <code>rebuilt_unit_price</code>,
-          and more &mdash; any Unit model field name works.
+          <code>unit_number</code>, <code>unit_type</code>,
+          {% for f in model_fields %}<code>{{ f }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
         </p>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var typeSelect = document.getElementById('template-unit-type');
+  var downloadBtn = document.getElementById('template-download-btn');
+  var baseUrl = downloadBtn.href;
+
+  typeSelect.addEventListener('change', function() {
+    var ut = this.value;
+    downloadBtn.href = ut ? baseUrl + '?unit_type=' + encodeURIComponent(ut) : baseUrl;
+  });
+})();
+</script>
 {% endblock %}

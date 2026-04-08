@@ -15,7 +15,7 @@ class CompanySettingsTest(TestCase):
         """CompanySettings.get() creates default when none exists."""
         self.assertFalse(CompanySettings.objects.exists())
         s = CompanySettings.get()
-        self.assertEqual(s.company_name, "Manchester Electric")
+        self.assertEqual(s.company_name, "")
         self.assertEqual(s.default_net_terms, NetTerms.NET_30)
 
     def test_get_due_date_net_10(self):
@@ -82,20 +82,16 @@ class CustomerModelTest(TestCase):
         """Customer has all fields from DATABASE_PLAN."""
         c = Customer.objects.create(
             name="Acme Corp",
-            email="info@acme.com",
-            phone="555-123-4567",
-            address_line1="123 Main St",
-            address_line2="Suite 100",
-            city="Springfield",
-            state="IL",
-            zip_code="62701",
+            bill_to_line1="123 Main St",
+            bill_to_line2="Suite 100",
+            bill_to_city="Springfield",
+            bill_to_state="IL",
+            bill_to_zip="62701",
             notes="Preferred customer",
             is_active=True,
         )
         self.assertEqual(c.name, "Acme Corp")
-        self.assertEqual(c.email, "info@acme.com")
-        self.assertEqual(c.phone, "555-123-4567")
-        self.assertEqual(c.city, "Springfield")
+        self.assertEqual(c.bill_to_city, "Springfield")
         self.assertTrue(c.is_active)
         self.assertIsNotNone(c.created_at)
         self.assertIsNotNone(c.updated_at)
@@ -160,17 +156,33 @@ class CustomerViewTest(TestCase):
         url = reverse("invoicing:customer_create")
         resp = self.client.post(url, {
             "name": "New Customer Co",
-            "email": "contact@newcustomer.com",
+            "contact_name": "",
             "phone": "",
-            "address_line1": "",
-            "address_line2": "",
-            "city": "",
-            "state": "",
-            "zip_code": "",
+            "email": "",
+            "fax": "",
+            "bill_to_line1": "",
+            "bill_to_line2": "",
+            "bill_to_city": "",
+            "bill_to_state": "",
+            "bill_to_zip": "",
+            "ship_to_line1": "",
+            "ship_to_line2": "",
+            "ship_to_city": "",
+            "ship_to_state": "",
+            "ship_to_zip": "",
             "notes": "",
             "net_terms": "",
             "net_days": "0",
             "is_active": "on",
+            "contacts-TOTAL_FORMS": "1",
+            "contacts-INITIAL_FORMS": "0",
+            "contacts-MIN_NUM_FORMS": "0",
+            "contacts-MAX_NUM_FORMS": "1000",
+            "contacts-0-name": "",
+            "contacts-0-phone": "",
+            "contacts-0-email": "",
+            "contacts-0-fax": "",
+            "contacts-0-department": "",
         })
         self.assertRedirects(resp, reverse("invoicing:customer_list"))
         self.assertTrue(Customer.objects.filter(name="New Customer Co").exists())
@@ -190,17 +202,33 @@ class CustomerViewTest(TestCase):
         url = reverse("invoicing:customer_edit", kwargs={"pk": c.pk})
         resp = self.client.post(url, {
             "name": "Updated Name",
-            "email": "",
+            "contact_name": "",
             "phone": "",
-            "address_line1": "",
-            "address_line2": "",
-            "city": "",
-            "state": "",
-            "zip_code": "",
+            "email": "",
+            "fax": "",
+            "bill_to_line1": "",
+            "bill_to_line2": "",
+            "bill_to_city": "",
+            "bill_to_state": "",
+            "bill_to_zip": "",
+            "ship_to_line1": "",
+            "ship_to_line2": "",
+            "ship_to_city": "",
+            "ship_to_state": "",
+            "ship_to_zip": "",
             "notes": "",
             "net_terms": "",
             "net_days": "0",
             "is_active": "on",
+            "contacts-TOTAL_FORMS": "1",
+            "contacts-INITIAL_FORMS": "0",
+            "contacts-MIN_NUM_FORMS": "0",
+            "contacts-MAX_NUM_FORMS": "1000",
+            "contacts-0-name": "",
+            "contacts-0-phone": "",
+            "contacts-0-email": "",
+            "contacts-0-fax": "",
+            "contacts-0-department": "",
         })
         self.assertRedirects(resp, reverse("invoicing:customer_list"))
         c.refresh_from_db()

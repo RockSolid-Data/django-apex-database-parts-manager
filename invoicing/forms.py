@@ -10,6 +10,7 @@ from catalog.models import Part
 from .models import (
     CompanySettings,
     Customer,
+    CustomerContact,
     Invoice,
     InvoiceItem,
     NetTerms,
@@ -69,22 +70,48 @@ class InvoiceItemForm(forms.ModelForm):
 
     class Meta:
         model = InvoiceItem
-        fields = ["part", "unit", "description", "quantity", "unit_price"]
+        fields = ["part", "unit", "description", "quantity", "unit_price", "discount_pct"]
         widgets = {
             "part": forms.Select(attrs={"class": "form-select form-select-sm item-part"}),
             "unit": forms.Select(attrs={"class": "form-select form-select-sm item-unit"}),
             "description": forms.TextInput(attrs={"class": "form-control form-control-sm item-desc"}),
             "quantity": forms.NumberInput(attrs={"class": "form-control form-control-sm item-qty", "min": 1}),
             "unit_price": forms.NumberInput(attrs={"class": "form-control form-control-sm item-price", "step": "0.01"}),
+            "discount_pct": forms.NumberInput(attrs={"class": "form-control form-control-sm item-discount", "step": "0.01", "min": 0, "max": 100, "placeholder": "0"}),
+        }
+        labels = {
+            "unit_price": "Rate",
+            "discount_pct": "Disc %",
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from catalog.models import Part, Unit
-        self.fields["part"].queryset = Part.objects.filter(is_active=True).order_by("part_number")
+
+        if self.is_bound:
+            # POST: full queryset for validation (.get() lookup only, not iterated)
+            self.fields["part"].queryset = Part.objects.filter(is_active=True)
+            self.fields["unit"].queryset = Unit.objects.filter(is_active=True)
+        else:
+            # GET: minimal queryset so the HTML only contains selected items
+            part_pks = []
+            unit_pks = []
+            if self.instance and self.instance.pk:
+                if self.instance.part_id:
+                    part_pks.append(self.instance.part_id)
+                if self.instance.unit_id:
+                    unit_pks.append(self.instance.unit_id)
+            init_part = self.initial.get("part")
+            if init_part:
+                part_pks.append(init_part.pk if hasattr(init_part, "pk") else init_part)
+            init_unit = self.initial.get("unit")
+            if init_unit:
+                unit_pks.append(init_unit.pk if hasattr(init_unit, "pk") else init_unit)
+            self.fields["part"].queryset = Part.objects.filter(pk__in=part_pks) if part_pks else Part.objects.none()
+            self.fields["unit"].queryset = Unit.objects.filter(pk__in=unit_pks) if unit_pks else Unit.objects.none()
+
         self.fields["part"].required = False
         self.fields["part"].empty_label = "— Select part —"
-        self.fields["unit"].queryset = Unit.objects.filter(is_active=True).order_by("unit_number")
         self.fields["unit"].required = False
         self.fields["unit"].empty_label = "— Select unit —"
 
@@ -112,7 +139,10 @@ class InvoiceItemFormSet(BaseInlineFormSet):
             if delta > 0:
                 parts_delta[part.pk] += delta
         for part_id, delta in parts_delta.items():
-            part = Part.objects.get(pk=part_id)
+            try:
+                part = Part.objects.get(pk=part_id)
+            except Part.DoesNotExist:
+                continue
             if part.stock_quantity < delta:
                 raise forms.ValidationError(
                     f"Not enough stock for {part.part_number}. "
@@ -179,11 +209,12 @@ class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
         fields = [
-            "name", "email", "phone",
-            "address_line1", "address_line2", "city", "state", "zip_code",
+            "name", "contact_name", "phone", "email", "fax",
+            "bill_to_line1", "bill_to_line2", "bill_to_city", "bill_to_state", "bill_to_zip",
+            "ship_to_line1", "ship_to_line2", "ship_to_city", "ship_to_state", "ship_to_zip",
             "notes", "is_active",
             "net_terms", "net_days",
-            "tax_rate",
+            "tax_rate", "is_tax_exempt", "has_st105",
         ]
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 3}),
@@ -202,3 +233,27 @@ class CustomerForm(forms.ModelForm):
                 field.widget.attrs.setdefault("class", "form-check-input")
             elif not isinstance(field.widget, forms.Select):
                 field.widget.attrs.setdefault("class", "form-control")
+
+
+class CustomerContactForm(forms.ModelForm):
+    """Form for one customer contact."""
+
+    class Meta:
+        model = CustomerContact
+        fields = ["name", "phone", "email", "fax", "department"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name"}),
+            "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "Phone"}),
+            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "Email"}),
+            "fax": forms.TextInput(attrs={"class": "form-control", "placeholder": "Fax"}),
+            "department": forms.TextInput(attrs={"class": "form-control", "placeholder": "Department"}),
+        }
+
+
+CustomerContactFormSet = inlineformset_factory(
+    Customer,
+    CustomerContact,
+    form=CustomerContactForm,
+    extra=1,
+    can_delete=True,
+)

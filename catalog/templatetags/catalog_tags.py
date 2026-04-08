@@ -9,11 +9,12 @@ def static_cache_bust(path):
     from django.templatetags.static import static
     from django.conf import settings
     import os
+    import sys
     full_path = os.path.join(settings.BASE_DIR, "static", path)
     if os.path.exists(full_path):
         mtime = int(os.path.getmtime(full_path))
-        return f"{static(path)}?v={mtime}"
-    return static(path)
+        return f"/static/{path}?v={mtime}"
+    return f"/static/{path}"
 
 
 @register.filter
@@ -23,3 +24,11 @@ def get_field(form, field_name):
         return form[field_name]
     except KeyError:
         return ""
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Look up a dict value by key. Usage: {{ mydict|get_item:'foo' }}"""
+    if isinstance(dictionary, dict):
+        return dictionary.get(key, "")
+    return ""

@@ -1,5 +1,5 @@
 """
-URL configuration for the Manchester Electric project.
+URL configuration for the Apex Database project.
 """
 
 from django.contrib import admin

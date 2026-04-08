@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}BOM for Unit {{ unit.unit_number }} — Manchester Electric{% endblock %}
+{% block title %}BOM for Unit {{ unit.unit_number }} — Apex Database{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="page-heading mb-0">
     <i class="bi bi-diagram-3"></i> BOM for Unit {{ unit.unit_number }}
   </h1>
-  <a href="{% url 'catalog:unit_detail' unit.pk %}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to Unit
-  </a>
+  <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </button>
 </div>
 
 <div class="card">
