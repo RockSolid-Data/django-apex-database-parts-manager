@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load catalog_tags %}
 
 {% block title %}{{ bom.name }} - BOM — Apex Database{% endblock %}
 
@@ -12,7 +13,7 @@
 {% block content %}
 
 {# ===== Page header: BOM Details title + top-right action buttons ===== #}
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 me-sticky-toolbar">
   <h1 class="page-heading mb-0">
     <i class="bi bi-diagram-3"></i> BOM Details
   </h1>
@@ -49,7 +50,9 @@
   </div>
   {% endif %}
   {% if bom.unit %}
-  <p class="mb-1 mt-2"><strong>Unit:</strong> <a href="{% url 'catalog:unit_detail' bom.unit.pk %}">{{ bom.unit.unit_number }}</a></p>
+  <p class="mb-1 mt-2"><strong>Unit:</strong> <a href="{% url 'catalog:unit_detail' bom.unit.pk %}">{{ bom.unit }}</a></p>
+  {% else %}
+  <p class="mb-1 mt-2"><strong>Unit:</strong> <span class="text-muted">— (none assigned)</span></p>
   {% endif %}
   {% if bom.application %}
   <p class="mb-1"><strong>Application:</strong> <a href="{% url 'catalog:application_detail' bom.application.pk %}">{{ bom.application.name }}</a></p>
@@ -73,13 +76,13 @@
             <th class="text-center" style="width: 40px;">
               <input type="checkbox" class="form-check-input" id="bom-select-all" title="Select all lines for Print">
             </th>
-            <th class="text-center">UNIT #</th>
             <th class="text-center">YT #</th>
+            <th class="text-center">PART #</th>
             <th class="text-center">J&N #</th>
             <th class="text-center">OEM #</th>
             <th class="text-center">DESCRIPTION</th>
             <th class="text-center">NOTES</th>
-            <th class="text-center">UNIT QTY</th>
+            <th class="text-center">PART QTY</th>
             <th class="text-center">STOCK QTY</th>
             <th class="text-center ps-4">BIN #</th>
           </tr>
@@ -91,11 +94,6 @@
               <input type="checkbox" class="form-check-input bom-item-check" data-item-id="{{ item.pk }}" title="Select for Print">
             </td>
             <td class="text-center">
-              {% if item.part and item.part.part_number %}
-              <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ item.part.part_number }}</a>
-              {% else %}—{% endif %}
-            </td>
-            <td class="text-center">
               {% with yt=item.yt_number|default:item.part.yt_number %}
               {% if yt and item.part %}
               <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ yt }}</a>
@@ -103,10 +101,19 @@
               {% endwith %}
             </td>
             <td class="text-center">
+              {% if item.part and item.part.part_number %}
+              <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ item.part.part_number }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-center">
               {% with jn=item.j_and_n|default:item.part.j_and_n %}
-              {% if jn and item.part %}
-              <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ jn }}</a>
-              {% else %}{{ jn|default:"—" }}{% endif %}
+              {% with first=jn|first_jn %}
+              {% if first and item.part %}
+              <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ first }}</a>
+              {% elif first %}
+              <a href="/parts/?q={{ first|urlencode }}" class="bom-num-link">{{ first }}</a>
+              {% else %}—{% endif %}
+              {% endwith %}
               {% endwith %}
             </td>
             <td class="text-center">

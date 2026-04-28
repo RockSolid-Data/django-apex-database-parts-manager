@@ -264,8 +264,8 @@ class PartForm(forms.ModelForm):
             "part_number", "part_name", "manufacturer_number", "yt_number", "j_and_n", "oem_number",
             "voltage", "item_no", "category", "type", "oem_type", "item_typ", "oem",
             "primary_vendor", "catalog", "plug_id",
-            "price", "cost_price",
-            "stock_quantity", "reorder_qty", "bin_number",
+            "cost_price", "markup_percent", "price",
+            "track_inventory", "stock_quantity", "reorder_qty", "bin_number",
             "description", "foot_notes", "superseding_notes",
         ]
         widgets = {
@@ -283,6 +283,8 @@ class PartForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["part_number"].required = False
+        self.fields["stock_quantity"].required = False
+        self.fields["reorder_qty"].required = False
 
         from .models import PartCategory
         db_categories = list(PartCategory.objects.values_list("name", flat=True))
@@ -300,7 +302,7 @@ class PartForm(forms.ModelForm):
         self.fields["category"].widget.attrs["id"] = "id_category"
         self.fields["category"].widget.attrs["style"] = "min-width: 200px;"
 
-        self.fields["part_number"].label = "Item Number"
+        self.fields["part_number"].label = "Part Number"
 
         if self.is_bound:
             submitted_ids = self.data.getlist("units")
@@ -329,6 +331,14 @@ class PartForm(forms.ModelForm):
         "part_number", "part_name", "manufacturer_number", "yt_number",
         "j_and_n", "oem_number", "voltage", "type", "oem", "primary_vendor",
     }
+
+    def clean_stock_quantity(self):
+        val = self.cleaned_data.get("stock_quantity")
+        return val if val is not None else 0
+
+    def clean_reorder_qty(self):
+        val = self.cleaned_data.get("reorder_qty")
+        return val if val is not None else 0
 
     def clean(self):
         cleaned = super().clean()
@@ -365,10 +375,6 @@ class PartForm(forms.ModelForm):
             if fd["name"] in model_field_names and not isinstance(val, bool):
                 setattr(instance, fd["name"], val)
         instance.specifications = specs
-
-        if not instance.part_number:
-            import uuid
-            instance.part_number = f"AUTO-{uuid.uuid4().hex[:8].upper()}"
 
         if commit:
             instance.save()
@@ -437,7 +443,7 @@ class BOMForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         if instance.unit:
-            instance.name = instance.unit.unit_number
+            instance.name = str(instance.unit)
         if commit:
             instance.save()
         return instance
@@ -469,6 +475,9 @@ class BOMItemForm(forms.ModelForm):
         else:
             self.fields["part"].queryset = Part.objects.none()
 
+        self.fields["stock_qty"].required = False
+        self.fields["unit_qty"].required = False
+
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
         self.fields["part"].widget.attrs.update({
@@ -478,6 +487,44 @@ class BOMItemForm(forms.ModelForm):
         })
         if bom:
             self.fields["part"].widget.attrs["data-exclude-bom"] = bom.pk
+
+    def clean_stock_qty(self):
+        val = self.cleaned_data.get("stock_qty")
+        return val if val is not None else 0
+
+    def clean_unit_qty(self):
+        val = self.cleaned_data.get("unit_qty")
+        return val if val is not None else 1
+
+
+class BOMItemInlineForm(forms.ModelForm):
+    """Simplified part + qty row for inline BOM creation."""
+
+    class Meta:
+        model = BOMItem
+        fields = ["part", "unit_qty"]
+
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("bom", None)
+        super().__init__(*args, **kwargs)
+        self.fields["part"].required = False
+        self.fields["unit_qty"].required = False
+
+        part_key = self.add_prefix("part")
+        if self.is_bound and self.data.get(part_key):
+            self.fields["part"].queryset = Part.objects.filter(pk=self.data[part_key])
+        else:
+            self.fields["part"].queryset = Part.objects.none()
+
+        self.fields["part"].widget.attrs.update({
+            "class": "form-select js-ajax-select",
+            "data-url": "/api/parts/autocomplete/",
+            "data-placeholder": "Search parts...",
+        })
+        self.fields["unit_qty"].widget.attrs.update({
+            "class": "form-control",
+        })
+        self.fields["unit_qty"].initial = 1
 
 
 class CrossReferenceForm(forms.ModelForm):

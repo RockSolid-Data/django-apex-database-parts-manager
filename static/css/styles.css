@@ -39,6 +39,10 @@
   --me-table-header-bg: var(--me-primary);
   --me-table-header-color: #ffffff;
 
+  /* Sticky zones — fallback before JS runs; JS will override per-page */
+  --me-toolbar-h: 82px;        /* title-bar-only pages */
+  --me-actions-h: 70px;        /* sticky save/cancel bar */
+
   /* Bootstrap overrides — buttons, badges, links use these */
   --bs-primary: var(--me-primary);
   --bs-primary-rgb: var(--me-primary-rgb);
@@ -306,25 +310,54 @@ main::-webkit-scrollbar-thumb:hover {
   padding-top: 0 !important;
 }
 
-/* ---- Sticky toolbar (filters pinned to top of scroll area) ---- */
-.me-sticky-toolbar {
+/* Breadcrumb bar sticks to the very top so the toolbar beneath it never moves.
+   Only activates on pages that also have a sticky toolbar.
+   Height is measured by JS → --me-breadcrumb-h. */
+#main-content:has(.me-sticky-toolbar) > nav[aria-label="breadcrumb"] {
   position: sticky;
   top: 0;
+  z-index: 12;
+  background-color: var(--me-body-bg);
+  padding-top: 0.4rem;
+  padding-bottom: 0.25rem;
+}
+
+/* ---- Sticky toolbar (pinned immediately below breadcrumbs) ---- */
+.me-sticky-toolbar {
+  position: sticky;
+  top: var(--me-breadcrumb-h, 0px);
   z-index: 10;
   background-color: var(--me-body-bg);
   padding-top: 1.25rem;
   padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--me-footer-border);
 }
 
-/* ---- Sticky table column headers (pinned below toolbar) ---- */
+/* Form / detail pages: toolbar IS the flex row itself (no filter card inside) */
+.me-sticky-toolbar:not(:has(> .card)) {
+  padding-bottom: 0.5rem;
+}
+
+/* Ensure the last direct child of the toolbar has no extra bottom margin
+   so the border-bottom sits flush regardless of which elements are inside */
+.me-sticky-toolbar > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* ---- Sticky table column headers (pinned below toolbar + count line) ---- */
 #main-content .table-responsive {
   overflow: visible;
 }
 
 #main-content thead.table-dark th {
   position: sticky;
-  top: var(--me-toolbar-h, 0px);
+  top: calc(var(--me-breadcrumb-h, 0px) + var(--me-toolbar-h, 0px));
   z-index: 9;
+}
+
+/* When a sticky count line is present, table header sits below it */
+#main-content:has(.me-sticky-count) thead.table-dark th {
+  top: calc(var(--me-breadcrumb-h, 0px) + var(--me-toolbar-h, 0px) + var(--me-count-h, 34px));
 }
 
 /* ---- Sticky action bar (save / cancel pinned to bottom of scroll area) ---- */
@@ -348,15 +381,53 @@ main::-webkit-scrollbar-thumb:hover {
   color: #adb5bd;
 }
 
+/* Hide the copyright footer on pages that have a sticky Save/Cancel bar.
+   With no content below the bar, its natural resting position at the scroll
+   bottom aligns with the viewport bottom — the bar never jumps up. */
+#main-content:has(.me-sticky-actions) .me-footer {
+  display: none;
+}
+
 .me-sticky-actions {
   position: sticky;
   bottom: 0;
   z-index: 10;
   background-color: var(--me-body-bg);
-  padding: 1rem 0;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  min-height: var(--me-actions-h);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin-top: auto;
   margin-bottom: 0 !important;
   border-top: 1px solid var(--me-footer-border);
+}
+
+/* ---- Sticky results count line (sticks just below the toolbar) ---- */
+.me-sticky-count {
+  position: sticky;
+  top: calc(var(--me-breadcrumb-h, 0px) + var(--me-toolbar-h, 0px));
+  z-index: 8;
+  background-color: var(--me-body-bg);
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--me-footer-border);
+  font-size: 0.875rem;
+}
+
+/* Flash-message toast overlay — fixed position so it never shifts layout */
+#me-flash-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1080;
+  width: 340px;
+  max-width: calc(100vw - 2rem);
+  pointer-events: none;
+}
+#me-flash-container .alert {
+  pointer-events: auto;
 }
 
 /* ==========================================================================
@@ -499,7 +570,7 @@ main::-webkit-scrollbar-thumb:hover {
     height: auto !important;
     overflow: visible !important;
   }
-  .sidebar, .me-mobile-header, .me-sidebar-backdrop {
+  .sidebar, .me-mobile-header, .me-sidebar-backdrop, #me-flash-container {
     display: none !important;
   }
   main {
@@ -509,9 +580,17 @@ main::-webkit-scrollbar-thumb:hover {
   }
   .me-sticky-toolbar {
     position: static;
+    border-bottom: none;
+  }
+  .me-sticky-count {
+    position: static;
+    border-bottom: none;
+    padding: 0.25rem 0;
   }
   .me-sticky-actions {
     position: static;
+    min-height: unset;
+    padding: 1rem 0;
   }
   #main-content thead.table-dark th {
     position: static;
@@ -527,6 +606,11 @@ tr[data-href] {
   cursor: pointer;
 }
 
+/* ---- Stronger hover on all rows (white and striped) ---- */
+.table-striped.table-hover > tbody > tr:hover > * {
+  --bs-table-bg-state: rgba(0, 0, 0, 0.14);
+}
+
 /* ---- Utility ---- */
 .page-heading {
   color: var(--me-page-heading);
@@ -534,10 +618,27 @@ tr[data-href] {
   margin-bottom: 1.25rem;
 }
 
-/* ---- Unit list badge ---- */
+/* ---- Unit type badge (color set inline per category) ---- */
 .badge.bg-unit-type {
   background-color: var(--me-badge-unit-type);
   color: #fff;
+}
+
+/* ---- Color-coded unit-type nav pills ---- */
+.nav-pills .nav-link.me-type-pill {
+  --pill-color: var(--me-primary);
+  color: #212529;
+  border: 1px solid transparent;
+  background-color: transparent;
+}
+.nav-pills .nav-link.me-type-pill:hover {
+  background-color: color-mix(in srgb, var(--pill-color) 12%, transparent);
+}
+.nav-pills .nav-link.me-type-pill.active {
+  --bs-nav-pills-link-active-bg: var(--pill-color);
+  background-color: var(--pill-color) !important;
+  color: #fff !important;
+  border-color: var(--pill-color);
 }
 
 /* ---- Table headers ---- */

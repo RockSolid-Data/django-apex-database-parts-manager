@@ -1,0 +1,42 @@
+---
+description: Build & packaging rules — loaded when working on cx_Freeze, Inno Setup, or build scripts
+globs: setup_cx_freeze.py,installer.iss,build_installer.bat,launcher.py
+alwaysApply: false
+---
+
+# Build & Packaging Rules
+
+Reference blueprint: `@BLUEPRINT-DJANGO-INNO.md` (at `C:\Users\tmkau\Documents\Rock Solid Data\BLUEPRINT-DJANGO-INNO.md`)
+
+## Build command
+
+Run `build_installer.bat` (or `build_installer.bat freeze` for exe only). It handles `collectstatic` → cx_Freeze → Inno Setup automatically.
+
+## Adding a new Django app
+
+When a new Django app is added to `INSTALLED_APPS`:
+1. Add `"appname"` and `"appname.migrations"` to PACKAGES in `setup_cx_freeze.py`
+2. Add `"appname"` to `zip_exclude_packages` so templates/migrations/templatetags are unpacked
+3. If the app has templatetags: add `"appname.templatetags"` to PACKAGES
+4. If the app has management commands: add `"appname.management"`, `"appname.management.commands"`
+
+## Adding a new pip dependency
+
+When a new package is added to `requirements.txt`:
+1. Add the package (and its key submodules) to PACKAGES in `setup_cx_freeze.py`
+2. Watch for compiled C extensions (mypyc, Cython) — these often need explicit inclusion
+3. Check transitive dependencies: run `pip show <pkg>` to see what it pulls in
+4. Test the frozen build with `build_installer.bat test` (runs Debug exe)
+
+## INCLUDE_FILES vs zip_exclude_packages
+
+- **`zip_exclude_packages`** handles Django app content automatically (templates, migrations, static, templatetags, management commands) — do NOT duplicate these in INCLUDE_FILES
+- **`INCLUDE_FILES`** is only for standalone resource files: VERSION, version.py, changelog.json, staticfiles/, seed.sqlite3
+
+## Key invariants
+
+- Version comes from `VERSION` file only — never duplicate it
+- `UPGRADE_CODE` from `.upgrade_code` — never hardcode a GUID
+- `launcher.py` must abort (`sys.exit(1)`) on migration failure — never start the server with a broken DB
+- GUI exe has no console — `launcher.py` wraps `main()` in try/except writing to `crash.log`
+- `frozen.py` STATIC_ROOT → `_INSTALL_DIR / "_internal" / "staticfiles"`

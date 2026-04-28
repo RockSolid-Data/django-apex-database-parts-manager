@@ -67,6 +67,9 @@ PACKAGES = [
     "asgiref", "sqlparse",
 
     "PIL",
+    "pdfplumber", "pdfminer", "pdfminer.high_level",
+    "charset_normalizer", "charset_normalizer.md",
+    "fitz", "pymupdf",
     "html.parser", "http.cookies", "http.server",
     "email", "email.policy", "email.headerregistry",
     "email._header_value_parser", "email.mime", "email.mime.text",
@@ -113,6 +116,12 @@ if not ICON_PATH.exists():
     print("WARNING: app.ico not found -- using default icon.")
 
 INCLUDES = ["email._header_value_parser"]
+
+# charset_normalizer uses mypyc-compiled extensions that reference a top-level
+# runtime module with a hash-based name. cx_Freeze can't auto-detect it.
+import glob as _glob
+for _pyd in _glob.glob(str(BASE_DIR / "venv/Lib/site-packages/*__mypyc*.pyd")):
+    INCLUDE_FILES.append((_pyd, f"lib/{Path(_pyd).name}"))
 
 BUILD_OPTIONS = {
     "packages": PACKAGES,

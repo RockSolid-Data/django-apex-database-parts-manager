@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load catalog_tags %}
 
 {% block title %}{{ item.part.part_number }} — {{ bom.name }} — Apex Database{% endblock %}
 
@@ -21,16 +22,16 @@
       <div class="card-body">
 
         <div class="mb-3">
-          <label class="form-label fw-semibold">Unit Number</label>
+          <label class="form-label fw-semibold">Part</label>
           <div class="form-control bg-light">
             {% if item.part %}
-            <a href="{% url 'catalog:part_detail' item.part.pk %}">{{ item.part.part_number }}</a>{% if item.part.part_name %} – {{ item.part.part_name }}{% endif %}
+            <a href="{% url 'catalog:part_detail' item.part.pk %}">{{ item.part.part_number|default:item.part.yt_number|default:item.part.part_name|default:"Part" }}</a>{% if item.part.part_name and item.part.part_number or item.part.yt_number %} – {{ item.part.part_name }}{% endif %}
             {% else %}—{% endif %}
           </div>
         </div>
 
         <div class="mb-3">
-          <label class="form-label fw-semibold">Unit Qty</label>
+          <label class="form-label fw-semibold">Part Qty</label>
           <div class="form-control bg-light">{{ item.unit_qty }}</div>
         </div>
 
@@ -59,11 +60,34 @@
           </div>
           <div class="col-6">
             <label class="form-label small fw-semibold">J&N</label>
-            <div class="form-control bg-light">{{ item.j_and_n|default:item.part.j_and_n|default:"—" }}</div>
+            <div class="form-control bg-light">
+              {% with jn=item.j_and_n|default:item.part.j_and_n %}
+              {% if jn %}
+                {% for num in jn|jn_items %}
+                  {% if item.part %}
+                  <a href="{% url 'catalog:part_detail' item.part.pk %}"
+                     style="color:#1a6cc4;text-decoration:none;white-space:nowrap;"
+                     onmouseover="this.style.textDecoration='underline'"
+                     onmouseout="this.style.textDecoration='none'">{{ num }}</a>
+                  {% else %}
+                  <a href="/parts/?q={{ num|urlencode }}"
+                     style="color:#1a6cc4;text-decoration:none;white-space:nowrap;"
+                     onmouseover="this.style.textDecoration='underline'"
+                     onmouseout="this.style.textDecoration='none'">{{ num }}</a>
+                  {% endif %}
+                  {% if not forloop.last %}<span class="text-muted">, </span>{% endif %}
+                {% endfor %}
+              {% else %}—{% endif %}
+              {% endwith %}
+            </div>
           </div>
           <div class="col-6">
             <label class="form-label small fw-semibold">YT Number</label>
             <div class="form-control bg-light">{{ item.yt_number|default:item.part.yt_number|default:"—" }}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">Part Number</label>
+            <div class="form-control bg-light">{{ item.part.part_number|default:"—" }}</div>
           </div>
         </div>
 

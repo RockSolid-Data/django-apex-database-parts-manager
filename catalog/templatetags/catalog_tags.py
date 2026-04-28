@@ -32,3 +32,20 @@ def get_item(dictionary, key):
     if isinstance(dictionary, dict):
         return dictionary.get(key, "")
     return ""
+
+
+@register.filter
+def first_jn(value):
+    """Return the first J&N number from a comma-separated string."""
+    if not value:
+        return ""
+    items = [p.strip() for p in str(value).split(",") if p.strip()]
+    return items[0] if items else ""
+
+
+@register.filter
+def jn_items(value):
+    """Split a comma-separated J&N string into a list of individual numbers."""
+    if not value:
+        return []
+    return [p.strip() for p in str(value).split(",") if p.strip()]

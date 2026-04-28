@@ -1,5 +1,58 @@
 # Changelog
 
+## v1.1.2 — UI Polish & Data Quality (2026-04-28)
+
+### Fixed
+- **Parts list:** "Mfr #" column renamed to "Part Number" and now correctly
+  displays `part_number` (not `manufacturer_number`)
+- **Track Inventory toggle:** unchecking "Track Inventory" on a part and
+  clearing Stock Qty / Reorder Threshold no longer raises a validation error
+  — both fields default to `0` when left blank
+- **Part categories:** existing categories (Hardware, Misc, etc.) were missing
+  the 10 standard default fields; migration 0039 seeds them into every
+  category and the edit view now always shows defaults so they can't be lost
+
+### Added
+- **Parts list — Match column:** two-tier search now shows a context badge
+  for deep matches (Tier 1: direct J&N/YT/OEM/Part# hit, no badge shown;
+  Tier 2: description, interchange, supersedes, etc., shows matched snippet)
+- **BOM detail — J&N column:** shows only the first J&N number as a direct
+  link to the part detail page (consistent with YT# and Part# columns)
+- **BOM item detail — J&N field:** each J&N number is now a separate
+  clickable link to the part detail page; multiple numbers are comma-separated
+- **BOM item edit — J&N tag-input widget:** type a number and press Enter to
+  convert it to a link-styled tag; Backspace on empty input restores the last
+  tag for editing; pasting comma-separated values splits into separate tags
+- **BOM create — Add Part:** fixed "Add Part" button being dead on new
+  (unsaved) BOMs; custom autocomplete dropdown replaces TomSelect in the modal
+
+### UI / UX
+- **Sticky footer fix:** Save/Cancel bar no longer jumps up when scrolling to
+  the bottom of long forms (copyright footer hidden on form pages so the
+  action bar is always the last element in the scroll container)
+- **Sticky header fix:** breadcrumb nav now sticks at `top: 0` alongside the
+  toolbar — both lock in together on scroll, eliminating the brief upward
+  drift before the toolbar caught
+- **All BOM table number links** (YT#, Part#, J&N#, OEM#) are consistent —
+  all link directly to the part detail page so Back always returns to the BOM
+
+## v1.1.1 — Production Bug Fixes (2026-04-21)
+
+### Fixed
+- Fixed `InvalidStorageError` crash on unit/part detail pages that have images
+  — `STORAGES` in frozen settings was missing the `"default"` key, breaking all
+  FileField/ImageField URL resolution
+- Fixed `ModuleNotFoundError` on PDF import page — `pdfplumber`, `pdfminer`,
+  `charset_normalizer`, and `fitz` were not bundled in the cx_Freeze build
+- Fixed media files (uploaded images) not loading in the installed app — media
+  URL serving was gated behind `DEBUG=True`
+- Set `MEDIA_ROOT` to persistent `DATA_DIR/media/` in frozen settings so uploads
+  survive app upgrades
+
+### Added
+- `500.html` and `404.html` error templates for graceful error pages
+- Cursor rules for frozen-build guardrails and dependency tracking
+
 ## v1.1.0 — Data Import, Settings & Installer Overhaul (2026-04-08)
 
 ### Data Import Pipeline

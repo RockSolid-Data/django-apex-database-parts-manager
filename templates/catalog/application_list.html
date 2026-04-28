@@ -79,7 +79,7 @@
         </div>
         <div class="col-6 col-md-1 d-flex align-items-end">
           <a href="{% url 'catalog:application_list' %}"
-             class="btn btn-outline-secondary btn-sm js-live-search-clear-persisted"
+             class="btn btn-outline-secondary btn-sm js-live-search-clear-persisted js-clear-all-filters"
              data-live-search-key="catalog:application_list">
             <i class="bi bi-x-lg"></i> Clear
           </a>
@@ -91,7 +91,7 @@
 </div>{# /.me-sticky-toolbar #}
 
 <div id="live-search-results">
-<p class="text-muted mb-2">{{ total_count }} application{{ total_count|pluralize }} found{% if page_obj.has_other_pages %} — page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</p>
+<p class="text-muted mb-0 me-sticky-count">{{ total_count }} application{{ total_count|pluralize }} found{% if page_obj.has_other_pages %} — page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</p>
 
 <div class="table-responsive">
   <table class="table table-striped table-hover align-middle">

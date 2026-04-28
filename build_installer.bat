@@ -5,7 +5,7 @@ set PYTHON=venv\Scripts\python
 set APP_NAME=ApexDatabase
 set APP_DISPLAY_NAME=Apex Database
 set APP_AUTHOR=Rock Solid Data
-set APP_DESCRIPTION=Catalog, Inventory ^& Invoicing
+set "APP_DESCRIPTION=Catalog, Inventory & Invoicing"
 
 :: Read version from VERSION file
 for /f "usebackq delims=" %%v in (`type VERSION`) do set APP_VERSION=%%v

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load catalog_tags %}
 
 {% block title %}Unit List — Apex Database{% endblock %}
 {% block main_class %}{% endblock %}
@@ -25,13 +26,14 @@
 </div>
 <ul class="nav nav-pills mb-3">
   <li class="nav-item">
-    <a class="nav-link {% if not selected_type %}active{% endif %} js-live-search-clear-persisted"
+    <a class="nav-link me-type-pill {% if not selected_type %}active{% endif %} js-live-search-clear-persisted"
        data-live-search-key="catalog:unit_list"
        href="{% url 'catalog:unit_list' %}">All</a>
   </li>
   {% for cat in unit_type_categories %}
   <li class="nav-item">
-    <a class="nav-link {% if selected_type == cat %}active{% endif %} js-live-search-clear-persisted"
+    <a class="nav-link me-type-pill {% if selected_type == cat %}active{% endif %} js-live-search-clear-persisted"
+       style="--pill-color: {{ category_color_map|get_item:cat }}"
        data-live-search-key="catalog:unit_list"
        href="{% url 'catalog:unit_list' %}?type={{ cat }}">{{ cat }}s</a>
   </li>
@@ -43,27 +45,16 @@
   <div class="card-body py-2">
     <form method="get" action="{% url 'catalog:unit_list' %}" class="js-live-search-form"
           data-live-search-key="catalog:unit_list">
+      {% if selected_type %}<input type="hidden" name="type" value="{{ selected_type }}">{% endif %}
       <div class="row g-2 align-items-end">
         {# Search #}
-        <div class="col-md-2">
+        <div class="col-md-3">
           <label class="form-label small mb-0">Search</label>
           <div class="search-input-wrapper js-search-with-clear">
             <input type="text" name="q" class="form-control form-control-sm"
                    placeholder="Search unit number, OEM, design..." value="{{ q }}">
             <button type="button" class="search-clear-btn" aria-label="Clear search"><i class="bi bi-x"></i></button>
           </div>
-        </div>
-
-        {# Unit Type dropdown #}
-        <div class="col-md-2">
-          <label class="form-label small mb-0">Unit Type</label>
-          <select name="type" class="form-select form-select-sm js-searchable-select">
-            <option value="">All Types</option>
-            {% for cat in unit_type_categories %}
-            <option value="{{ cat }}" {% if selected_type == cat %}selected{% endif %}>{{ cat }}</option>
-            {% endfor %}
-            <option value="__blank__" {% if selected_type == "__blank__" %}selected{% endif %}>— No Type —</option>
-          </select>
         </div>
 
         {# Family dropdown #}
@@ -100,10 +91,10 @@
         </div>
 
         {# Results count + Clear #}
-        <div class="col-md-2 d-flex align-items-center gap-2">
+        <div class="col-md-3 d-flex align-items-center gap-2">
           <span class="text-muted small">{{ total_count }} result{{ total_count|pluralize }}</span>
-          <a href="{% url 'catalog:unit_list' %}{% if selected_type %}?type={{ selected_type }}{% endif %}"
-             class="btn btn-outline-secondary btn-sm js-live-search-clear-persisted"
+          <a href="{% url 'catalog:unit_list' %}"
+             class="btn btn-outline-secondary btn-sm js-live-search-clear-persisted js-clear-all-filters"
              data-live-search-key="catalog:unit_list">
             <i class="bi bi-x-lg"></i> Clear
           </a>
@@ -141,7 +132,7 @@
       <tr data-href="{% url 'catalog:unit_detail' unit.pk %}">
         <td>
           {% if unit.unit_type_category %}
-          <span class="badge bg-unit-type">{{ unit.unit_type_category }}</span>
+          <span class="badge bg-unit-type" style="background-color: {{ category_color_map|get_item:unit.unit_type_category }} !important">{{ unit.unit_type_category }}</span>
           {% else %}
           —
           {% endif %}

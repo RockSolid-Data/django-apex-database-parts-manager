@@ -12,7 +12,7 @@
 {% block content %}
 
 {# ===== Header with title and action buttons (2.2) ===== #}
-<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar">
   <h1 class="page-heading mb-0">
     <i class="bi bi-cpu"></i> Unit {{ unit.yt_number|default:unit.unit_number }}
   </h1>
@@ -45,7 +45,7 @@
     <div class="card mb-3">
       <div class="card-header fw-semibold">{{ section_title }}</div>
       <div class="card-body p-0">
-        <table class="table table-sm mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <tbody>
             {% for label, value in fields %}
             {% if value %}
@@ -76,7 +76,7 @@
     <div class="card mb-3">
       <div class="card-header fw-semibold">Unit Type Specifications{% if unit.unit_type_category %} — {{ unit.unit_type_category }}{% endif %}</div>
       <div class="card-body p-0">
-        <table class="table table-sm mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <tbody>
             {% for item in unit_spec_display %}
             <tr>
@@ -127,7 +127,7 @@
       </div>
       <div class="card-body p-0 me-scrollable-table">
         {% if cross_ref_all %}
-        <table class="table table-sm table-hover mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
               <th class="ps-3">Unit / Part Number</th>
@@ -179,7 +179,7 @@
       </div>
       <div class="card-body p-0 me-scrollable-table">
         {% if substitute_units %}
-        <table class="table table-sm table-hover mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
               <th class="ps-3">Unit Number</th>
@@ -236,7 +236,7 @@
       </div>
       <div class="card-body p-0 me-scrollable-table">
         {% if gear_reductions %}
-        <table class="table table-sm table-hover mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
               <th class="ps-3">Number</th>

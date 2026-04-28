@@ -1,0 +1,25 @@
+---
+description: Checklist when adding new Python imports or model fields with file storage
+globs: requirements.txt,**/models.py,**/views.py
+alwaysApply: false
+---
+
+# New Dependency & Model Field Checklist
+
+## Adding a pip package
+
+When any new `import <pkg>` appears in project code:
+
+1. Add to `requirements.txt` with a pinned version
+2. Add the package and its submodules to `PACKAGES` in `setup_cx_freeze.py`
+3. Check for compiled extensions — packages using mypyc, Cython, or C extensions (like `charset_normalizer`, `pydantic`, `orjson`) need their compiled modules explicitly included
+4. Run `pip show <pkg>` to find transitive deps that also need bundling
+
+## Adding FileField / ImageField to a model
+
+Any model with `FileField` or `ImageField` will call `storages["default"]` at template render time. Verify:
+
+1. `config/settings/frozen.py` `STORAGES` dict has a `"default"` key with `FileSystemStorage`
+2. `MEDIA_ROOT` in frozen settings points to `DATA_DIR / "media"` (persistent, writable)
+3. `config/urls.py` serves `MEDIA_URL` unconditionally (not behind `if settings.DEBUG`)
+4. If the field has `upload_to=`, ensure that subdirectory is writable under `MEDIA_ROOT`

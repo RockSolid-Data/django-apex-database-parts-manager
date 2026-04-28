@@ -171,7 +171,7 @@ class CompanySettingsForm(forms.ModelForm):
             "company_name", "logo",
             "email", "phone", "address",
             "default_net_terms", "default_net_days",
-            "default_tax_rate",
+            "default_tax_rate", "pricing_method",
             "invoice_number_prefix", "invoice_number_include_year", "invoice_number_include_month", "invoice_number_padding",
             "invoice_paper_size", "invoice_layout_style", "invoice_date_format", "invoice_currency_symbol",
         ]
@@ -184,6 +184,7 @@ class CompanySettingsForm(forms.ModelForm):
             "default_net_terms": forms.Select(attrs={"class": "form-select"}, choices=NetTerms.CHOICES),
             "default_net_days": forms.NumberInput(attrs={"class": "form-control", "min": 0, "placeholder": "e.g. 15"}),
             "default_tax_rate": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0, "placeholder": "e.g. 0"}),
+            "pricing_method": forms.Select(attrs={"class": "form-select"}),
             "invoice_number_prefix": forms.TextInput(attrs={"class": "form-control", "placeholder": "INV-"}),
             "invoice_number_include_year": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "invoice_number_include_month": forms.CheckboxInput(attrs={"class": "form-check-input"}),

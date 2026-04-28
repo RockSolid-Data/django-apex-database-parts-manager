@@ -250,6 +250,35 @@ def add_to_invoice(request):
     })
 
 
+def invoice_delete(request, pk):
+    """Permanently delete an invoice. POST only."""
+    if request.method != "POST":
+        return redirect("invoicing:invoice_edit", pk=pk)
+    invoice = get_object_or_404(Invoice, pk=pk)
+    number = invoice.invoice_number
+    invoice.delete()
+    logger.info("[Invoice] Deleted %s", number)
+    messages.success(request, f"Invoice {number} deleted.")
+    return redirect("invoicing:invoice_list")
+
+
+def invoice_bulk_print(request):
+    """Print multiple invoices in one print dialog. GET ?ids=1,2,3"""
+    ids_param = request.GET.get("ids", "")
+    ids = [int(i) for i in ids_param.split(",") if i.strip().isdigit()]
+    invoices = (
+        Invoice.objects
+        .filter(pk__in=ids)
+        .select_related("customer")
+        .prefetch_related("items__part", "items__unit")
+        .order_by("invoice_number")
+    )
+    return render(request, "invoicing/invoice_bulk_print.html", {
+        "invoices": invoices,
+        "company_settings": CompanySettings.get(),
+    })
+
+
 def invoice_cancel(request, pk):
     """Cancel an invoice (set status to CANCELLED). POST only."""
     if request.method != "POST":

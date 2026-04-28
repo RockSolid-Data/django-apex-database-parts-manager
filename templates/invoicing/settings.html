@@ -3,7 +3,7 @@
 {% block title %}Settings — Apex Database{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar">
   <h1 class="page-heading mb-0">
     <i class="bi bi-gear"></i> Settings
   </h1>
@@ -84,13 +84,21 @@
   </div>
 
   <div class="card mb-4">
-    <div class="card-header fw-semibold">Default Tax Rate</div>
+    <div class="card-header fw-semibold">Default Tax Rate &amp; Resell Calculation</div>
     <div class="card-body">
-      <p class="text-muted small">Used when creating new invoices. Customers can override on their profile.</p>
+      <p class="text-muted small">Tax rate is used when creating new invoices. Customers can override on their profile.</p>
       <div class="row g-3">
         <div class="col-md-6">
           <label class="form-label" for="{{ form.default_tax_rate.id_for_label }}">Default Tax Rate (%)</label>
           {{ form.default_tax_rate }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.pricing_method.id_for_label }}">Resell Calculation Method</label>
+          {{ form.pricing_method }}
+          <p class="form-text small mb-0">
+            <strong>Markup</strong> — Sell = Cost ÷ Factor &nbsp;(e.g. $5.50 ÷ 0.5 = $11.00)<br>
+            <strong>Margin</strong> — Sell = Cost × (1 + %) &nbsp;(e.g. $5.50 at 50% = $8.25)
+          </p>
         </div>
       </div>
     </div>

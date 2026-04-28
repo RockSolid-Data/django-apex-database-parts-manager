@@ -12,7 +12,7 @@
 {% block content %}
 
 {# ===== Header with action buttons (4.5) ===== #}
-<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar">
   <h1 class="page-heading mb-0">
     <i class="bi bi-box-seam"></i> {{ part_display_number }}
   </h1>
@@ -37,9 +37,9 @@
     <div class="card mb-3">
       <div class="card-header fw-semibold">Basic Information</div>
       <div class="card-body p-0">
-        <table class="table table-sm mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <tbody>
-            <tr><th class="ps-3" style="width: 30%;">Item Number</th><td>{{ part.part_number|default:"—" }}</td></tr>
+            <tr><th class="ps-3" style="width: 30%;">Part Number</th><td>{{ part.part_number|default:"—" }}</td></tr>
             <tr><th class="ps-3">Part Name</th><td>{{ part.part_name|default:"—" }}</td></tr>
             <tr><th class="ps-3">Category</th><td>{{ part.category|default:"—" }}</td></tr>
             <tr><th class="ps-3">Manufacturer Number</th><td>{{ part.manufacturer_number|default:"—" }}</td></tr>
@@ -49,7 +49,7 @@
             <tr><th class="ps-3">Voltage</th><td>{{ part.voltage|default:"—" }}</td></tr>
             <tr><th class="ps-3">Type</th><td>{{ part.type|default:"—" }}</td></tr>
             <tr><th class="ps-3">OEM</th><td>{{ part.oem|default:"—" }}</td></tr>
-            <tr><th class="ps-3">Primary Vendor</th><td>{{ part.primary_vendor|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Primary Supplier</th><td>{{ part.primary_vendor|default:"—" }}</td></tr>
             <tr><th class="ps-3">Bin Location</th><td>{{ part.bin_number|default:"—" }}</td></tr>
             {% for item in spec_display %}
             <tr><th class="ps-3">{{ item.label }}</th><td>{{ item.value }}</td></tr>
@@ -63,7 +63,7 @@
     <div class="card mb-3">
       <div class="card-header fw-semibold">Stock &amp; Inventory</div>
       <div class="card-body p-0">
-        <table class="table table-sm mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <tbody>
             <tr><th class="ps-3" style="width: 30%;">Sale Price</th><td>{% if part.price != None %}${{ part.price|floatformat:2 }}{% else %}—{% endif %}</td></tr>
             <tr><th class="ps-3">Reorder Qty</th><td>{{ part.reorder_qty }}</td></tr>
@@ -83,7 +83,7 @@
       </div>
       <div class="card-body p-0 me-scrollable-table">
         {% if part_substitutes %}
-        <table class="table table-sm table-hover mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
               <th class="ps-3">Part Number</th>
@@ -163,7 +163,7 @@
       </div>
       <div class="card-body p-0 me-scrollable-table">
         {% if part_interchanges %}
-        <table class="table table-sm table-hover mb-0" id="part-interchange-table">
+        <table class="table table-sm table-striped table-hover mb-0" id="part-interchange-table">
           <thead class="table-light">
             <tr>
               <th class="ps-3">Reference Number</th>
@@ -239,7 +239,7 @@
       </div>
       <div class="card-body p-0 me-scrollable-table">
         {% if part_supersedings %}
-        <table class="table table-sm table-hover mb-0">
+        <table class="table table-sm table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
               <th class="ps-3">Old Part Number</th>

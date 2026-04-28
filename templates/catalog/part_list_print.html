@@ -20,7 +20,7 @@
 <table>
   <thead>
     <tr>
-      <th>Mfr #</th>
+      <th>Part Number</th>
       <th>YT Number</th>
       <th>J&N</th>
       <th>OEM #</th>
@@ -32,7 +32,7 @@
   <tbody>
     {% for part in parts %}
     <tr>
-      <td>{{ part.manufacturer_number|default:"—" }}</td>
+      <td>{{ part.part_number|default:"—" }}</td>
       <td>{{ part.yt_number|default:"—" }}</td>
       <td>{{ part.j_and_n|default:"—" }}</td>
       <td>{{ part.oem_number|default:"—" }}</td>

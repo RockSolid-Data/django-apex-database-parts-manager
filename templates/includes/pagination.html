@@ -5,8 +5,9 @@
     {# Prev / counter / Next #}
     <div class="d-flex align-items-center border rounded overflow-hidden">
       {% if page_obj.has_previous %}
-      <a class="btn btn-sm btn-outline-secondary border-0 rounded-0" aria-label="Previous page"
-         href="?{% for key, val in request.GET.items %}{% if key != 'page' %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+      <a class="btn btn-sm btn-outline-secondary border-0 rounded-0 js-page-link"
+         data-page="{{ page_obj.previous_page_number }}" aria-label="Previous page"
+         href="?{% for key, val in request.GET.items %}{% if key != 'page' %}{{ key }}={{ val|urlencode }}&amp;{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
         <i class="bi bi-chevron-left"></i>
       </a>
       {% else %}
@@ -18,8 +19,9 @@
       <span class="px-3 small fw-semibold text-nowrap">{{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }}</span>
 
       {% if page_obj.has_next %}
-      <a class="btn btn-sm btn-outline-secondary border-0 rounded-0" aria-label="Next page"
-         href="?{% for key, val in request.GET.items %}{% if key != 'page' %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+      <a class="btn btn-sm btn-outline-secondary border-0 rounded-0 js-page-link"
+         data-page="{{ page_obj.next_page_number }}" aria-label="Next page"
+         href="?{% for key, val in request.GET.items %}{% if key != 'page' %}{{ key }}={{ val|urlencode }}&amp;{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
         <i class="bi bi-chevron-right"></i>
       </a>
       {% else %}
@@ -41,14 +43,4 @@
 
   </div>
 </nav>
-<script>
-document.querySelectorAll('.js-per-page-select').forEach(function(sel) {
-  sel.addEventListener('change', function() {
-    var url = new URL(window.location);
-    url.searchParams.set('per_page', this.value);
-    url.searchParams.delete('page');
-    window.location = url;
-  });
-});
-</script>
 {% endif %}

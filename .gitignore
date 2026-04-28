@@ -37,9 +37,32 @@ dist/
 
 # Database backups
 *.backup
+*_backup*.sqlite3
+db_backup_*.sqlite3
 
 # Dev archive (one-off scripts and intermediate data)
 _dev_archive/
+
+# One-off reimport / diagnostic scripts and their output
+reimport_log.txt
+reparse_*.txt
+compare_random.txt
+check_categories.py
+check_unit_parts.py
+compare_random.txt
+deep_preview.py
+fast_reimport.py
+fix_orphan.py
+fix_unit_parts.py
+preview_categories.py
+run_reimport.py
+test_compare_random.py
+test_reparse.py
+test_reparse_full.py
+test_reparse_quick.py
+
+# Cursor project cache (rules are committed separately under .cursor/rules/)
+.cursor/projects/
 
 # OS
 .DS_Store

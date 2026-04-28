@@ -99,17 +99,24 @@ _COMMON_VENDOR_MARKERS = [
     "cargo",
     "carquest",
     "caterpillar",
+    "chrysler",
     "club car",
     "component",
+    "cummins",
     "delco",
     "delco-remy",
+    "denso",
     "dixie",
     "dns",
     "dubois usa",
+    "ducellier",
     "elmar",
     "elreg",
+    "femsa",
     "ford",
+    "genon",
     "harley",
+    "harvester",
     "hc cargo",
     "hitachi",
     "huco",
@@ -118,32 +125,48 @@ _COMMON_VENDOR_MARKERS = [
     "industry",
     "ipm (wabash)",
     "j&n",
+    "john deere",
     "just parts",
     "lester",
     "lucas",
+    "magneton",
+    "magneti marelli",
+    "marelli",
+    "mercedes",
+    "mercedes-benz",
+    "mitsubishi",
     "mobiletron",
+    "motorola",
     "mpa",
     "napa",
+    "nikko",
+    "nippondenso",
+    "paris rhone",
+    "peugeot",
     "pic",
     "pic (old)",
     "prestolite",
+    "r&r regulator",
     "rcp",
     "regitar usa",
     "remy",
     "renard",
     "roadwarrior",
     "romaine",
+    "romaine electric",
     "sws",
     "taditel",
     "transpo",
     "unipoint",
     "universal",
     "usi",
+    "valeo",
     "voltux",
     "wagner",
     "wai",
     "wilson",
     "wood auto",
+    "yamaha",
 ]
 
 
@@ -205,6 +228,24 @@ def _looks_like_numeric_reference_with_spaces(text: str) -> bool:
     return len(tokens) > 1 and all(re.fullmatch(r"[A-Za-z0-9!./()-]+", t) for t in tokens) and all(
         any(ch.isdigit() for ch in t) for t in tokens
     )
+
+
+def _split_concatenated_numbers(text: str) -> list[str] | None:
+    """If *text* looks like two+ separate part numbers jammed together
+    (e.g. '7700666179 576131'), return the individual numbers.
+    Returns None when splitting is inappropriate (single token, multi-word
+    reference like '3078 758 R92', etc.)."""
+    tokens = [t for t in text.split() if t]
+    if len(tokens) < 2:
+        return None
+    for t in tokens:
+        if not re.fullmatch(r"[A-Za-z0-9!./()-]+", t):
+            return None
+        if not any(ch.isdigit() for ch in t):
+            return None
+        if len(t) < 4:
+            return None
+    return tokens
 
 
 def _is_exact_text_reference(text: str) -> bool:
@@ -292,14 +333,28 @@ def parse_youtech_pdf(pdf_file) -> list[dict]:
         interchanges: list of {"vendor": str, "number": str}
     """
     entries = []
+    carry_entry = None
+    prev_col_starts = None
     with pdfplumber.open(pdf_file) as pdf:
         for page_number, page in enumerate(pdf.pages, start=1):
-            _parse_page(page, entries, page_number)
+            carry_entry, prev_col_starts = _parse_page(
+                page, entries, page_number,
+                carry_entry=carry_entry,
+                prev_col_starts=prev_col_starts,
+            )
     _finalize_entries(entries)
     return entries
 
 
-def _parse_page(page, entries: list, page_number: int):
+def _parse_page(
+    page,
+    entries: list,
+    page_number: int,
+    *,
+    carry_entry: dict | None = None,
+    prev_col_starts: list[float] | None = None,
+) -> tuple[dict | None, list[float] | None]:
+    """Parse one page and return (carry_entry, column_starts) for the next page."""
     words = page.extract_words(
         x_tolerance=3,
         y_tolerance=3,
@@ -308,38 +363,41 @@ def _parse_page(page, entries: list, page_number: int):
         keep_blank_chars=False,
     )
     if not words:
-        return
+        return carry_entry, prev_col_starts
 
     # -----------------------------------------------------------------------
     # 1. Auto-detect column left-edges from bold YT-number word positions.
     #    Cluster by proximity (within 20px = same column).
+    #    Fall back to previous page's columns for all-continuation pages.
     # -----------------------------------------------------------------------
     yt_x0s = sorted(
         w["x0"] for w in words
         if _is_bold(w) and _looks_like_yt(w["text"])
     )
-    if not yt_x0s:
-        return
 
-    column_starts: list[float] = [yt_x0s[0]]
-    for x in yt_x0s[1:]:
-        if x - column_starts[-1] > 20:
-            gap = x - column_starts[-1]
-            while gap > (_COLUMN_STEP * 1.5):
-                column_starts.append(column_starts[-1] + _COLUMN_STEP)
+    if yt_x0s:
+        column_starts: list[float] = [yt_x0s[0]]
+        for x in yt_x0s[1:]:
+            if x - column_starts[-1] > 20:
                 gap = x - column_starts[-1]
-            column_starts.append(x)
-    while len(column_starts) < 4:
-        column_starts.append(column_starts[-1] + _COLUMN_STEP)
+                while gap > (_COLUMN_STEP * 1.5):
+                    column_starts.append(column_starts[-1] + _COLUMN_STEP)
+                    gap = x - column_starts[-1]
+                column_starts.append(x)
+        while len(column_starts) < 4:
+            column_starts.append(column_starts[-1] + _COLUMN_STEP)
+    elif prev_col_starts:
+        column_starts = list(prev_col_starts)
+    else:
+        return carry_entry, prev_col_starts
 
     # Right boundary for each column group.
-    # Use "next column start minus a small gap" so that wide part numbers
-    # (which can reach close to the next column's left edge) stay in their
-    # own column rather than spilling into the next one.
+    # Use a tight gap (4px) so numbers near the edge of one column don't
+    # bleed into the next column's word list and get concatenated.
     column_rights: list[float] = []
     for i, cs in enumerate(column_starts):
         if i + 1 < len(column_starts):
-            column_rights.append(column_starts[i + 1] - 8)
+            column_rights.append(column_starts[i + 1] - 4)
         else:
             column_rights.append(page.width)
 
@@ -358,18 +416,15 @@ def _parse_page(page, entries: list, page_number: int):
         col_words[word_column(w)].append(w)
 
     # -----------------------------------------------------------------------
-    # 3. Process each column group independently.
+    # 3. Process each column group, carrying the active entry across columns
+    #    (and across pages via the caller).
     # -----------------------------------------------------------------------
-    carry_entry: dict | None = None
     for col_idx, col in enumerate(col_words):
         if not col:
             continue
         col_start_x = column_starts[col_idx]
-        # The vendor/number split within this column:
-        # part numbers always start ~60px right of the column's left edge.
         vendor_num_split = col_start_x + 58
 
-        # Sort top-to-bottom
         col.sort(key=lambda w: (round(w["top"], 1), w["x0"]))
         lines = _group_into_lines(col)
         initial_entry = carry_entry if _column_starts_with_continuation(lines) else None
@@ -380,6 +435,8 @@ def _parse_page(page, entries: list, page_number: int):
             page_number,
             initial_entry=initial_entry,
         )
+
+    return carry_entry, column_starts
 
 
 def _group_into_lines(words: list, y_tolerance: float = 4.0) -> list[list]:
@@ -425,13 +482,14 @@ def _merge_entry_continuation(target: dict, continuation: dict):
 
 
 def _merge_page_continuations(entries: list[dict]) -> list[dict]:
+    """Merge consecutive entries with the same YT number (continuations across
+    columns or pages)."""
     merged: list[dict] = []
     for entry in entries:
         if (
             merged
             and entry.get("yt_number")
             and entry.get("yt_number") == merged[-1].get("yt_number")
-            and entry.get("page_number") == (merged[-1].get("page_number") or 0) + 1
         ):
             _merge_entry_continuation(merged[-1], entry)
         else:
@@ -577,6 +635,11 @@ def _parse_column_lines(
                 _save_interchange(vendor, prefix_number)
                 _save_interchange(embedded_vendor, embedded_number)
                 return
+            multi = _split_concatenated_numbers(number)
+            if multi and len(multi) >= 2:
+                for n in multi:
+                    current_entry["interchanges"].append({"vendor": vendor, "number": n})
+                return
             if current_entry["interchanges"]:
                 last_ix = current_entry["interchanges"][-1]
                 last_vendor = last_ix.get("vendor", "").strip()
@@ -606,7 +669,7 @@ def _parse_column_lines(
             continue
 
         # Skip page header / footer lines (e.g. "OUR NUMBERS TO OTHERS", "Pg. 7059")
-        if text.startswith("Pg.") or text.startswith("OUR NUMBERS"):
+        if text.startswith("Pg.") or text.startswith("OUR NUMBERS") or text == "TO OTHERS":
             continue
 
         bold = _line_is_bold(line)

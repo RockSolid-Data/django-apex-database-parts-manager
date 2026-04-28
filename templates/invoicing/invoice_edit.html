@@ -91,7 +91,7 @@
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 invoice-items-table">
+        <table class="table table-striped table-hover align-middle mb-0 invoice-items-table">
           <colgroup>
             <col style="width:60px">
             <col style="width:20%">
@@ -198,8 +198,38 @@
     <a href="#" class="btn btn-outline-secondary" data-print-url="{% url 'invoicing:invoice_print' invoice.pk %}">
       <i class="bi bi-printer"></i> Print Invoice
     </a>
+    <button type="button" class="btn btn-danger ms-auto" data-bs-toggle="modal" data-bs-target="#deleteInvoiceModal">
+      <i class="bi bi-trash"></i> Delete Invoice
+    </button>
   </div>
 </form>
+
+{# ── Delete confirmation modal ── #}
+<div class="modal fade" id="deleteInvoiceModal" tabindex="-1" aria-labelledby="deleteInvoiceModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="deleteInvoiceModalLabel">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>Delete Invoice {{ invoice.invoice_number }}?
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>This will <strong>permanently delete</strong> invoice <strong>{{ invoice.invoice_number }}</strong> and all its line items.</p>
+        <p class="mb-0 text-muted">Customer: {{ invoice.get_bill_to_name }}</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form method="post" action="{% url 'invoicing:invoice_delete' invoice.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash"></i> Yes, Delete Permanently
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

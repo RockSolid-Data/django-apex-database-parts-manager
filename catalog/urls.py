@@ -43,7 +43,6 @@ urlpatterns = [
     path("parts/category-fields/<str:category>/", views.part_category_fields_api, name="part_category_fields_api"),
     path("api/part-category-custom-field/add/", views.part_category_custom_field_add_api, name="part_category_custom_field_add_api"),
     path("parts/upload-csv/", views.part_upload_csv, name="part_upload_csv"),
-    path("parts/import-pdf/", views.part_import_pdf, name="part_import_pdf"),
     path("parts/csv-template/", views.part_download_csv_template, name="part_download_csv_template"),
     path("parts/<int:pk>/", views.part_detail, name="part_detail"),
     path("parts/<int:pk>/edit/", views.part_edit, name="part_edit"),
@@ -79,6 +78,11 @@ urlpatterns = [
     path("units/<int:pk>/gear-reduction/add/", views.gear_reduction_add, name="gear_reduction_add"),
     path("units/<int:pk>/gear-reduction/<int:gr_pk>/edit/", views.gear_reduction_edit, name="gear_reduction_edit"),
     path("units/<int:pk>/gear-reduction/<int:gr_pk>/delete/", views.gear_reduction_delete, name="gear_reduction_delete"),
+
+    # BOM AJAX API endpoints (modal-based add-part flow)
+    path("api/bom/save/", views.bom_save_api, name="bom_save_api"),
+    path("api/bom/<int:pk>/add-part/", views.bom_item_add_api, name="bom_item_add_api"),
+    path("api/bom/<int:pk>/item/<int:item_pk>/delete/", views.bom_item_delete_api, name="bom_item_delete_api"),
 
     # Autocomplete JSON endpoints (Tom Select AJAX)
     path("api/units/autocomplete/", views.unit_autocomplete, name="unit_autocomplete"),

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vendor List — Apex Database</title>
+  <title>Supplier List — Apex Database</title>
   <style>
     @page { size: letter; margin: 0.5in; }
     body { font-family: sans-serif; font-size: 10pt; max-width: 7.5in; margin: 0 auto; }
@@ -14,8 +14,8 @@
   </style>
 </head>
 <body>
-<h1>Vendor List — Apex Database</h1>
-<p>{{ vendors|length }} vendor{{ vendors|length|pluralize }} found</p>
+<h1>Supplier List — Apex Database</h1>
+<p>{{ vendors|length }} supplier{{ vendors|length|pluralize }} found</p>
 <table>
   <thead>
     <tr>
@@ -40,7 +40,7 @@
       <td class="text-center">{% if v.is_active %}Active{% else %}Inactive{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="7" class="text-center">No vendors found.</td></tr>
+    <tr><td colspan="7" class="text-center">No suppliers found.</td></tr>
     {% endfor %}
   </tbody>
 </table>

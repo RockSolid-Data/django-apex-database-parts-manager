@@ -56,9 +56,14 @@ if IS_FROZEN:
 else:
     STATIC_ROOT = BASE_DIR / "staticfiles"  # noqa: F405
 
+MEDIA_ROOT = DATA_DIR / "media"
+
 STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
 }
 

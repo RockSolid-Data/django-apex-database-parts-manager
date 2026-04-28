@@ -30,7 +30,7 @@
           {% csrf_token %}
 
           <div class="mb-3">
-            <label class="form-label" for="{{ form.part.id_for_label }}">Unit Number <span class="text-danger">*</span></label>
+            <label class="form-label" for="{{ form.part.id_for_label }}">Part <span class="text-danger">*</span></label>
             {{ form.part }}
             {% if form.part.errors %}
               <div class="invalid-feedback d-block">{{ form.part.errors.0 }}</div>
@@ -38,7 +38,7 @@
           </div>
 
           <div class="mb-3">
-            <label class="form-label" for="{{ form.unit_qty.id_for_label }}">Unit Qty</label>
+            <label class="form-label" for="{{ form.unit_qty.id_for_label }}">Part Qty</label>
             {{ form.unit_qty }}
           </div>
 
@@ -66,12 +66,25 @@
               {{ form.oem_number }}
             </div>
             <div class="col-6">
-              <label class="form-label small" for="{{ form.j_and_n.id_for_label }}">J&N</label>
-              {{ form.j_and_n }}
+              <label class="form-label small" for="jn-tag-text">J&N</label>
+              <div id="jn-tag-wrapper" class="form-control"
+                   style="height:auto;min-height:38px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:4px 8px;cursor:text;">
+                <input type="text" id="jn-tag-text" placeholder="Type number, press Enter"
+                       style="border:none;outline:none;flex:1;min-width:80px;padding:2px 0;background:transparent;font-size:inherit;"
+                       autocomplete="off">
+              </div>
+              {# Hidden field keeps the comma-separated value for form submission #}
+              <input type="hidden" id="id_j_and_n" name="{{ form.j_and_n.html_name }}"
+                     value="{{ form.j_and_n.value|default:'' }}">
             </div>
             <div class="col-6">
               <label class="form-label small" for="{{ form.yt_number.id_for_label }}">YT Number</label>
               {{ form.yt_number }}
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Part Number</label>
+              <input type="text" id="id_part_number_display" class="form-control bg-light" readonly
+                     value="{% if item and item.part %}{{ item.part.part_number|default:'' }}{% endif %}">
             </div>
           </div>
 
@@ -100,6 +113,96 @@
 
 {% block extra_js %}
 <script>
+/* ── J&N tag-input widget ─────────────────────────────────────────── */
+(function() {
+  var hiddenField = document.getElementById('id_j_and_n');
+  var wrapper     = document.getElementById('jn-tag-wrapper');
+  var textInput   = document.getElementById('jn-tag-text');
+  if (!hiddenField || !wrapper || !textInput) return;
+
+  var tags = [];
+
+  function parseTags(val) {
+    return (val || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  }
+
+  function syncHidden() {
+    hiddenField.value = tags.join(', ');
+  }
+
+  function makeTagEl(text) {
+    var span = document.createElement('span');
+    span.setAttribute('data-tag', text);
+    span.style.cssText = 'display:inline-flex;align-items:center;gap:3px;padding:1px 7px;' +
+      'background:#e8f0fe;border-radius:4px;font-size:.875rem;white-space:nowrap;';
+
+    var link = document.createElement('a');
+    link.href = '/parts/?q=' + encodeURIComponent(text);
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = text;
+    link.style.cssText = 'color:#1a6cc4;text-decoration:none;';
+    link.addEventListener('mouseover', function() { this.style.textDecoration = 'underline'; });
+    link.addEventListener('mouseout',  function() { this.style.textDecoration = 'none'; });
+
+    span.appendChild(link);
+    return span;
+  }
+
+  function renderTags() {
+    wrapper.querySelectorAll('[data-tag]').forEach(function(el) { el.remove(); });
+    tags.forEach(function(text) {
+      wrapper.insertBefore(makeTagEl(text), textInput);
+    });
+    syncHidden();
+  }
+
+  function addTag(text) {
+    text = text.trim();
+    if (!text || tags.indexOf(text) !== -1) return;
+    tags.push(text);
+    renderTags();
+    textInput.value = '';
+  }
+
+  function removeLastTag() {
+    if (!tags.length) return;
+    var last = tags.pop();
+    renderTags();
+    textInput.value = last;
+    /* move cursor to end of restored text */
+    setTimeout(function() { textInput.setSelectionRange(last.length, last.length); }, 0);
+  }
+
+  /* seed from existing value */
+  tags = parseTags(hiddenField.value);
+  renderTags();
+
+  /* Enter → add tag */
+  textInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (this.value.trim()) addTag(this.value);
+    } else if (e.key === 'Backspace' && this.value === '') {
+      e.preventDefault();
+      removeLastTag();
+    }
+  });
+
+  /* clicking the wrapper area focuses the text input */
+  wrapper.addEventListener('click', function() { textInput.focus(); });
+
+  /* handle pasted comma-separated values */
+  textInput.addEventListener('paste', function(e) {
+    var pasted = (e.clipboardData || window.clipboardData).getData('text');
+    if (pasted.indexOf(',') !== -1) {
+      e.preventDefault();
+      pasted.split(',').forEach(function(p) { addTag(p); });
+    }
+  });
+})();
+
+/* ── Fill fields from selected part ──────────────────────────────── */
 (function() {
   var partSelect = document.getElementById('id_part');
   if (!partSelect) return;
@@ -119,10 +222,45 @@
       .then(function(data) {
         Object.keys(fieldMap).forEach(function(key) {
           var el = document.getElementById(fieldMap[key]);
+          if (!el) return;
+          /* j_and_n is now a hidden field synced by the tag widget */
+          if (key === 'j_and_n') {
+            if (!el.value && data[key]) {
+              /* inject into tag widget */
+              var wrapper = document.getElementById('jn-tag-wrapper');
+              if (wrapper) {
+                /* trigger re-seed by dispatching a custom event is complex;
+                   simplest: set hidden value then re-init tags */
+                el.value = data[key];
+                /* re-run tag seeding inline */
+                var tags = (data[key] || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+                wrapper.querySelectorAll('[data-tag]').forEach(function(t){t.remove();});
+                var ti = document.getElementById('jn-tag-text');
+                tags.forEach(function(text) {
+                  var span = document.createElement('span');
+                  span.setAttribute('data-tag', text);
+                  span.style.cssText = 'display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:#e8f0fe;border-radius:4px;font-size:.875rem;white-space:nowrap;';
+                  var a = document.createElement('a');
+                  a.href = '/parts/?q=' + encodeURIComponent(text);
+                  a.target = '_blank'; a.rel = 'noopener';
+                  a.textContent = text;
+                  a.style.cssText = 'color:#1a6cc4;text-decoration:none;';
+                  a.addEventListener('mouseover', function(){this.style.textDecoration='underline';});
+                  a.addEventListener('mouseout',  function(){this.style.textDecoration='none';});
+                  span.appendChild(a);
+                  if (ti) wrapper.insertBefore(span, ti);
+                  else wrapper.appendChild(span);
+                });
+              }
+            }
+            return;
+          }
           if (el && !el.value && data[key]) {
             el.value = data[key];
           }
         });
+        var pnDisplay = document.getElementById('id_part_number_display');
+        if (pnDisplay) pnDisplay.value = data.part_number || '';
       })
       .catch(function() {});
   }

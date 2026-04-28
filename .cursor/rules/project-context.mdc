@@ -1,0 +1,33 @@
+---
+description: Apex Database project context — always loaded so every chat understands the architecture
+alwaysApply: true
+---
+
+# Apex Database — Project Context
+
+Django 6 desktop app for Manchester Electric (catalog, inventory, invoicing). Ships as a frozen Windows `.exe` via cx_Freeze + Inno Setup.
+
+## Architecture
+
+| Layer | Dev | Installed (frozen) |
+|-------|-----|--------------------|
+| Server | `manage.py runserver` | Waitress (4 threads, 127.0.0.1) |
+| Settings | `config.settings.dev` (DEBUG=True) | `config.settings.frozen` (DEBUG=False) |
+| Static files | Django dev server | WhiteNoise middleware from `_internal/staticfiles/` |
+| Database | `BASE_DIR/db.sqlite3` | `%LOCALAPPDATA%\ApexDatabase\db.sqlite3` |
+| Media uploads | `BASE_DIR/media/` | `%LOCALAPPDATA%\ApexDatabase\media/` |
+| Logs | Console | `%LOCALAPPDATA%\ApexDatabase\logs/` (app.log, launcher.log, crash.log) |
+
+## Key files
+
+- `launcher.py` — frozen entry point (sets up Django, runs migrations, starts Waitress)
+- `config/settings/base.py` — shared settings; `dev.py` and `frozen.py` import from it
+- `setup_cx_freeze.py` — cx_Freeze build config (PACKAGES, INCLUDE_FILES, zip_exclude)
+- `installer.iss` + `build_installer.bat` — Inno Setup installer
+
+## Critical rules
+
+- **Dev ≠ Production**: anything that works only under `DEBUG=True` WILL break in the installed app. Always verify behavior against frozen settings.
+- **`STORAGES` must always include both `"default"` and `"staticfiles"` keys** — omitting `"default"` crashes any page that renders a FileField/ImageField URL.
+- **New pip dependencies must also be added to `setup_cx_freeze.py` PACKAGES** — cx_Freeze won't auto-detect lazily imported or transitive packages.
+- **`collectstatic` must run before `cx_Freeze build`** — the `build_installer.bat` handles this automatically.

@@ -87,16 +87,72 @@
   <div class="card mb-3">
     <div class="card-header fw-semibold">Pricing &amp; Stock</div>
     <div class="card-body">
+      {# Row 1: Cost Price | Markup/Margin | Sell Price #}
       <div class="row g-3">
-        {% for field in form %}
-          {% if field.name in "price,cost_price,stock_quantity,reorder_qty,bin_number" %}
-          <div class="col-md-4">
-            <label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
-            {{ field }}
-            {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors.0 }}</div>{% endif %}
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.cost_price.id_for_label }}">{{ form.cost_price.label }}</label>
+          <div class="input-group">
+            <span class="input-group-text">$</span>
+            {{ form.cost_price }}
           </div>
+          {% if form.cost_price.errors %}<div class="invalid-feedback d-block">{{ form.cost_price.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.markup_percent.id_for_label }}" id="markup-label">
+            {% if pricing_method == "margin" %}Margin{% else %}Markup{% endif %}
+          </label>
+          {% if pricing_method == "margin" %}
+          <div class="input-group">
+            {{ form.markup_percent }}
+            <span class="input-group-text">%</span>
+          </div>
+          {% else %}
+          {{ form.markup_percent }}
           {% endif %}
-        {% endfor %}
+          <div class="form-text small text-muted" id="markup-hint">
+            {% if pricing_method == "margin" %}
+              e.g. 50% → Sell = Cost × 1.50
+            {% else %}
+              e.g. 0.5 → Sell = Cost ÷ 0.5
+            {% endif %}
+          </div>
+          {% if form.markup_percent.errors %}<div class="invalid-feedback d-block">{{ form.markup_percent.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.price.id_for_label }}">{{ form.price.label }}</label>
+          <div class="input-group">
+            <span class="input-group-text">$</span>
+            {{ form.price }}
+          </div>
+          {% if form.price.errors %}<div class="invalid-feedback d-block">{{ form.price.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+      {# Row 2: Stock Qty | Reorder Threshold | Bin Location #}
+      <div class="row g-3 mt-1">
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.stock_quantity.id_for_label }}">{{ form.stock_quantity.label }}</label>
+          {{ form.stock_quantity }}
+          {% if form.stock_quantity.errors %}<div class="invalid-feedback d-block">{{ form.stock_quantity.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.reorder_qty.id_for_label }}">{{ form.reorder_qty.label }}</label>
+          {{ form.reorder_qty }}
+          {% if form.reorder_qty.errors %}<div class="invalid-feedback d-block">{{ form.reorder_qty.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1" for="{{ form.bin_number.id_for_label }}">{{ form.bin_number.label }}</label>
+          {{ form.bin_number }}
+          {% if form.bin_number.errors %}<div class="invalid-feedback d-block">{{ form.bin_number.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+      <hr class="my-3">
+      <div class="form-check">
+        {{ form.track_inventory }}
+        <label class="form-check-label" for="{{ form.track_inventory.id_for_label }}">
+          Track Inventory
+        </label>
+        <div class="form-text">When checked, this part will appear in the Inventory tab and the Reorder list (based on stock and reorder threshold).</div>
+        {% if form.track_inventory.errors %}<div class="invalid-feedback d-block">{{ form.track_inventory.errors.0 }}</div>{% endif %}
       </div>
     </div>
   </div>
@@ -350,6 +406,95 @@
       errorDiv.classList.remove('d-none');
     });
   });
+  // --- Currency / percent formatting helpers ---
+  function fmtDollars(input) {
+    var v = parseFloat(input.value);
+    if (!isNaN(v)) input.value = v.toFixed(2);
+  }
+  function fmtPercent(input) {
+    var v = parseFloat(input.value);
+    if (!isNaN(v)) {
+      input.value = (v % 1 === 0) ? v.toFixed(0) : v.toFixed(2);
+    }
+  }
+
+  // --- Sell-price auto-calc (Markup or Margin based on company setting) ---
+  var pricingMethod = '{{ pricing_method|default:"markup" }}';
+  var costInput     = document.getElementById('id_cost_price');
+  var markupInput   = document.getElementById('id_markup_percent');
+  var sellInput     = document.getElementById('id_price');
+  var hintEl        = document.getElementById('markup-hint');
+
+  function updateHint() {
+    var val = parseFloat(markupInput.value);
+    if (isNaN(val) || val <= 0) {
+      if (pricingMethod === 'margin') {
+        hintEl.textContent = 'e.g. 50% \u2192 Sell = Cost \u00d7 1.50';
+      } else {
+        hintEl.textContent = 'e.g. 0.5 \u2192 Sell = Cost \u00f7 0.5';
+      }
+      return;
+    }
+    if (pricingMethod === 'margin') {
+      hintEl.textContent = val + '% \u2192 Sell = Cost \u00d7 ' + (1 + val / 100).toFixed(2);
+    } else {
+      hintEl.textContent = val + ' \u2192 Sell = Cost \u00f7 ' + val;
+    }
+  }
+
+  function calcSellPrice() {
+    var cost = parseFloat(costInput.value);
+    var val  = parseFloat(markupInput.value);
+    updateHint();
+    if (isNaN(cost) || isNaN(val) || val <= 0) return;
+    if (pricingMethod === 'margin') {
+      sellInput.value = (cost * (1 + val / 100)).toFixed(2);
+    } else {
+      sellInput.value = (cost / val).toFixed(2);
+    }
+  }
+  if (costInput && markupInput && sellInput) {
+    costInput.addEventListener('input', calcSellPrice);
+    markupInput.addEventListener('input', calcSellPrice);
+
+    costInput.addEventListener('blur', function() { fmtDollars(costInput); });
+    sellInput.addEventListener('blur', function() { fmtDollars(sellInput); });
+    if (pricingMethod === 'margin') {
+      markupInput.addEventListener('blur', function() { fmtPercent(markupInput); });
+    }
+
+    fmtDollars(costInput);
+    fmtDollars(sellInput);
+    if (pricingMethod === 'margin') fmtPercent(markupInput);
+    updateHint();
+  }
+
+  // --- Track Inventory: toggle required on stock / reorder ---
+  var trackCb   = document.getElementById('id_track_inventory');
+  var stockInp  = document.getElementById('id_stock_quantity');
+  var reorderInp = document.getElementById('id_reorder_qty');
+
+  function toggleStockRequired() {
+    var needed = trackCb.checked;
+    stockInp.required  = needed;
+    reorderInp.required = needed;
+    var stockLbl  = document.querySelector('label[for="id_stock_quantity"]');
+    var reorderLbl = document.querySelector('label[for="id_reorder_qty"]');
+    if (stockLbl) {
+      var s = stockLbl.querySelector('.text-danger');
+      if (needed && !s) { stockLbl.insertAdjacentHTML('beforeend', ' <span class="text-danger">*</span>'); }
+      else if (!needed && s) { s.remove(); }
+    }
+    if (reorderLbl) {
+      var r = reorderLbl.querySelector('.text-danger');
+      if (needed && !r) { reorderLbl.insertAdjacentHTML('beforeend', ' <span class="text-danger">*</span>'); }
+      else if (!needed && r) { r.remove(); }
+    }
+  }
+  if (trackCb) {
+    trackCb.addEventListener('change', toggleStockRequired);
+    toggleStockRequired();
+  }
 })();
 </script>
 {% endblock %}

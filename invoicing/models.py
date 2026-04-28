@@ -65,6 +65,19 @@ class CompanySettings(models.Model):
         help_text="Used when creating new invoices. Customers can override on their profile.",
     )
 
+    PRICING_MARKUP = "markup"
+    PRICING_MARGIN = "margin"
+    PRICING_METHOD_CHOICES = [
+        (PRICING_MARKUP, "Markup  (Sell = Cost ÷ Factor)"),
+        (PRICING_MARGIN, "Margin  (Sell = Cost × (1 + %))"),
+    ]
+    pricing_method = models.CharField(
+        "Resell Calculation Method",
+        max_length=10,
+        choices=PRICING_METHOD_CHOICES,
+        default=PRICING_MARKUP,
+    )
+
     # Invoice numbering
     invoice_number_prefix = models.CharField(max_length=20, default="INV-")
     invoice_number_include_year = models.BooleanField(default=True)

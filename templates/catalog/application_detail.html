@@ -12,7 +12,7 @@
 {% block content %}
 
 {# ===== Header with action buttons (3.5) ===== #}
-<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar">
   <h1 class="page-heading mb-0">
     <i class="bi bi-gear"></i> {{ application.name }}
   </h1>
@@ -33,7 +33,7 @@
 <div class="card mb-3">
   <div class="card-header fw-semibold">General Specifications</div>
   <div class="card-body p-0">
-    <table class="table table-sm mb-0">
+    <table class="table table-sm table-striped table-hover mb-0">
       <tbody>
         {% if application.make %}
         <tr><th class="ps-3" style="width: 30%;">Make</th><td>{{ application.make }}</td></tr>
@@ -104,7 +104,7 @@
   </div>
   <div class="card-body p-0">
     {% if specifications %}
-    <table class="table table-sm table-hover mb-0">
+    <table class="table table-sm table-striped table-hover mb-0">
       <thead class="table-light">
         <tr>
           <th class="ps-3">Category</th>
@@ -159,7 +159,7 @@
   </div>
   <div class="card-body p-0">
     {% if linked_units %}
-    <table class="table table-sm table-hover mb-0">
+    <table class="table table-sm table-striped table-hover mb-0">
       <thead class="table-light">
         <tr>
           <th class="ps-3">Unit Number</th>

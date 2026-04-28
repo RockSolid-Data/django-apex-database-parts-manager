@@ -3,7 +3,7 @@
 {% block title %}{{ title }} — Apex Database{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar" style="padding-bottom: 0.5rem;">
+<div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar">
   <h1 class="page-heading mb-0">
     <i class="bi bi-diagram-3"></i> {{ title }}
   </h1>
@@ -19,7 +19,7 @@
 </div>
 {% endif %}
 
-<form method="post">
+<form method="post" id="bom-form">
   {% csrf_token %}
   {{ form.name }}
   <div class="card mb-3">
@@ -49,108 +49,447 @@
     </div>
   </div>
 
-  {% if item_form %}
+  {# ===== Parts in BOM table (always shown) ===== #}
   <div class="card mb-3">
-    <div class="card-header fw-semibold">First Item (optional)</div>
-    <div class="card-body">
-      <div class="row g-2">
-        <div class="col-md-6">
-          <label class="form-label small" for="{{ item_form.part.id_for_label }}">Unit Number</label>
-          {{ item_form.part }}
-          {% if item_form.part.errors %}<div class="invalid-feedback d-block">{{ item_form.part.errors.0 }}</div>{% endif %}
-        </div>
-        <div class="col-md-6">
-          <label class="form-label small" for="{{ item_form.unit_qty.id_for_label }}">Unit Qty</label>
-          {{ item_form.unit_qty }}
-        </div>
-        <div class="col-md-6">
-          <label class="form-label small" for="{{ item_form.description.id_for_label }}">Description (override)</label>
-          {{ item_form.description }}
-        </div>
-        <div class="col-md-6">
-          <label class="form-label small" for="{{ item_form.notes.id_for_label }}">Notes</label>
-          {{ item_form.notes }}
-        </div>
-        <div class="col-6">
-          <label class="form-label small" for="{{ item_form.stock_qty.id_for_label }}">Stock Qty</label>
-          {{ item_form.stock_qty }}
-        </div>
-        <div class="col-6">
-          <label class="form-label small" for="{{ item_form.bin_number.id_for_label }}">Bin Number</label>
-          {{ item_form.bin_number }}
-        </div>
-        <div class="col-6">
-          <label class="form-label small" for="{{ item_form.oem_number.id_for_label }}">OEM #</label>
-          {{ item_form.oem_number }}
-        </div>
-        <div class="col-6">
-          <label class="form-label small" for="{{ item_form.j_and_n.id_for_label }}">J&N</label>
-          {{ item_form.j_and_n }}
-        </div>
-        <div class="col-6">
-          <label class="form-label small" for="{{ item_form.yt_number.id_for_label }}">YT Number</label>
-          {{ item_form.yt_number }}
-        </div>
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Parts in BOM (<span id="parts-count">{% if bom %}{{ bom.items.all|length }}{% else %}0{% endif %}</span>)</span>
+      <button type="button" id="add-part-btn" class="btn btn-sm btn-primary"
+              data-bs-toggle="modal" data-bs-target="#addPartModal">
+        <i class="bi bi-plus-lg"></i> Add Part
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped table-hover align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th class="text-center">YT #</th>
+              <th class="text-center">PART #</th>
+              <th class="text-center">J&N #</th>
+              <th class="text-center">OEM #</th>
+              <th class="text-center">DESCRIPTION</th>
+              <th class="text-center">NOTES</th>
+              <th class="text-center">PART QTY</th>
+              <th class="text-center">STOCK QTY</th>
+              <th class="text-center ps-4">BIN #</th>
+              <th class="text-center" style="width:50px;"></th>
+            </tr>
+          </thead>
+          <tbody id="parts-tbody">
+            {% if bom %}
+            {% for item in bom.items.all %}
+            <tr id="item-row-{{ item.pk }}">
+              <td class="text-center">
+                {% with yt=item.yt_number|default:item.part.yt_number %}
+                {% if yt and item.part %}
+                <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ yt }}</a>
+                {% else %}{{ yt|default:"—" }}{% endif %}
+                {% endwith %}
+              </td>
+              <td class="text-center">
+                {% if item.part and item.part.part_number %}
+                <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ item.part.part_number }}</a>
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-center">
+                {% with jn=item.j_and_n|default:item.part.j_and_n %}
+                {% if jn and item.part %}
+                <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ jn }}</a>
+                {% else %}{{ jn|default:"—" }}{% endif %}
+                {% endwith %}
+              </td>
+              <td class="text-center">
+                {% with oem=item.oem_number|default:item.part.oem_number %}
+                {% if oem and item.part %}
+                <a href="{% url 'catalog:part_detail' item.part.pk %}" class="bom-num-link">{{ oem }}</a>
+                {% else %}{{ oem|default:"—" }}{% endif %}
+                {% endwith %}
+              </td>
+              <td class="text-center">{{ item.description|default:item.part.part_name|default:"—" }}</td>
+              <td class="text-center">{{ item.notes|default:"—" }}</td>
+              <td class="text-center">{{ item.unit_qty }}</td>
+              <td class="text-center">{% if item.stock_qty %}{{ item.stock_qty }}{% else %}—{% endif %}</td>
+              <td class="text-center ps-4">{{ item.bin_number|default:"—" }}</td>
+              <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger delete-item-btn"
+                        data-item-pk="{{ item.pk }}" title="Remove">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      <div id="empty-msg" class="text-center text-muted py-4{% if bom and bom.items.all %} d-none{% endif %}">
+        <i class="bi bi-box-seam fs-3 d-block mb-2"></i>
+        No parts in this BOM yet. Click <strong>Add Part</strong> above to get started.
       </div>
     </div>
   </div>
-  {% endif %}
 
   <div class="d-flex gap-2 me-sticky-actions">
-    <button type="submit" class="btn btn-primary">
+    <button type="button" id="save-bom-btn" class="btn btn-primary">
       <i class="bi bi-check-lg"></i> Save BOM
     </button>
     <a href="{% url 'catalog:bom_list' %}" class="btn btn-outline-secondary">Cancel</a>
   </div>
 </form>
+
+{# ===== Add Part Modal (outside form to avoid nesting) ===== #}
+<div class="modal fade" id="addPartModal" tabindex="-1" aria-labelledby="addPartModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addPartModalLabel">
+          <i class="bi bi-plus-lg"></i> Add Part to BOM
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-errors" class="alert alert-danger d-none"></div>
+        <form id="add-part-form">
+          <div class="mb-3 position-relative">
+            <label class="form-label" for="modal_part_search">Part <span class="text-danger">*</span></label>
+            <input type="text" id="modal_part_search" class="form-control"
+                   placeholder="Type a part number to search..." autocomplete="off">
+            <div id="modal_part_results"
+                 style="display:none;position:absolute;left:0;right:0;top:100%;
+                        max-height:240px;overflow-y:auto;z-index:9999;
+                        background:#fff;border:1px solid #ced4da;border-top:none;
+                        border-radius:0 0 .375rem .375rem;
+                        box-shadow:0 6px 16px rgba(0,0,0,.12);"></div>
+            <input type="hidden" id="modal_part" name="part">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="modal_unit_qty">Part Qty</label>
+            <input type="number" id="modal_unit_qty" name="unit_qty" class="form-control" value="1" min="0">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="modal_description">Description (override)</label>
+            <input type="text" id="modal_description" name="description" class="form-control" maxlength="300">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="modal_notes">Notes</label>
+            <textarea id="modal_notes" name="notes" class="form-control" rows="2"></textarea>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small" for="modal_stock_qty">Stock Qty</label>
+              <input type="number" id="modal_stock_qty" name="stock_qty" class="form-control" min="0" value="0">
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="modal_bin_number">Bin Number</label>
+              <input type="text" id="modal_bin_number" name="bin_number" class="form-control" maxlength="50">
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="modal_oem_number">OEM #</label>
+              <input type="text" id="modal_oem_number" name="oem_number" class="form-control" maxlength="100">
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="modal_j_and_n">J&N</label>
+              <input type="text" id="modal_j_and_n" name="j_and_n" class="form-control" maxlength="100">
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="modal_yt_number">YT Number</label>
+              <input type="text" id="modal_yt_number" name="yt_number" class="form-control" maxlength="100">
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Part Number</label>
+              <input type="text" id="modal_part_number_display" class="form-control bg-light" readonly>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="modal-save-btn" class="btn btn-primary">
+          <i class="bi bi-check-lg"></i> Add Part
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
-{% if item_form %}
 {% block extra_js %}
 <script>
 (function() {
-  var partSelect = document.getElementById('id_item-part');
-  if (!partSelect) return;
+  var bomPk = {{ bom.pk|default:"null" }};
+  var csrfToken = document.querySelector('#bom-form [name=csrfmiddlewaretoken]').value;
+  var modal = new bootstrap.Modal(document.getElementById('addPartModal'));
 
-  var fieldMap = {
-    j_and_n: 'id_item-j_and_n',
-    yt_number: 'id_item-yt_number',
-    bin_number: 'id_item-bin_number',
-    oem_number: 'id_item-oem_number',
-    stock_quantity: 'id_item-stock_qty'
-  };
+  // ── Part search — simple debounced input + results list ─────────────────
+  var partSearchTimer = null;
+
+  function initPartSelect() {
+    var searchEl  = document.getElementById('modal_part_search');
+    var resultsEl = document.getElementById('modal_part_results');
+    var hiddenEl  = document.getElementById('modal_part');
+    if (searchEl._bomBound) return;
+    searchEl._bomBound = true;
+
+    searchEl.addEventListener('input', function() {
+      var q = this.value.trim();
+      clearTimeout(partSearchTimer);
+      hiddenEl.value = '';
+      if (!q) { resultsEl.style.display = 'none'; return; }
+      partSearchTimer = setTimeout(function() { fetchPartResults(q); }, 280);
+    });
+
+    // Close results when user clicks outside
+    document.addEventListener('mousedown', function(e) {
+      if (!resultsEl.contains(e.target) && e.target !== searchEl) {
+        resultsEl.style.display = 'none';
+      }
+    });
+  }
+
+  function fetchPartResults(q) {
+    var url = '/api/parts/autocomplete/?q=' + encodeURIComponent(q);
+    if (bomPk) url += '&exclude_bom=' + bomPk;
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) { renderPartResults(data.results); })
+      .catch(function() {});
+  }
+
+  function renderPartResults(results) {
+    var resultsEl = document.getElementById('modal_part_results');
+    resultsEl.innerHTML = '';
+    if (!results.length) {
+      var empty = document.createElement('div');
+      empty.style.cssText = 'padding:8px 12px;color:#6c757d;font-size:.875rem;';
+      empty.textContent = 'No results found';
+      resultsEl.appendChild(empty);
+      resultsEl.style.display = 'block';
+      return;
+    }
+    results.forEach(function(r, i) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.style.cssText = 'display:block;width:100%;padding:7px 12px;text-align:left;' +
+        'background:none;border:none;border-bottom:1px solid #f0f0f0;font-size:.875rem;cursor:pointer;';
+      if (i === results.length - 1) btn.style.borderBottom = 'none';
+      btn.textContent = r.text;
+      btn.addEventListener('mouseover',  function() { this.style.background = '#e9f3ff'; });
+      btn.addEventListener('mouseout',   function() { this.style.background = 'none'; });
+      btn.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        document.getElementById('modal_part').value = r.value;
+        document.getElementById('modal_part_search').value = r.text;
+        resultsEl.style.display = 'none';
+        fillFromPart(r.value);
+      });
+      resultsEl.appendChild(btn);
+    });
+    resultsEl.style.display = 'block';
+  }
 
   function fillFromPart(partId) {
     if (!partId) return;
     fetch('/api/parts/' + partId + '/detail/')
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        Object.keys(fieldMap).forEach(function(key) {
-          var el = document.getElementById(fieldMap[key]);
-          if (el && !el.value && data[key]) {
-            el.value = data[key];
-          }
+        var map = {
+          j_and_n: 'modal_j_and_n',
+          yt_number: 'modal_yt_number',
+          bin_number: 'modal_bin_number',
+          oem_number: 'modal_oem_number',
+          stock_quantity: 'modal_stock_qty'
+        };
+        Object.keys(map).forEach(function(key) {
+          var el = document.getElementById(map[key]);
+          if (el && !el.value && data[key] != null && data[key] !== '') el.value = data[key];
         });
+        var pn = document.getElementById('modal_part_number_display');
+        if (pn) pn.value = data.part_number || '';
       })
       .catch(function() {});
   }
 
-  var observer = new MutationObserver(function() {
-    var ts = partSelect.tomselect;
-    if (ts) {
-      observer.disconnect();
-      ts.on('change', function(value) { fillFromPart(value); });
+  function resetModal() {
+    document.getElementById('add-part-form').reset();
+    document.getElementById('modal_part_search').value = '';
+    document.getElementById('modal_part').value = '';
+    document.getElementById('modal_part_results').style.display = 'none';
+    document.getElementById('modal_part_number_display').value = '';
+    document.getElementById('modal_errors').classList.add('d-none');
+    document.getElementById('modal_unit_qty').value = '1';
+    document.getElementById('modal_stock_qty').value = '0';
+  }
+
+  // ── BOM header save (AJAX) ────────────────────────────────────────────────
+  function saveBomHeader() {
+    var formData = new FormData(document.getElementById('bom-form'));
+    if (bomPk) formData.append('bom_pk', bomPk);
+    return fetch('/api/bom/save/', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-CSRFToken': csrfToken }
+    }).then(function(r) { return r.json(); });
+  }
+
+  function showHeaderErrors(errors) {
+    var container = document.querySelector('.alert-danger');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'alert alert-danger';
+      document.getElementById('bom-form').parentNode.insertBefore(container, document.getElementById('bom-form'));
+    }
+    var html = '<strong>Please correct the errors below.</strong><ul>';
+    for (var field in errors) {
+      var msgs = errors[field];
+      if (Array.isArray(msgs)) {
+        msgs.forEach(function(m) { html += '<li>' + (m.message || m) + '</li>'; });
+      }
+    }
+    html += '</ul>';
+    container.innerHTML = html;
+    container.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ── Reset form fields as soon as Bootstrap starts opening the modal ─────────
+  document.getElementById('addPartModal').addEventListener('show.bs.modal', function() {
+    resetModal();
+  });
+
+  // ── Once visible, bind search handler and focus the input ───────────────────
+  document.getElementById('addPartModal').addEventListener('shown.bs.modal', function() {
+    initPartSelect();
+    document.getElementById('modal_part_search').focus();
+  });
+
+  // ── "Add Part" confirm button (inside modal) ──────────────────────────────
+  document.getElementById('modal-save-btn').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true;
+    var formData = new FormData(document.getElementById('add-part-form'));
+
+    function doAddPart(currentBomPk) {
+      fetch('/api/bom/' + currentBomPk + '/add-part/', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRFToken': csrfToken }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        btn.disabled = false;
+        if (data.ok) {
+          addRowToTable(data.item);
+          modal.hide();
+        } else {
+          showModalErrors(data.errors);
+        }
+      })
+      .catch(function() { btn.disabled = false; });
+    }
+
+    if (!bomPk) {
+      // New BOM — save the header first, then add the part
+      saveBomHeader().then(function(data) {
+        if (data.ok) {
+          bomPk = data.pk;
+          history.replaceState(null, '', '/bom/' + bomPk + '/edit/');
+          doAddPart(bomPk);
+        } else {
+          btn.disabled = false;
+          modal.hide();
+          showHeaderErrors(data.errors);
+        }
+      }).catch(function() { btn.disabled = false; });
+    } else {
+      doAddPart(bomPk);
     }
   });
-  observer.observe(partSelect.parentElement || document.body, { childList: true, subtree: true });
 
-  setTimeout(function() {
-    if (partSelect.tomselect) {
-      observer.disconnect();
-      partSelect.tomselect.on('change', function(value) { fillFromPart(value); });
+  function showModalErrors(errors) {
+    var el = document.getElementById('modal-errors');
+    var html = '<strong>Please correct the errors below.</strong><ul>';
+    for (var field in errors) {
+      var msgs = errors[field];
+      if (Array.isArray(msgs)) {
+        msgs.forEach(function(m) { html += '<li><strong>' + field + ':</strong> ' + (m.message || m) + '</li>'; });
+      }
     }
-  }, 500);
+    html += '</ul>';
+    el.innerHTML = html;
+    el.classList.remove('d-none');
+  }
+
+  // ── Add a new row to the parts table ────────────────────────────────────
+  function addRowToTable(item) {
+    var tbody = document.getElementById('parts-tbody');
+    var tr = document.createElement('tr');
+    tr.id = 'item-row-' + item.pk;
+    var partUrl = item.part_pk ? '/parts/' + item.part_pk + '/' : '';
+    function linkedCell(val, isLink) {
+      if (val && partUrl && isLink)
+        return '<td class="text-center"><a href="' + partUrl + '" class="bom-num-link">' + escHtml(val) + '</a></td>';
+      return '<td class="text-center">' + escHtml(val || '—') + '</td>';
+    }
+    tr.innerHTML =
+      linkedCell(item.yt_number, true) +
+      linkedCell(item.part_number, true) +
+      linkedCell(item.j_and_n, true) +
+      linkedCell(item.oem_number, true) +
+      '<td class="text-center">' + escHtml(item.description || '—') + '</td>' +
+      '<td class="text-center">' + escHtml(item.notes || '—') + '</td>' +
+      '<td class="text-center">' + (item.unit_qty || '1') + '</td>' +
+      '<td class="text-center">' + (item.stock_qty !== '' && item.stock_qty != null ? item.stock_qty : '—') + '</td>' +
+      '<td class="text-center ps-4">' + escHtml(item.bin_number || '—') + '</td>' +
+      '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delete-item-btn" data-item-pk="' + item.pk + '" title="Remove"><i class="bi bi-trash"></i></button></td>';
+    tbody.appendChild(tr);
+    updatePartsCount();
+    document.getElementById('empty-msg').classList.add('d-none');
+  }
+
+  function escHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function updatePartsCount() {
+    document.getElementById('parts-count').textContent =
+      document.getElementById('parts-tbody').querySelectorAll('tr').length;
+  }
+
+  // ── Delete a part row ────────────────────────────────────────────────────
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.delete-item-btn');
+    if (!btn || !bomPk) return;
+    var itemPk = btn.getAttribute('data-item-pk');
+    if (!confirm('Remove this part from the BOM?')) return;
+    fetch('/api/bom/' + bomPk + '/item/' + itemPk + '/delete/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        var row = document.getElementById('item-row-' + itemPk);
+        if (row) row.remove();
+        updatePartsCount();
+        if (!document.getElementById('parts-tbody').querySelectorAll('tr').length)
+          document.getElementById('empty-msg').classList.remove('d-none');
+      }
+    })
+    .catch(function() {});
+  });
+
+  // ── Save BOM button ───────────────────────────────────────────────────────
+  document.getElementById('save-bom-btn').addEventListener('click', function() {
+    if (bomPk) {
+      document.getElementById('bom-form').action = '/bom/' + bomPk + '/edit/';
+    }
+    document.getElementById('bom-form').submit();
+  });
 })();
 </script>
 {% endblock %}
-{% endif %}

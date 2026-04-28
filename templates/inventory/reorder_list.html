@@ -59,6 +59,11 @@
             <option value="supplier" {% if sort == "supplier" %}selected{% endif %}>Supplier</option>
           </select>
         </div>
+        <div class="col-auto d-flex align-items-end">
+          <button type="button" class="btn btn-outline-secondary btn-sm js-clear-all-filters">
+            <i class="bi bi-x-lg"></i> Clear
+          </button>
+        </div>
       </div>
     </form>
   </div>
@@ -73,11 +78,11 @@
     <thead class="table-dark">
       <tr>
         <th>Mfr #</th>
+        <th>YT #</th>
         <th>J&N</th>
         <th>OEM #</th>
         <th>Description</th>
         <th>Supplier</th>
-        <th>Unit #</th>
         <th class="text-center">In Stock</th>
         <th class="text-center">Reorder Qty</th>
         <th class="text-center">Status</th>
@@ -87,11 +92,11 @@
       {% for part in parts %}
       <tr data-href="{% url 'catalog:part_detail' part.pk %}">
         <td>{{ part.manufacturer_number|default:"—" }}</td>
+        <td>{{ part.yt_number|default:"—" }}</td>
         <td>{{ part.j_and_n|default:"—" }}</td>
         <td>{{ part.oem_number|default:"—" }}</td>
         <td>{{ part.description|truncatewords:12|default:part.part_name|default:"—" }}</td>
         <td>{{ part.primary_vendor|default:"—" }}</td>
-        <td>{{ part.unit.unit_number|default:"—" }}</td>
         <td class="text-center {% if part.stock_quantity <= 0 %}text-danger fw-bold{% endif %}">{{ part.stock_quantity }}</td>
         <td class="text-center">{{ part.reorder_qty }}</td>
         <td class="text-center">

@@ -435,11 +435,15 @@ class PartCategoryField(models.Model):
 class UnitTypeCategory(models.Model):
     """User-defined unit type category shown in the Add New Unit dropdown."""
 
+    DEFAULT_COLOR = "#fd7e14"
+
     name = models.CharField(max_length=100, unique=True)
+    sort_order = models.IntegerField(default=0)
+    color = models.CharField(max_length=7, default=DEFAULT_COLOR)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["sort_order", "name"]
         verbose_name = "Unit Type Category"
         verbose_name_plural = "Unit Type Categories"
 
@@ -484,19 +488,23 @@ class Part(models.Model):
     oem_type = models.CharField("OEM Type", max_length=100, blank=True, default="")
     item_typ = models.CharField("Item Type", max_length=100, blank=True, default="")
     oem = models.CharField("OEM", max_length=200, blank=True, default="")
-    primary_vendor = models.CharField(max_length=200, blank=True, default="")
+    primary_vendor = models.CharField("Primary Supplier", max_length=200, blank=True, default="")
     catalog = models.CharField(max_length=100, blank=True, default="")
     plug_id = models.CharField("Plug ID", max_length=100, blank=True, default="")
 
     # -- Pricing --
-    price = models.DecimalField(
-        "Sell Price", max_digits=10, decimal_places=2, null=True, blank=True
-    )
     cost_price = models.DecimalField(
         "Cost Price", max_digits=10, decimal_places=2, null=True, blank=True
     )
+    markup_percent = models.DecimalField(
+        "Markup", max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    price = models.DecimalField(
+        "Sell Price", max_digits=10, decimal_places=2, null=True, blank=True
+    )
 
     # -- Stock / Inventory --
+    track_inventory = models.BooleanField("Track Inventory", default=False)
     stock_quantity = models.IntegerField(default=0)
     reorder_qty = models.IntegerField("Reorder Threshold", default=0)
     bin_number = models.CharField("Bin Location", max_length=50, blank=True, default="")
@@ -709,7 +717,7 @@ class BOMItem(models.Model):
     part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name="bom_items")
     description = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True, default="")
-    unit_qty = models.PositiveIntegerField("Unit Qty", default=1)
+    unit_qty = models.PositiveIntegerField("Part Qty", default=1)
     stock_qty = models.IntegerField("Stock Qty", default=0)
     bin_number = models.CharField(max_length=50, blank=True, default="")
     oem_number = models.CharField("OEM #", max_length=100, blank=True, default="")

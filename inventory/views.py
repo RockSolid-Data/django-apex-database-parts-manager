@@ -51,7 +51,7 @@ def inventory_item_create(request):
 
 def inventory_list(request):
     """Inventory management list: parts with cost, margin, sale price, quantity, total value."""
-    parts = Part.objects.select_related("unit").filter(is_active=True).order_by("part_number")
+    parts = Part.objects.select_related("unit").filter(is_active=True, track_inventory=True).order_by("part_number")
 
     # --- Text search (name, part number, description) ---
     q = request.GET.get("q", "").strip()
@@ -68,7 +68,7 @@ def inventory_list(request):
         parts = parts.filter(primary_vendor=filter_supplier)
 
     supplier_choices = (
-        Part.objects.filter(is_active=True)
+        Part.objects.filter(is_active=True, track_inventory=True)
         .exclude(primary_vendor="")
         .values_list("primary_vendor", flat=True)
         .distinct()
@@ -100,10 +100,10 @@ def inventory_list(request):
 
 def reorder_list(request):
     """List parts where stock is at or below reorder level. Search, filters, sort."""
-    # Parts needing reorder: stock_quantity <= reorder_qty
+    # Only show parts the user has opted into reorder tracking (reorder_qty > 0)
     parts = (
         Part.objects.select_related("unit")
-        .filter(is_active=True)
+        .filter(is_active=True, track_inventory=True, reorder_qty__gt=0)
         .filter(stock_quantity__lte=F("reorder_qty"))
     )
 
@@ -137,7 +137,7 @@ def reorder_list(request):
         parts = parts.order_by("primary_vendor", "stock_quantity")
 
     # --- Build filter choices from reorder parts (before slicing) ---
-    base_reorder = Part.objects.filter(is_active=True).filter(
+    base_reorder = Part.objects.filter(is_active=True, track_inventory=True, reorder_qty__gt=0).filter(
         stock_quantity__lte=F("reorder_qty")
     )
     category_choices = (
@@ -234,7 +234,7 @@ def vendor_create(request):
                 first.is_primary = True
                 first.save(update_fields=["is_primary"])
             logger.info("[Vendor] Created '%s' (pk=%s)", vendor.name, vendor.pk)
-            messages.success(request, f"Vendor '{vendor.name}' created.")
+            messages.success(request, f"Supplier '{vendor.name}' created.")
             return redirect("inventory:vendor_list")
     else:
         form = VendorForm()
@@ -244,7 +244,7 @@ def vendor_create(request):
         "form": form,
         "contact_formset": contact_formset,
         "vendor": None,
-        "title": "Add New Vendor",
+        "title": "Add New Supplier",
     })
 
 
@@ -263,7 +263,7 @@ def vendor_edit(request, pk):
                 first.is_primary = True
                 first.save(update_fields=["is_primary"])
             logger.info("[Vendor] Updated '%s' (pk=%s)", vendor.name, vendor.pk)
-            messages.success(request, f"Vendor '{vendor.name}' updated.")
+            messages.success(request, f"Supplier '{vendor.name}' updated.")
             return redirect("inventory:vendor_list")
     else:
         form = VendorForm(instance=vendor)
@@ -273,7 +273,7 @@ def vendor_edit(request, pk):
         "form": form,
         "contact_formset": contact_formset,
         "vendor": vendor,
-        "title": "Edit Vendor",
+        "title": "Edit Supplier",
     })
 
 
@@ -284,6 +284,6 @@ def vendor_delete(request, pk):
         name = vendor.name
         vendor.delete()
         logger.info("[Vendor] Deleted '%s' (pk=%s)", name, pk)
-        messages.success(request, f"Vendor '{name}' deleted.")
+        messages.success(request, f"Supplier '{name}' deleted.")
         return redirect("inventory:vendor_list")
     return redirect("inventory:vendor_edit", pk=pk)

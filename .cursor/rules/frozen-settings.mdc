@@ -1,0 +1,42 @@
+---
+description: Guardrails for frozen/production settings — prevent dev/prod parity bugs
+globs: config/settings/frozen.py,config/settings/base.py
+alwaysApply: false
+---
+
+# Frozen Settings Guardrails
+
+## STORAGES must be complete
+
+Django's default `STORAGES` dict has two keys: `"default"` (FileSystemStorage for media) and `"staticfiles"`. If you override `STORAGES`, you **must include both keys** or Django crashes with `InvalidStorageError` whenever a FileField/ImageField `.url` is accessed in a template.
+
+```python
+# CORRECT — both keys present
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+```
+
+## Paths must use DATA_DIR for persistent data
+
+In the frozen app, `BASE_DIR` points inside the install directory (read-only, replaced on upgrade). Anything that must survive upgrades goes in `DATA_DIR` (`%LOCALAPPDATA%\ApexDatabase\`):
+
+- `DATABASES` → `DATA_DIR / "db.sqlite3"`
+- `MEDIA_ROOT` → `DATA_DIR / "media"`
+- `SECRET_KEY` → `DATA_DIR / ".secret_key"`
+- Logs → `DATA_DIR / "logs/"`
+
+## Media serving
+
+`config/urls.py` must serve `MEDIA_URL` unconditionally (not gated behind `if settings.DEBUG`), since the frozen app needs it too.
+
+## Before modifying these files
+
+1. Check that `STORAGES` still has both keys
+2. Verify any new path setting uses `DATA_DIR` (not `BASE_DIR`) for user data
+3. Test with `--settings=config.settings.frozen` before building

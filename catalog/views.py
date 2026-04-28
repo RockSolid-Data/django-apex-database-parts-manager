@@ -2,14 +2,15 @@ import csv
 import io
 import json
 import logging
-import uuid
+
 
 from django.contrib import messages
 
 logger = logging.getLogger(__name__)
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Exists, F, Max, OuterRef, Q
+from django.db.models import Case, Exists, F, Max, OuterRef, Q, Value, When
+from django.db.models.functions import NullIf
 from django.http import HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -18,7 +19,7 @@ from .forms import ApplicationForm, ApplicationSpecificationForm, ApplicationUni
 from .models import Application, ApplicationSpecification, ApplicationType, ApplicationTypeField, ApplicationUnit, BOM, BOMItem, CrossReference, GearReductionSubstitution, Part, PartCategory, PartCategoryField, PartInterchange, PartSubstitute, PartSuperseding, Substitute, Unit, UnitType, UnitTypeCategory, UnitTypeCategoryField
 
 PART_DEFAULT_FIELDS = [
-    ("part_number", "Item Number"),
+    ("part_number", "Part Number"),
     ("part_name", "Part Name"),
     ("manufacturer_number", "Manufacturer Number"),
     ("yt_number", "YT Number"),
@@ -455,6 +456,9 @@ def bom_list(request):
     paginator = Paginator(boms, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+    category_color_map = dict(
+        UnitTypeCategory.objects.values_list("name", "color")
+    )
     return render(request, "catalog/bom_list.html", {
         "boms": page_obj,
         "page_obj": page_obj,
@@ -463,6 +467,7 @@ def bom_list(request):
         "q": q,
         "filter_unit_type": filter_unit_type,
         "unit_type_choices": unit_type_choices,
+        "category_color_map": category_color_map,
     })
 
 
@@ -498,17 +503,11 @@ def bom_print(request, pk):
 
 
 def bom_create(request):
-    """Create a new BOM with an optional first item. Accepts ?unit=<pk> to pre-fill the unit."""
+    """Create a new BOM. Accepts ?unit=<pk> to pre-fill the unit."""
     if request.method == "POST":
         form = BOMForm(request.POST)
-        item_form = BOMItemForm(request.POST, prefix="item")
-        item_form.fields["part"].required = False
         if form.is_valid():
             bom = form.save()
-            if item_form.is_valid() and item_form.cleaned_data.get("part"):
-                item = item_form.save(commit=False)
-                item.bom = bom
-                item.save()
             logger.info("[BOM] Created '%s' (pk=%s)", bom.name, bom.pk)
             messages.success(request, f"BOM '{bom.name}' created.")
             return redirect("catalog:bom_detail", pk=bom.pk)
@@ -521,20 +520,21 @@ def bom_create(request):
                 initial["unit"] = unit
                 initial["name"] = f"BOM — {unit.unit_number}"
         form = BOMForm(initial=initial)
-        item_form = BOMItemForm(prefix="item")
-        item_form.fields["part"].required = False
 
     return render(request, "catalog/bom_form.html", {
         "form": form,
-        "item_form": item_form,
         "bom": None,
+        "item_form": BOMItemForm(),
         "title": "Create BOM",
     })
 
 
 def bom_edit(request, pk):
     """Edit a BOM."""
-    bom = get_object_or_404(BOM, pk=pk)
+    bom = get_object_or_404(
+        BOM.objects.prefetch_related("items__part"),
+        pk=pk,
+    )
     if request.method == "POST":
         form = BOMForm(request.POST, instance=bom)
         if form.is_valid():
@@ -548,6 +548,7 @@ def bom_edit(request, pk):
     return render(request, "catalog/bom_form.html", {
         "form": form,
         "bom": bom,
+        "item_form": BOMItemForm(bom=bom),
         "title": "Edit BOM",
     })
 
@@ -587,9 +588,10 @@ def bom_item_add(request, pk):
             item = form.save(commit=False)
             item.bom = bom
             item.save()
-            logger.info("[BOM] Added part %s to %s", item.part.part_number, bom.name)
-            messages.success(request, f"Part {item.part.part_number} added to BOM.")
-            return redirect("catalog:bom_detail", pk=bom.pk)
+            part_label = item.part.part_number or item.part.yt_number or item.part.part_name or "Part"
+            logger.info("[BOM] Added part %s to %s", part_label, bom.name)
+            messages.success(request, f"Part '{part_label}' added to BOM.")
+            return redirect("catalog:bom_edit", pk=bom.pk)
     else:
         form = BOMItemForm(bom=bom)
 
@@ -610,7 +612,7 @@ def bom_item_edit(request, pk, item_pk):
             form.save()
             logger.info("[BOM] Updated item in %s", bom.name)
             messages.success(request, f"BOM item updated.")
-            return redirect("catalog:bom_detail", pk=bom.pk)
+            return redirect("catalog:bom_edit", pk=bom.pk)
     else:
         form = BOMItemForm(instance=item, bom=bom)
 
@@ -627,41 +629,167 @@ def bom_item_delete(request, pk, item_pk):
     bom = get_object_or_404(BOM, pk=pk)
     item = get_object_or_404(BOMItem, pk=item_pk, bom=bom)
     if request.method == "POST":
-        part_number = item.part.part_number
+        part_label = item.part.part_number or item.part.yt_number or item.part.part_name or "Part"
         item.delete()
-        logger.info("[BOM] Removed part %s from %s", part_number, bom.name)
-        messages.success(request, f"Part {part_number} removed from BOM.")
-    return redirect("catalog:bom_detail", pk=bom.pk)
+        logger.info("[BOM] Removed part %s from %s", part_label, bom.name)
+        messages.success(request, f"Part '{part_label}' removed from BOM.")
+    return redirect("catalog:bom_edit", pk=bom.pk)
+
+
+# ---------------------------------------------------------------------------
+# BOM AJAX API endpoints (for modal-based add-part flow)
+# ---------------------------------------------------------------------------
+
+def bom_save_api(request):
+    """Create or update a BOM via AJAX, return JSON {ok, pk, name, errors}."""
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "errors": {"__all__": ["POST required."]}}, status=405)
+
+    pk = request.POST.get("bom_pk")
+    if pk:
+        bom = get_object_or_404(BOM, pk=pk)
+        form = BOMForm(request.POST, instance=bom)
+    else:
+        form = BOMForm(request.POST)
+
+    if form.is_valid():
+        bom = form.save()
+        logger.info("[BOM] Saved '%s' (pk=%s) via API", bom.name, bom.pk)
+        return JsonResponse({"ok": True, "pk": bom.pk, "name": bom.name})
+
+    errors = {f: e.get_json_data() for f, e in form.errors.items()}
+    return JsonResponse({"ok": False, "errors": errors}, status=400)
+
+
+def bom_item_add_api(request, pk):
+    """Add a BOM item via AJAX, return JSON with the new row data."""
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "errors": {"__all__": ["POST required."]}}, status=405)
+
+    bom = get_object_or_404(BOM, pk=pk)
+    form = BOMItemForm(request.POST, bom=bom)
+    if form.is_valid():
+        item = form.save(commit=False)
+        item.bom = bom
+        item.save()
+        part = item.part
+        part_label = part.part_number or part.yt_number or part.part_name or "Part"
+        logger.info("[BOM] Added part %s to %s via API", part_label, bom.name)
+        return JsonResponse({
+            "ok": True,
+            "item": {
+                "pk": item.pk,
+                "yt_number": item.yt_number or (part.yt_number if part else ""),
+                "part_number": part.part_number or "" if part else "",
+                "j_and_n": item.j_and_n or (part.j_and_n if part else ""),
+                "oem_number": item.oem_number or (part.oem_number if part else ""),
+                "description": item.description or (part.part_name if part else ""),
+                "notes": item.notes or "",
+                "unit_qty": item.unit_qty,
+                "stock_qty": item.stock_qty or "",
+                "bin_number": item.bin_number or "",
+                "part_pk": part.pk if part else None,
+                "edit_url": reverse("catalog:bom_item_edit", args=[bom.pk, item.pk]),
+            },
+        })
+
+    errors = {f: e.get_json_data() for f, e in form.errors.items()}
+    return JsonResponse({"ok": False, "errors": errors}, status=400)
+
+
+def bom_item_delete_api(request, pk, item_pk):
+    """Delete a BOM item via AJAX."""
+    if request.method != "POST":
+        return JsonResponse({"ok": False}, status=405)
+    bom = get_object_or_404(BOM, pk=pk)
+    item = get_object_or_404(BOMItem, pk=item_pk, bom=bom)
+    part_label = item.part.part_number or item.part.yt_number or item.part.part_name or "Part"
+    item.delete()
+    logger.info("[BOM] Removed part %s from %s via API", part_label, bom.name)
+    return JsonResponse({"ok": True})
+
+
+def _get_deep_match_label(part, q_lower: str, ic_map: dict, sup_map: dict) -> str:
+    """Return the value that matched this part in a deep (tier-2) search."""
+    q = q_lower
+    if part.manufacturer_number and q in part.manufacturer_number.lower():
+        return part.manufacturer_number
+    if part.part_name and q in part.part_name.lower():
+        return part.part_name[:50]
+    if part.description and q in part.description.lower():
+        text = part.description
+        idx = text.lower().index(q)
+        start = max(0, idx - 12)
+        end = min(len(text), idx + len(q) + 12)
+        snippet = text[start:end].strip()
+        return f"\u2026{snippet}\u2026"
+    if part.voltage and q in part.voltage.lower():
+        return f"Voltage: {part.voltage}"
+    for ic_num in ic_map.get(part.pk, []):
+        if ic_num and q in ic_num.lower():
+            return f"Interchange: {ic_num}"
+    for old_num in sup_map.get(part.pk, []):
+        if old_num and q in old_num.lower():
+            return f"Supersedes: {old_num}"
+    return q
 
 
 def part_list(request):
-    """List parts with search, category filter, KEY, YT NUMBER, J&N, OEM #, DESCRIPTION, IN STOCK, DETAILS."""
-    parts = Part.objects.select_related("unit").filter(is_active=True).order_by("part_number")
-
-    # --- Text search (key, J&N, OEM #, description, unit #) ---
-    q = request.GET.get("q", "").strip()
-    if q:
-        parts = parts.filter(
-            Q(manufacturer_number__icontains=q)
-            | Q(j_and_n__icontains=q)
-            | Q(oem_number__icontains=q)
-            | Q(description__icontains=q)
-            | Q(part_name__icontains=q)
-            | Q(part_number__icontains=q)
-            | Q(yt_number__icontains=q)
-            | Q(voltage__icontains=q)
-            | Q(unit__unit_number__icontains=q)
-        )
+    """List parts with search, category filter, Part Number, YT Number, J&N, OEM #, Description, In Stock."""
+    base_qs = Part.objects.select_related("unit").filter(is_active=True).annotate(
+        _sort_yt=NullIf("yt_number", Value("")),
+        _sort_pn=NullIf("part_number", Value("")),
+    ).order_by(
+        F("_sort_yt").asc(nulls_last=True),
+        F("_sort_pn").asc(nulls_last=True),
+    )
 
     # --- Category filter ---
     filter_category = request.GET.get("category", "").strip()
     if filter_category:
-        parts = parts.filter(category=filter_category)
+        base_qs = base_qs.filter(category=filter_category)
 
     # --- Voltage filter ---
     filter_voltage = request.GET.get("voltage", "").strip()
     if filter_voltage:
-        parts = parts.filter(voltage=filter_voltage)
+        base_qs = base_qs.filter(voltage=filter_voltage)
+
+    # --- Two-tier search ---
+    # Tier 1 (direct): matches on the four primary number fields visible in the table.
+    #   → Match column stays blank; these bypass the deep search entirely.
+    # Tier 2 (deep): only reached when tier-1 yields nothing.
+    #   → searches manufacturer number, descriptions, interchange & superseding numbers;
+    #     Match column shows the value that caused each hit.
+    q = request.GET.get("q", "").strip()
+    match_map: dict[int, str] = {}
+    search_tier = 0  # 0 = no query, 1 = direct, 2 = deep
+
+    if q:
+        direct_qs = base_qs.filter(
+            Q(manufacturer_number__icontains=q)
+            | Q(yt_number__icontains=q)
+            | Q(j_and_n__icontains=q)
+            | Q(oem_number__icontains=q)
+        )
+        if direct_qs.exists():
+            parts = direct_qs
+            search_tier = 1
+        else:
+            deep_qs = base_qs.filter(
+                Q(part_number__icontains=q)
+                | Q(part_name__icontains=q)
+                | Q(description__icontains=q)
+                | Q(voltage__icontains=q)
+                | Q(unit__unit_number__icontains=q)
+                | Q(units__unit_number__icontains=q)
+                | Q(part_interchanges__interchange_number__icontains=q)
+                | Q(interchanged_by_parts__interchange_number__icontains=q)
+                | Q(supersedings__old_part_number__icontains=q)
+            ).distinct()
+            parts = deep_qs
+            search_tier = 2
+    else:
+        parts = base_qs
 
     # --- Build category choices for dropdown ---
     category_choices = (
@@ -690,12 +818,41 @@ def part_list(request):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
+    # Build (part, match_label) pairs for the current page.
+    # match_label is non-empty only for tier-2 deep results.
+    parts_with_match: list[tuple] = []
+    if q and search_tier == 2:
+        q_lower = q.lower()
+        page_pks = [p.pk for p in page_obj]
+
+        ic_map: dict[int, list[str]] = {}
+        for ic in PartInterchange.objects.filter(
+            Q(part_id__in=page_pks) | Q(interchange_part_id__in=page_pks)
+        ).values("part_id", "interchange_part_id", "interchange_number"):
+            for pk in (ic["part_id"], ic["interchange_part_id"]):
+                if pk in page_pks:
+                    ic_map.setdefault(pk, []).append(ic["interchange_number"] or "")
+
+        sup_map: dict[int, list[str]] = {}
+        for sup in PartSuperseding.objects.filter(
+            part_id__in=page_pks
+        ).values("part_id", "old_part_number"):
+            sup_map.setdefault(sup["part_id"], []).append(sup["old_part_number"] or "")
+
+        for part in page_obj:
+            label = _get_deep_match_label(part, q_lower, ic_map, sup_map)
+            parts_with_match.append((part, label))
+    else:
+        parts_with_match = [(part, "") for part in page_obj]
+
     context = {
         "parts": page_obj,
+        "parts_with_match": parts_with_match,
         "page_obj": page_obj,
         "total_count": total_count,
         "per_page": per_page,
         "q": q,
+        "search_tier": search_tier,
         "filter_category": filter_category,
         "category_choices": category_choices,
         "filter_voltage": filter_voltage,
@@ -743,9 +900,15 @@ def part_detail(request, pk):
         other = ps.substitute_part if ps.part_id == part.pk else ps.part
         part_substitutes.append({"ref": ps, "part": other})
 
+    # Sort: J&N first, then alphabetically by source, then by number
     interchanges_qs = PartInterchange.objects.filter(
         Q(part=part) | Q(interchange_part=part)
-    ).select_related("part", "interchange_part")
+    ).select_related("part", "interchange_part").annotate(
+        _is_jn=Case(
+            When(source_name__istartswith="J&N", then=Value(0)),
+            default=Value(1),
+        ),
+    ).order_by("_is_jn", "source_name", "interchange_number")
     part_interchanges = []
     for pi in interchanges_qs:
         other = pi.interchange_part if pi.part_id == part.pk else pi.part
@@ -823,6 +986,7 @@ def part_create(request):
     else:
         form = PartForm()
 
+    from invoicing.models import CompanySettings
     category_fields = _get_category_field_defs()
     category_pk_map = {c.name: c.pk for c in PartCategory.objects.all()}
     return render(request, "catalog/part_form.html", {
@@ -832,6 +996,7 @@ def part_create(request):
         "category_fields_json": json.dumps(category_fields),
         "existing_specs_json": "{}",
         "category_pk_map_json": json.dumps(category_pk_map),
+        "pricing_method": CompanySettings.get().pricing_method,
     })
 
 
@@ -862,6 +1027,7 @@ def part_edit(request, pk):
     else:
         form = PartForm(instance=part)
 
+    from invoicing.models import CompanySettings
     category_fields = _get_category_field_defs()
     existing_specs = part.specifications or {}
     category_pk_map = {c.name: c.pk for c in PartCategory.objects.all()}
@@ -872,6 +1038,7 @@ def part_edit(request, pk):
         "category_fields_json": json.dumps(category_fields),
         "existing_specs_json": json.dumps(existing_specs),
         "category_pk_map_json": json.dumps(category_pk_map),
+        "pricing_method": CompanySettings.get().pricing_method,
     })
 
 
@@ -1091,11 +1258,28 @@ def part_category_edit(request, pk):
         messages.success(request, f"Category '{name}' updated.")
         return redirect("catalog:part_category_list")
 
-    existing_fields = list(cat.fields.values("field_name", "field_label"))
+    existing_fields = list(
+        cat.fields.order_by("display_order").values("field_name", "field_label")
+    )
+    existing_names = {f["field_name"] for f in existing_fields}
+
+    # Build merged list: defaults first (locked), then any extra custom fields.
+    # If a default was previously saved with a customised label, use that label.
+    db_by_name = {f["field_name"]: f for f in existing_fields}
+    merged = []
+    for fn, fl in PART_DEFAULT_FIELDS:
+        merged.append({
+            "field_name": fn,
+            "field_label": db_by_name[fn]["field_label"] if fn in db_by_name else fl,
+        })
+    for f in existing_fields:
+        if f["field_name"] not in {fn for fn, _ in PART_DEFAULT_FIELDS}:
+            merged.append(f)
+
     return render(request, "catalog/part_category_form.html", {
         "title": f"Edit Category: {cat.name}",
         "category": cat,
-        "fields": existing_fields,
+        "fields": merged,
         "default_field_names_json": json.dumps([fn for fn, _ in PART_DEFAULT_FIELDS]),
     })
 
@@ -1201,9 +1385,9 @@ def _parse_part_csv(decoded_text):
     header_warning = ""
     if not has_part_number_col:
         header_warning = (
-            f'No "Item Number" (part_number) column detected. '
+            f'No "Part Number" (part_number) column detected. '
             f"Your CSV columns are: {', '.join(columns_raw)}. "
-            f"An Item Number will be auto-generated for each row on import."
+            f"Parts will be created without a Part Number."
         )
 
     rows = []
@@ -1218,7 +1402,7 @@ def _parse_part_csv(decoded_text):
             if existing:
                 warnings.append((row_num, f"Part {pn} already exists — will be updated."))
         elif has_part_number_col:
-            warnings.append((row_num, "Empty Item Number — will be auto-generated."))
+            warnings.append((row_num, "Empty Part Number — part will be created without one."))
         rows.append(row)
     return columns, rows, warnings, header_warning
 
@@ -1243,11 +1427,7 @@ def part_upload_csv(request):
             for col in columns:
                 row[col] = request.POST.get(f"row_{i}_{col}", "").strip()
 
-            pn = row.get("part_number", "").strip()
-            auto_generated = False
-            if not pn:
-                pn = f"AUTO-{uuid.uuid4().hex[:8].upper()}"
-                auto_generated = True
+            pn = row.get("part_number", "").strip() or None
 
             defaults = {}
             specs = {}
@@ -1283,7 +1463,7 @@ def part_upload_csv(request):
                     unit_linked = unit_number
 
             if specs:
-                if not auto_generated:
+                if pn:
                     existing_specs = Part.objects.filter(part_number=pn).values_list("specifications", flat=True).first()
                     merged = dict(existing_specs or {})
                     merged.update(specs)
@@ -1292,17 +1472,19 @@ def part_upload_csv(request):
                     defaults["specifications"] = specs
 
             try:
-                obj, was_created = Part.objects.update_or_create(
-                    part_number=pn, defaults=defaults
-                )
+                if pn:
+                    obj, was_created = Part.objects.update_or_create(
+                        part_number=pn, defaults=defaults
+                    )
+                else:
+                    obj = Part.objects.create(part_number=None, **defaults)
+                    was_created = True
                 action = "created" if was_created else "updated"
                 if was_created:
                     created += 1
                 else:
                     updated += 1
                 detail_fields = {k: v for k, v in row.items() if v and k != "part_number"}
-                if auto_generated:
-                    detail_fields["auto_item_number"] = pn
                 if unit_linked:
                     detail_fields["unit_linked"] = unit_linked
                 if specs:
@@ -1362,7 +1544,7 @@ def part_upload_csv(request):
 
 # Human-friendly labels for CSV template headers
 _PART_CSV_LABELS = {
-    "part_number": "Item Number",
+    "part_number": "Part Number",
     "part_name": "Part Name",
     "unit_number": "Unit Number",
     "category": "Category",
@@ -1772,12 +1954,20 @@ def unit_search(request):
 
 def unit_list(request):
     """List units with type tabs, search, and dropdown filters."""
-    units = Unit.objects.filter(is_active=True)
+    units = Unit.objects.filter(is_active=True).annotate(
+        _sort_yt=NullIf("yt_number", Value("")),
+        _sort_un=NullIf("unit_number", Value("")),
+    ).order_by(
+        F("_sort_yt").asc(nulls_last=True),
+        F("_sort_un").asc(nulls_last=True),
+    )
 
     # --- Unit-type category tabs (from the Add New Unit dropdown) ---
-    unit_type_categories = list(
-        UnitTypeCategory.objects.values_list("name", flat=True)
+    unit_type_cats = list(
+        UnitTypeCategory.objects.values_list("name", "color")
     )
+    unit_type_categories = [name for name, _color in unit_type_cats]
+    category_color_map = {name: color for name, color in unit_type_cats}
     selected_type = request.GET.get("type", "")
 
     if selected_type == "__blank__":
@@ -1848,7 +2038,9 @@ def unit_list(request):
         "total_count": total_count,
         "per_page": per_page,
         "unit_type_categories": unit_type_categories,
+        "category_color_map": category_color_map,
         "selected_type": selected_type,
+        "selected_color": category_color_map.get(selected_type, ""),
         "selected_unit_type_name": selected_unit_type_name,
         "q": q,
         "filter_oem": filter_oem,
@@ -1890,9 +2082,17 @@ def unit_detail(request, pk):
     ]
 
     # Cross references — unit-to-unit (both directions) and manufacturer numbers
+    # Sort: J&N first, then alphabetically by manufacturer/source, then by number
     cross_refs = CrossReference.objects.filter(
         Q(unit=unit) | Q(cross_ref_unit=unit)
-    ).select_related("unit", "cross_ref_unit", "unit__unit_type", "cross_ref_unit__unit_type")
+    ).select_related(
+        "unit", "cross_ref_unit", "unit__unit_type", "cross_ref_unit__unit_type"
+    ).annotate(
+        _is_jn=Case(
+            When(interchange_type__istartswith="J&N", then=Value(0)),
+            default=Value(1),
+        ),
+    ).order_by("_is_jn", "interchange_type", "cross_ref_number")
 
     cross_ref_all = []
     for cr in cross_refs:
@@ -2546,7 +2746,7 @@ def _parse_unit_csv(decoded_text):
         header_warning = (
             f'No "unit_number" column detected. '
             f"Your CSV columns are: {', '.join(columns_raw)}. "
-            f"A Unit Number will be auto-generated for each row on import."
+            f"Units will be created without a Unit Number."
         )
 
     rows = []
@@ -2561,7 +2761,7 @@ def _parse_unit_csv(decoded_text):
             if existing:
                 warnings.append((row_num, f"Unit {un} already exists — will be updated."))
         elif has_unit_number_col:
-            warnings.append((row_num, "Empty Unit Number — will be auto-generated."))
+            warnings.append((row_num, "Empty Unit Number — unit will be created without one."))
         rows.append(row)
     return columns, rows, warnings, header_warning
 
@@ -2815,7 +3015,13 @@ def unit_autocomplete(request):
 
 def part_autocomplete(request):
     q = request.GET.get("q", "").strip()
-    qs = Part.objects.filter(is_active=True).order_by("part_number")
+    qs = Part.objects.filter(is_active=True).annotate(
+        _sort_yt=NullIf("yt_number", Value("")),
+        _sort_pn=NullIf("part_number", Value("")),
+    ).order_by(
+        F("_sort_yt").asc(nulls_last=True),
+        F("_sort_pn").asc(nulls_last=True),
+    )
     if q:
         qs = qs.filter(
             Q(part_number__icontains=q)
@@ -2844,6 +3050,7 @@ def part_detail_api(request, pk):
     """Return part fields as JSON for auto-fill (used by BOM item form)."""
     part = get_object_or_404(Part, pk=pk)
     return JsonResponse({
+        "part_number": part.part_number,
         "j_and_n": part.j_and_n,
         "yt_number": part.yt_number,
         "bin_number": part.bin_number,

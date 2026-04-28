@@ -198,7 +198,7 @@
                  placeholder="Enter OEM..." value="{{ get_params.q_oem }}">
         </div>
         <div class="col-md-4">
-          <label class="form-label small">Primary Vendor</label>
+          <label class="form-label small">Primary Supplier</label>
           <input type="text" name="q_primary_vendor" class="form-control form-control-sm"
                  placeholder="Enter vendor..." value="{{ get_params.q_primary_vendor }}">
         </div>
@@ -334,7 +334,7 @@
 {# ===== Results ===== #}
 <div id="live-search-results">
 {% if results_count > 0 %}
-<p class="text-muted mb-2">{{ results_count }} result{{ results_count|pluralize }} found</p>
+<p class="text-muted mb-0 me-sticky-count">{{ results_count }} result{{ results_count|pluralize }} found</p>
 
 {% if tab == 'crossref' %}
 <div class="table-responsive">
