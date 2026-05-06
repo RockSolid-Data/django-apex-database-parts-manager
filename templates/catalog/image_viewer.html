@@ -1,0 +1,203 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title|default:"Image Viewer" }} — Apex Database</title>
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}">
+  <style>
+    body {
+      margin: 0;
+      background: #1a1a1a;
+      overflow: hidden;
+    }
+
+    .iv-toolbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #fff;
+    }
+    .iv-toolbar .iv-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 40%;
+    }
+    .iv-toolbar .btn {
+      color: #fff;
+      border-color: rgba(255,255,255,0.3);
+      font-size: 0.85rem;
+    }
+    .iv-toolbar .btn:hover {
+      background: rgba(255,255,255,0.15);
+      border-color: rgba(255,255,255,0.5);
+    }
+    .iv-zoom-label {
+      font-size: 0.8rem;
+      min-width: 3.5rem;
+      text-align: center;
+      color: rgba(255,255,255,0.7);
+    }
+
+    .iv-canvas {
+      position: fixed;
+      top: 48px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .iv-canvas img {
+      pointer-events: none;
+    }
+
+    @media print {
+      body { background: #fff; overflow: visible; }
+      .iv-toolbar { display: none !important; }
+      .iv-canvas {
+        position: static;
+        display: block;
+        text-align: center;
+        padding: 1rem;
+      }
+      .iv-canvas img {
+        transform: none !important;
+        max-width: 100%;
+        max-height: 100vh;
+        width: auto;
+        height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="iv-toolbar">
+    <span class="iv-title">{{ title|default:"" }}</span>
+    <div class="d-flex align-items-center gap-1">
+      <button class="btn btn-sm btn-outline-light" id="zoomOut" title="Zoom out">
+        <i class="bi bi-dash-lg"></i>
+      </button>
+      <span class="iv-zoom-label" id="zoomLabel">100%</span>
+      <button class="btn btn-sm btn-outline-light" id="zoomIn" title="Zoom in">
+        <i class="bi bi-plus-lg"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-light ms-2" id="zoomFit" title="Fit to screen">
+        <i class="bi bi-arrows-fullscreen"></i> Fit
+      </button>
+      <button class="btn btn-sm btn-outline-light" id="zoomActual" title="Actual size (100%)">
+        <i class="bi bi-aspect-ratio"></i> 1:1
+      </button>
+      <button class="btn btn-sm btn-outline-light ms-2" id="printBtn" title="Print image">
+        <i class="bi bi-printer"></i> Print
+      </button>
+      <button class="btn btn-sm btn-outline-light ms-2" id="closeBtn" title="Close viewer">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="iv-canvas" id="canvas">
+    <img id="viewer-img" src="{{ image_url }}" alt="{{ title|default:'Image' }}" draggable="false">
+  </div>
+
+  <script>
+  (function() {
+    var img = document.getElementById('viewer-img');
+    var zoomLabel = document.getElementById('zoomLabel');
+    var scale = 1;
+    var natW = 0, natH = 0;
+
+    function applyScale() {
+      img.style.transform = 'scale(' + scale + ')';
+      zoomLabel.textContent = Math.round(scale * 100) + '%';
+    }
+
+    function calcFitScale() {
+      var cw = window.innerWidth;
+      var ch = window.innerHeight - 48;
+      return Math.min(cw / natW, ch / natH, 1);
+    }
+
+    function fitToScreen() {
+      if (!natW) return;
+      scale = calcFitScale();
+      applyScale();
+    }
+
+    function actualSize() {
+      scale = 1;
+      applyScale();
+    }
+
+    function setZoom(newScale) {
+      scale = Math.max(0.05, Math.min(20, newScale));
+      applyScale();
+    }
+
+    function init() {
+      natW = img.naturalWidth;
+      natH = img.naturalHeight;
+      if (natW) fitToScreen();
+    }
+
+    img.addEventListener('load', init);
+    if (img.complete && img.naturalWidth) init();
+
+    // Scroll anywhere to zoom — always centered
+    window.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      setZoom(scale * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
+    }, { passive: false });
+
+    // Toolbar buttons
+    document.getElementById('zoomIn').addEventListener('click', function(e) {
+      e.preventDefault(); setZoom(scale * 1.25);
+    });
+    document.getElementById('zoomOut').addEventListener('click', function(e) {
+      e.preventDefault(); setZoom(scale / 1.25);
+    });
+    document.getElementById('zoomFit').addEventListener('click', function(e) {
+      e.preventDefault(); fitToScreen();
+    });
+    document.getElementById('zoomActual').addEventListener('click', function(e) {
+      e.preventDefault(); actualSize();
+    });
+    document.getElementById('printBtn').addEventListener('click', function(e) {
+      e.preventDefault(); window.print();
+    });
+    document.getElementById('closeBtn').addEventListener('click', function(e) {
+      e.preventDefault(); window.close();
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', function(e) {
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(scale * 1.25); }
+      else if (e.key === '-') { e.preventDefault(); setZoom(scale / 1.25); }
+      else if (e.key === '0') { e.preventDefault(); fitToScreen(); }
+      else if (e.key === '1') { e.preventDefault(); actualSize(); }
+      else if (e.key === 'Escape') { window.close(); }
+    });
+
+    window.addEventListener('resize', fitToScreen);
+  })();
+  </script>
+
+</body>
+</html>

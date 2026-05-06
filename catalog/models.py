@@ -233,6 +233,24 @@ class Unit(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# 3b. UnitImage
+# ---------------------------------------------------------------------------
+class UnitImage(models.Model):
+    """Multiple images per unit."""
+
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="images")
+    image = models.ImageField(upload_to="units/")
+    caption = models.CharField(max_length=200, blank=True, default="")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at"]
+
+    def __str__(self):
+        return f"Image for {self.unit}"
+
+
+# ---------------------------------------------------------------------------
 # 4. ApplicationUnit (junction)
 # ---------------------------------------------------------------------------
 class ApplicationUnit(models.Model):
@@ -291,6 +309,7 @@ class CrossReference(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        ordering = ["interchange_type", "cross_ref_number"]
         unique_together = [("unit", "cross_ref_number", "interchange_type")]
         verbose_name = "Cross Reference"
         verbose_name_plural = "Cross References"

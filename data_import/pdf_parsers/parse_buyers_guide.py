@@ -46,6 +46,64 @@ SECTION_HEADERS = {
 # Logo watermark dimensions — skip any image at or below this size
 _LOGO_MAX_PX = 200
 
+# Map normalized attribute keys (from PDF) to our staging column names.
+# PyMuPDF extracts attribute names and values on alternate lines; the name
+# line is lowercased and spaces replaced with underscores.
+ATTR_KEY_MAP = {
+    # -- Shared --
+    "manufacture": "manufacture",
+    "oe_manufacturer": "oe_manufacturer",
+    "family": "family",
+    "voltage": "voltage",
+    "mounting_type": "mounting_type",
+    "series": "series",
+    # -- Alternator --
+    "amperage_rating": "amperage_rating",
+    "fan_type": "fan_type",
+    "regulator_type": "regulator_type",
+    "rotation_direction": "rotation",
+    "ground_type": "ground_type",
+    "ground_polarity": "ground_type",
+    "mounting_ear_quantity": "mounting_ear_quantity",
+    "plug_type": "plug_type",
+    "plug_clock_rear_view": "plug_clocking",
+    "plug_clock_rear_view_main_mounting_ear_at": "plug_clocking",
+    "pulley_belt_type": "belt_type",
+    "pulley_groove_quantity": "pulley_grooves",
+    "pulley_class": "pulley_type",
+    "pulley_outside_diameter": "pulley_od",
+    "outside_diameter": "pulley_od",
+    "decoupled": "decoupled",
+    "stator_type": "stator_type",
+    "stator_leads": "stator_type",
+    # -- Generator --
+    "circuit_type": "circuit_type",
+    "generator_rotation": "rotation",
+    # -- Starter --
+    "starter_rotation": "rotation",
+    "design": "design",
+    "power_rating": "power_rating",
+    "tooth_quantity": "tooth_quantity",
+    "case_grounding": "case_grounding",
+    "nose_cone_type": "nose_cone_type",
+    "over-crank_protection": "over_crank_protection",
+    "solenoid_attached": "solenoid_attached",
+    "re-clockable_flange": "reclockable_flange",
+    "spline_quantity": "spline_quantity",
+    "starter_drive_housing_position": "drive_housing_position",
+    "mounting_bolt_hole_quantity": "bolt_holes",
+    "mounting_hardware_included": "with_hardware",
+    "mounting_shims_included": "with_mounting_shims",
+}
+
+
+def _clean_interchange_number(num):
+    """Fix line-wrap artifacts in interchange numbers (e.g. '240- 025' -> '240-025')."""
+    num = num.strip()
+    num = re.sub(r"-\s+", "-", num)
+    num = re.sub(r"\s+-", "-", num)
+    return num
+
 
 def parse_interchanges_text(text):
     """Parse pipe-delimited interchange text into (manufacturer, number) pairs."""
@@ -65,7 +123,7 @@ def parse_interchanges_text(text):
 
         if current_mfr and numbers_text:
             for num in numbers_text.split(","):
-                num = num.strip()
+                num = _clean_interchange_number(num)
                 if num:
                     results.append((current_mfr, num))
     return results
@@ -154,10 +212,14 @@ def _match_images_to_units(unit_positions, page_images, page_width=612.0):
     return result
 
 
-def parse_document(doc, limit=None):
+def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
     """
     Parse entire PDF document into products, interchanges, bom items,
     substitutes, and images.
+
+    If image_db_conn is provided, images are written directly to the DB
+    instead of accumulating in memory (critical for large PDFs).
+    start_page allows processing a subset of pages (for chunked processing).
     """
     # Accumulators keyed by YouTech number (de-duplicate by YT#)
     product_map = {}       # yt -> dict of attributes
@@ -165,22 +227,42 @@ def parse_document(doc, limit=None):
     interchange_map = {}   # (yt, mfr, num) -> True  (de-duplicate)
     bom_map = {}           # yt -> list of (part_name, yt_part, jn_part)
     sub_map = {}           # yt -> list of (sub_yt, sub_jn)
-    image_map = {}         # yt -> (image_bytes, ext)
+    image_map = {}         # yt -> (image_bytes, ext) — only used if no image_db_conn
+    app_map = {}           # yt -> list of raw application text lines
+    images_saved = 0
 
     total_pages = doc.page_count
     if limit:
         total_pages = min(total_pages, limit)
+
+    first_page = start_page
 
     current_yt = ""
     current_jn = ""
     current_section = ""
     current_attrs = {}
     interchange_buffer = ""
+    notes_pending = False  # True while accumulating multi-line Product Notes
 
     # BOM parsing state
     bom_pending_name = ""
     bom_pending_yt = ""
+    bom_pending_jn = ""
     bom_in_header = False  # True while we're on the BOM/YOUTECH/J&N header row
+
+    def flush_bom_pending():
+        nonlocal bom_pending_name, bom_pending_yt, bom_pending_jn
+        if bom_pending_name and bom_pending_yt and current_yt:
+            # Clean up line-wrap artifacts in J&N (e.g. "130- 05002" → "130-05002")
+            jn_clean = re.sub(r'-\s+', '-', bom_pending_jn)
+            jn_clean = re.sub(r'\s+-', '-', jn_clean)
+            jn_clean = re.sub(r'\s+', ' ', jn_clean).strip().rstrip(",")
+            bom_map[current_yt].append(
+                (bom_pending_name, bom_pending_yt, jn_clean)
+            )
+        bom_pending_name = ""
+        bom_pending_yt = ""
+        bom_pending_jn = ""
 
     def flush_interchanges():
         nonlocal interchange_buffer
@@ -204,7 +286,7 @@ def parse_document(doc, limit=None):
                     product_map[current_yt][k] = v
         current_attrs = {}
 
-    for page_idx in range(total_pages):
+    for page_idx in range(first_page, total_pages):
         page = doc[page_idx]
         text = page.get_text()
         lines = text.split("\n")
@@ -216,7 +298,17 @@ def parse_document(doc, limit=None):
             page_width = page.rect.width
             matched = _match_images_to_units(unit_positions, page_images, page_width)
             for yt, img_data in matched.items():
-                if yt not in image_map:
+                if image_db_conn:
+                    try:
+                        image_db_conn.execute(
+                            "INSERT OR IGNORE INTO buyers_guide_images "
+                            "(youtech_number, image_data, image_ext) VALUES (?, ?, ?)",
+                            (yt, img_data[0], img_data[1]),
+                        )
+                        images_saved += 1
+                    except Exception:
+                        pass
+                elif yt not in image_map:
                     image_map[yt] = img_data
 
         for raw_line in lines:
@@ -226,22 +318,34 @@ def parse_document(doc, limit=None):
 
             # Skip page headers
             if line in ("BUYERS GUIDE", "TILT & TRIM MOTORS",
-                        "MILD HYBRID MOTOR/GENERATORS"):
+                        "MILD HYBRID MOTOR/GENERATORS",
+                        "ALTERNATORS", "STARTERS", "GENERATORS",
+                        "BUYERS GUIDE ALTERNATORS",
+                        "ALTERNATORS BUYERS GUIDE",
+                        "BUYERS GUIDE STARTERS",
+                        "STARTERS BUYERS GUIDE",
+                        "BUYERS GUIDE GENERATORS",
+                        "GENERATORS BUYERS GUIDE"):
                 continue
 
             # Check for new product header
             m = YOUTECH_HEADER_RE.match(line)
             if m:
+                if "(Cont.)" in line:
+                    # Continuation header — keep current parsing state
+                    continue
+
+                # Flush pending data before starting a new product
                 flush_interchanges()
                 flush_product()
+                flush_bom_pending()
 
                 current_yt = m.group(1)
                 current_jn = m.group(2) or ""
                 current_section = ""
                 current_attrs = {}
-                bom_pending_name = ""
-                bom_pending_yt = ""
                 bom_in_header = False
+                notes_pending = False
 
                 # Track J&N numbers for this YouTech number
                 if current_yt not in jn_map:
@@ -260,25 +364,49 @@ def parse_document(doc, limit=None):
             if clean in SECTION_HEADERS:
                 if current_section == "INTERCHANGES":
                     flush_interchanges()
+                flush_bom_pending()
+                notes_pending = False
                 current_section = clean
                 bom_in_header = (clean == "BILL OF MATERIALS")
-                bom_pending_name = ""
-                bom_pending_yt = ""
                 continue
 
             if not current_yt:
                 continue
 
+            # Skip continuation headers like "YouTech #310002 /J&N #400-40020 (Cont.)"
+            if "(Cont.)" in line:
+                continue
+
+            # Product Notes can appear before or inside PRODUCT ATTRIBUTES
+            if line.startswith("Product Notes:") or line.startswith('Product Notes: "'):
+                notes_text = line.split(":", 1)[1].strip().strip('"')
+                current_attrs["product_notes"] = notes_text
+                notes_pending = True
+                continue
+
+            # Continuation of multi-line Product Notes (before a section header)
+            if notes_pending:
+                current_attrs["product_notes"] += " " + line
+                continue
+
             # --- PRODUCT ATTRIBUTES ---
             if current_section == "PRODUCT ATTRIBUTES":
-                if line.startswith("Product Notes:"):
-                    current_attrs["product_notes"] = line[14:].strip()
-                elif "pending_attr_key" in current_attrs:
-                    key = current_attrs.pop("pending_attr_key")
-                    current_attrs[key] = line
+                if "_pending_attr_key" in current_attrs:
+                    key = current_attrs.pop("_pending_attr_key")
+                    mapped = ATTR_KEY_MAP.get(key, key)
+                    current_attrs[mapped] = line
                 else:
                     normalized = line.lower().replace(" ", "_")
-                    current_attrs["pending_attr_key"] = normalized
+                    if normalized in ATTR_KEY_MAP:
+                        current_attrs["_pending_attr_key"] = normalized
+                    elif re.match(r"^\d+$", line) and current_attrs:
+                        last_keys = [k for k in current_attrs if k != "_pending_attr_key"]
+                        if last_keys:
+                            last = last_keys[-1]
+                            if not current_attrs[last]:
+                                current_attrs[last] = line
+                    else:
+                        current_attrs["_pending_attr_key"] = normalized
 
             # --- INTERCHANGES ---
             elif current_section == "INTERCHANGES":
@@ -297,36 +425,29 @@ def parse_document(doc, limit=None):
                 if re.match(r'^Pg\.\s*\d+', line):
                     continue
 
-                # A line starting with a letter is a part name
+                # If we have name + yt already, accumulate J&N lines
+                # (J&N values can wrap; may include letter suffixes like 301-12015R)
+                if bom_pending_yt and re.match(r'^\d[\dA-Za-z\-, ]*$', line):
+                    bom_pending_jn += " " + line if bom_pending_jn else line
+                    continue
+
+                # When we have a pending part name awaiting its part number,
+                # check for part-number patterns FIRST (before the part-name
+                # check, which would incorrectly consume "TE-10000" etc.)
+                if bom_pending_name and not bom_pending_yt:
+                    # YouTech part number (e.g. 1A-6103, TE-10000, 2D-30424)
+                    if re.match(r'^[A-Z0-9]{1,4}-', line):
+                        bom_pending_yt = line
+                        continue
+                    # Bearing/part number starting with digits (e.g. 6201-2RS)
+                    if re.match(r'^\d{3,}', line):
+                        bom_pending_yt = line
+                        continue
+
+                # A new part name (starts with a letter, not a YouTech header)
                 if re.match(r'^[A-Za-z]', line) and not line.startswith("YouTech"):
-                    # Flush any pending BOM item first
-                    if bom_pending_name and bom_pending_yt:
-                        bom_map[current_yt].append(
-                            (bom_pending_name, bom_pending_yt, "")
-                        )
+                    flush_bom_pending()
                     bom_pending_name = line
-                    bom_pending_yt = ""
-
-                # A line that looks like a YouTech part number (e.g. 2D-30424, 62-7600, TE-20000)
-                elif bom_pending_name and re.match(r'^[A-Z0-9]{2}-', line):
-                    bom_pending_yt = line
-
-                # A line that looks like a J&N number (e.g. 141-21000-10)
-                elif bom_pending_yt and re.match(r'^\d{3}-', line):
-                    # This is the J&N for the current BOM item
-                    jn_val = line.rstrip(",")
-                    bom_map[current_yt].append(
-                        (bom_pending_name, bom_pending_yt, jn_val)
-                    )
-                    bom_pending_name = ""
-                    bom_pending_yt = ""
-
-                # Continuation J&N lines (comma-separated overflow)
-                elif re.match(r'^\d{3}-', line) and bom_map[current_yt]:
-                    # Append to last BOM item's J&N field
-                    last = bom_map[current_yt][-1]
-                    merged_jn = (last[2] + ", " + line.rstrip(",")).strip(", ")
-                    bom_map[current_yt][-1] = (last[0], last[1], merged_jn)
 
             # --- POSSIBLE SUBSTITUTIONS ---
             elif current_section == "POSSIBLE SUBSTITUTIONS":
@@ -340,29 +461,39 @@ def parse_document(doc, limit=None):
                         sub_map[current_yt].append(entry)
 
             elif current_section in ("APPLICATION", "APPLICATIONS"):
-                pass  # not captured for this import
+                if re.match(r"^Pg\.\s*\d+", line):
+                    continue
+                if current_yt not in app_map:
+                    app_map[current_yt] = []
+                app_map[current_yt].append(line)
 
         # Flush last BOM pending item if we hit end of page mid-item
-        if bom_pending_name and bom_pending_yt and current_yt:
-            bom_map[current_yt].append((bom_pending_name, bom_pending_yt, ""))
-            bom_pending_name = ""
-            bom_pending_yt = ""
+        flush_bom_pending()
 
-        if (page_idx + 1) % 20 == 0 or page_idx == total_pages - 1:
+        # Free the page object to release memory (critical for large PDFs)
+        del page
+
+        if (page_idx + 1) % 100 == 0 or page_idx == total_pages - 1:
+            img_ct = images_saved if image_db_conn else len(image_map)
             print(
-                f"  Page {page_idx + 1:>3}/{total_pages}  |  "
-                f"units: {len(product_map):>4}  |  "
-                f"xrefs: {len(interchange_map):>6}  |  "
-                f"images: {len(image_map):>4}"
+                f"  Page {page_idx + 1:>5}/{total_pages}  |  "
+                f"units: {len(product_map):>5}  |  "
+                f"xrefs: {len(interchange_map):>7}  |  "
+                f"images: {img_ct:>5}",
+                flush=True,
             )
+            if image_db_conn and (page_idx + 1) % 500 == 0:
+                image_db_conn.commit()
 
     # Final flush
     flush_interchanges()
     flush_product()
 
-    # Build products list with combined J&N numbers
+    # Build products list with combined J&N numbers and all attributes
     products = []
     for yt, attrs in product_map.items():
+        # Remove internal parsing keys
+        attrs.pop("_pending_attr_key", None)
         jns = jn_map.get(yt, [])
         jn_combined = " | ".join(jns) if jns else ""
         products.append({
@@ -372,8 +503,38 @@ def parse_document(doc, limit=None):
             "oe_manufacturer": attrs.get("oe_manufacturer", ""),
             "family": attrs.get("family", ""),
             "voltage": attrs.get("voltage", ""),
-            "rotation": attrs.get("starter_rotation", ""),
+            "rotation": attrs.get("rotation", ""),
             "product_notes": attrs.get("product_notes", ""),
+            "amperage_rating": attrs.get("amperage_rating", ""),
+            "fan_type": attrs.get("fan_type", ""),
+            "regulator_type": attrs.get("regulator_type", ""),
+            "plug_type": attrs.get("plug_type", ""),
+            "plug_clocking": attrs.get("plug_clocking", ""),
+            "belt_type": attrs.get("belt_type", ""),
+            "pulley_grooves": attrs.get("pulley_grooves", ""),
+            "pulley_type": attrs.get("pulley_type", ""),
+            "pulley_od": attrs.get("pulley_od", ""),
+            "ground_type": attrs.get("ground_type", ""),
+            "decoupled": attrs.get("decoupled", ""),
+            "stator_type": attrs.get("stator_type", ""),
+            "series": attrs.get("series", ""),
+            "mounting_type": attrs.get("mounting_type", ""),
+            # Generator-specific
+            "circuit_type": attrs.get("circuit_type", ""),
+            # Starter-specific
+            "design": attrs.get("design", ""),
+            "power_rating": attrs.get("power_rating", ""),
+            "tooth_quantity": attrs.get("tooth_quantity", ""),
+            "case_grounding": attrs.get("case_grounding", ""),
+            "nose_cone_type": attrs.get("nose_cone_type", ""),
+            "over_crank_protection": attrs.get("over_crank_protection", ""),
+            "solenoid_attached": attrs.get("solenoid_attached", ""),
+            "reclockable_flange": attrs.get("reclockable_flange", ""),
+            "spline_quantity": attrs.get("spline_quantity", ""),
+            "drive_housing_position": attrs.get("drive_housing_position", ""),
+            "bolt_holes": attrs.get("bolt_holes", ""),
+            "with_hardware": attrs.get("with_hardware", ""),
+            "with_mounting_shims": attrs.get("with_mounting_shims", ""),
         })
 
     interchanges = list(interchange_map.values())  # (mfr, num, yt)
@@ -389,7 +550,14 @@ def parse_document(doc, limit=None):
         for sub_yt, sub_jn in subs:
             substitutes.append((yt, sub_yt, sub_jn))
 
-    return products, interchanges, bom_items, substitutes, image_map
+    # Combine raw application lines per unit into a single text blob
+    applications = []
+    for yt, lines in app_map.items():
+        app_text = "\n".join(lines)
+        if app_text.strip():
+            applications.append((yt, app_text))
+
+    return products, interchanges, bom_items, substitutes, image_map, applications
 
 
 def create_staging_db(db_path):
@@ -406,7 +574,35 @@ def create_staging_db(db_path):
             family TEXT NOT NULL DEFAULT '',
             voltage TEXT NOT NULL DEFAULT '',
             rotation TEXT NOT NULL DEFAULT '',
-            product_notes TEXT NOT NULL DEFAULT ''
+            product_notes TEXT NOT NULL DEFAULT '',
+            amperage_rating TEXT NOT NULL DEFAULT '',
+            fan_type TEXT NOT NULL DEFAULT '',
+            regulator_type TEXT NOT NULL DEFAULT '',
+            plug_type TEXT NOT NULL DEFAULT '',
+            plug_clocking TEXT NOT NULL DEFAULT '',
+            belt_type TEXT NOT NULL DEFAULT '',
+            pulley_grooves TEXT NOT NULL DEFAULT '',
+            pulley_type TEXT NOT NULL DEFAULT '',
+            pulley_od TEXT NOT NULL DEFAULT '',
+            ground_type TEXT NOT NULL DEFAULT '',
+            decoupled TEXT NOT NULL DEFAULT '',
+            stator_type TEXT NOT NULL DEFAULT '',
+            series TEXT NOT NULL DEFAULT '',
+            mounting_type TEXT NOT NULL DEFAULT '',
+            circuit_type TEXT NOT NULL DEFAULT '',
+            design TEXT NOT NULL DEFAULT '',
+            power_rating TEXT NOT NULL DEFAULT '',
+            tooth_quantity TEXT NOT NULL DEFAULT '',
+            case_grounding TEXT NOT NULL DEFAULT '',
+            nose_cone_type TEXT NOT NULL DEFAULT '',
+            over_crank_protection TEXT NOT NULL DEFAULT '',
+            solenoid_attached TEXT NOT NULL DEFAULT '',
+            reclockable_flange TEXT NOT NULL DEFAULT '',
+            spline_quantity TEXT NOT NULL DEFAULT '',
+            drive_housing_position TEXT NOT NULL DEFAULT '',
+            bolt_holes TEXT NOT NULL DEFAULT '',
+            with_hardware TEXT NOT NULL DEFAULT '',
+            with_mounting_shims TEXT NOT NULL DEFAULT ''
         )
     """)
     conn.execute("""
@@ -443,12 +639,21 @@ def create_staging_db(db_path):
         )
     """)
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS buyers_guide_applications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            youtech_number TEXT NOT NULL,
+            application_text TEXT NOT NULL DEFAULT ''
+        )
+    """)
+
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bg_yt ON buyers_guide_products(youtech_number)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bg_their ON buyers_guide_interchanges(their_number)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bg_our ON buyers_guide_interchanges(our_number)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bg_bom_yt ON buyers_guide_bom(youtech_number)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bg_sub_yt ON buyers_guide_substitutes(youtech_number)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bg_img_yt ON buyers_guide_images(youtech_number)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_bg_app_yt ON buyers_guide_applications(youtech_number)")
     conn.commit()
     return conn
 
@@ -475,32 +680,76 @@ def main():
     if os.path.exists(db_path):
         os.remove(db_path)
 
-    print(f"PDF:    {args.pdf_path}")
-    print(f"Output: {db_path}")
-    print()
+    print(f"PDF:    {args.pdf_path}", flush=True)
+    print(f"Output: {db_path}", flush=True)
+    print(flush=True)
 
-    doc = fitz.open(args.pdf_path)
-    start_time = time.time()
-
-    products, interchanges, bom_items, substitutes, image_map = parse_document(
-        doc, limit=args.limit
-    )
-    doc.close()
-
+    # Create staging DB first so images can be written incrementally
     conn = create_staging_db(db_path)
 
+    doc = fitz.open(args.pdf_path)
+    total_pages = doc.page_count
+    if args.limit:
+        total_pages = min(total_pages, args.limit)
+    print(f"Total pages: {total_pages:,}", flush=True)
+
+    start_time = time.time()
+
+    # Process in chunks to manage memory with very large PDFs
+    CHUNK = 500
+    products_all, interchanges_all = [], []
+    bom_all, subs_all, apps_all = [], [], []
+    image_map_all = {}
+
+    for chunk_start in range(0, total_pages, CHUNK):
+        chunk_end = min(chunk_start + CHUNK, total_pages)
+        chunk_limit = chunk_end  # parse_document uses 0-based page index up to limit
+        print(f"\n--- Processing pages {chunk_start + 1}-{chunk_end} ---", flush=True)
+
+        if chunk_start > 0:
+            doc.close()
+            import gc; gc.collect()
+            doc = fitz.open(args.pdf_path)
+
+        result = parse_document(
+            doc, limit=chunk_end, image_db_conn=conn,
+            start_page=chunk_start,
+        )
+        products, interchanges, bom_items, substitutes, image_map, applications = result
+        products_all.extend(products)
+        interchanges_all.extend(interchanges)
+        bom_all.extend(bom_items)
+        subs_all.extend(substitutes)
+        apps_all.extend(applications)
+        image_map_all.update(image_map)
+
+    doc.close()
+    import gc; gc.collect()
+
+    # Reassign for the DB write section below
+    products = products_all
+    interchanges = interchanges_all
+    bom_items = bom_all
+    substitutes = subs_all
+    image_map = image_map_all
+    applications = apps_all
+
+    _PRODUCT_COLS = (
+        "youtech_number", "jn_number", "manufacture", "oe_manufacturer",
+        "family", "voltage", "rotation", "product_notes", "amperage_rating",
+        "fan_type", "regulator_type", "plug_type", "plug_clocking",
+        "belt_type", "pulley_grooves", "pulley_type", "pulley_od",
+        "ground_type", "decoupled", "stator_type", "series", "mounting_type",
+        "circuit_type", "design", "power_rating", "tooth_quantity", "case_grounding",
+        "nose_cone_type", "over_crank_protection", "solenoid_attached",
+        "reclockable_flange", "spline_quantity", "drive_housing_position",
+        "bolt_holes", "with_hardware", "with_mounting_shims",
+    )
+    _placeholders = ", ".join("?" * len(_PRODUCT_COLS))
     conn.executemany(
-        "INSERT INTO buyers_guide_products "
-        "(youtech_number, jn_number, manufacture, oe_manufacturer, family, voltage, rotation, product_notes) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-            (
-                p["youtech_number"], p["jn_number"], p["manufacture"],
-                p["oe_manufacturer"], p["family"], p["voltage"],
-                p["rotation"], p["product_notes"],
-            )
-            for p in products
-        ],
+        f"INSERT INTO buyers_guide_products ({', '.join(_PRODUCT_COLS)}) "
+        f"VALUES ({_placeholders})",
+        [tuple(p[c] for c in _PRODUCT_COLS) for p in products],
     )
 
     if interchanges:
@@ -524,11 +773,19 @@ def main():
             substitutes,
         )
 
-    for yt, (img_bytes, img_ext) in image_map.items():
-        conn.execute(
-            "INSERT OR REPLACE INTO buyers_guide_images (youtech_number, image_data, image_ext) "
-            "VALUES (?, ?, ?)",
-            (yt, img_bytes, img_ext),
+    if image_map:
+        for yt, (img_bytes, img_ext) in image_map.items():
+            conn.execute(
+                "INSERT OR REPLACE INTO buyers_guide_images (youtech_number, image_data, image_ext) "
+                "VALUES (?, ?, ?)",
+                (yt, img_bytes, img_ext),
+            )
+
+    if applications:
+        conn.executemany(
+            "INSERT INTO buyers_guide_applications (youtech_number, application_text) "
+            "VALUES (?, ?)",
+            applications,
         )
 
     conn.commit()
@@ -540,20 +797,22 @@ def main():
     bom_count = conn.execute("SELECT COUNT(*) FROM buyers_guide_bom").fetchone()[0]
     sub_count = conn.execute("SELECT COUNT(*) FROM buyers_guide_substitutes").fetchone()[0]
     img_count = conn.execute("SELECT COUNT(*) FROM buyers_guide_images").fetchone()[0]
+    app_count = conn.execute("SELECT COUNT(*) FROM buyers_guide_applications").fetchone()[0]
     conn.close()
 
-    print()
-    print("=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
-    print(f"  Products (unique YT#):     {prod_count:>10,}")
-    print(f"  Interchange records:       {xref_count:>10,}")
-    print(f"  BOM line items:            {bom_count:>10,}")
-    print(f"  Substitute pairs:          {sub_count:>10,}")
-    print(f"  Unit images extracted:     {img_count:>10,}")
-    print(f"  Time elapsed:              {elapsed:>10.1f}s")
-    print()
-    print(f"Staging DB saved to: {db_path}")
+    print(flush=True)
+    print("=" * 60, flush=True)
+    print("SUMMARY", flush=True)
+    print("=" * 60, flush=True)
+    print(f"  Products (unique YT#):     {prod_count:>10,}", flush=True)
+    print(f"  Interchange records:       {xref_count:>10,}", flush=True)
+    print(f"  BOM line items:            {bom_count:>10,}", flush=True)
+    print(f"  Substitute pairs:          {sub_count:>10,}", flush=True)
+    print(f"  Unit images extracted:     {img_count:>10,}", flush=True)
+    print(f"  Application entries:       {app_count:>10,}", flush=True)
+    print(f"  Time elapsed:              {elapsed:>10.1f}s", flush=True)
+    print(flush=True)
+    print(f"Staging DB saved to: {db_path}", flush=True)
 
 
 if __name__ == "__main__":

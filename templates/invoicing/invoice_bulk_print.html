@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoices — {{ company_settings.company_name }}</title>
   <style>
-    @page { size: {{ company_settings.invoice_paper_size|default:"letter" }}; margin: 0.5in; }
+    @page {
+      size: {{ company_settings.invoice_paper_size|default:"letter" }};
+      margin: 0.4in 0.5in 0.6in 0.5in;
+    }
     * { box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -25,35 +28,46 @@
 
     .invoice-sheet {
       width: 7.5in;
-      min-height: 10in;
       margin: 0 auto;
-      padding: 0.5in;
+      padding: 0.25in 0.5in;
       position: relative;
     }
 
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
-    .company-info { flex: 1; }
-    .company-name { font-size: 1.5rem; font-weight: 700; color: #1a2744; margin-bottom: 0.25rem; }
-    .company-detail { font-size: 0.9rem; color: #666; }
+    .header { margin-bottom: 0.75rem; }
+    .company-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+    .company-header img { max-height: 50px; flex-shrink: 0; }
+    .company-name { font-size: 1.4rem; font-weight: 700; color: #1a2744; margin-bottom: 0.1rem; }
+    .company-detail { font-size: 0.85rem; color: #666; }
+    .info-row { display: flex; justify-content: space-between; align-items: flex-start; }
     .invoice-meta { text-align: right; }
-    .invoice-title { font-size: 1.75rem; font-weight: 700; color: #1a2744; margin-bottom: 0.5rem; }
+    .invoice-title { font-size: 1.75rem; font-weight: 700; color: #1a2744; margin-bottom: 0.4rem; }
     .invoice-meta p { margin: 0.2rem 0; font-size: 0.95rem; }
 
-    .bill-to { margin-bottom: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; }
-    .bill-to-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem; color: #1a2744; }
+    .bill-to { padding: 0.6rem 0.75rem; background: #f8f9fa; border-radius: 4px; }
+    .bill-to-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem; color: #1a2744; }
     .bill-to-content { white-space: pre-line; }
 
-    table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
-    th, td { border: 1px solid #dee2e6; padding: 0.5rem 0.75rem; text-align: left; font-size: 0.9rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid #dee2e6; padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; }
     th { background: #1a2744; color: #fff; font-weight: 600; }
     .text-end { text-align: right; }
 
-    .totals-section { display: flex; justify-content: flex-end; margin-top: 1rem; }
+    .totals-section {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 1rem;
+      page-break-inside: avoid;
+    }
     .totals-box { width: 260px; border: 1px solid #dee2e6; padding: 1rem; background: #f8f9fa; }
     .totals-box p { margin: 0.35rem 0; display: flex; justify-content: space-between; }
     .totals-box .total-line { font-weight: 700; font-size: 1.1rem; border-top: 2px solid #1a2744; padding-top: 0.5rem; margin-top: 0.5rem; }
 
-    .notes-section { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }
+    .notes-section { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid #dee2e6; }
     .notes-section strong { display: block; margin-bottom: 0.25rem; }
 
     .paid-stamp {
@@ -73,7 +87,6 @@
       pointer-events: none;
     }
 
-    /* Screen: show dividers between invoices */
     @media screen {
       .invoice-sheet { border-bottom: 4px dashed #ccc; margin-bottom: 2rem; }
     }
@@ -97,9 +110,9 @@
   {% endif %}
 
   <div class="header">
-    <div class="company-info" style="display:flex; align-items:flex-start; gap:0.75rem;">
+    <div class="company-header">
       {% if company_settings.logo %}
-      <img src="{{ company_settings.logo.url }}" alt="{{ company_settings.company_name }}" style="max-height:60px; flex-shrink:0;">
+      <img src="{{ company_settings.logo.url }}" alt="{{ company_settings.company_name }}">
       {% endif %}
       <div>
         <div class="company-name">{{ company_settings.company_name }}</div>
@@ -107,7 +120,7 @@
         <div class="company-detail" style="white-space: pre-line;">{{ company_settings.address }}</div>
         {% endif %}
         {% if company_settings.phone or company_settings.email %}
-        <div class="company-detail" style="margin-top:0.25rem;">
+        <div class="company-detail">
           {% if company_settings.phone %}{{ company_settings.phone }}{% endif %}
           {% if company_settings.phone and company_settings.email %} · {% endif %}
           {% if company_settings.email %}{{ company_settings.email }}{% endif %}
@@ -115,39 +128,47 @@
         {% endif %}
       </div>
     </div>
-    <div class="invoice-meta">
-      <div class="invoice-title">INVOICE</div>
-      <p><strong>Invoice #:</strong> {{ invoice.invoice_number }}</p>
-      <p><strong>Date:</strong> {{ invoice.date|date:company_settings.invoice_date_format }}</p>
-      <p><strong>Due Date:</strong> {{ invoice.due_date|date:company_settings.invoice_date_format|default:"—" }}</p>
+    <div class="info-row">
+      <div class="bill-to">
+        <div class="bill-to-title">Bill To:</div>
+        <div class="bill-to-content">{{ invoice.get_bill_to_display|linebreaksbr }}</div>
+      </div>
+      <div class="invoice-meta">
+        <div class="invoice-title">INVOICE</div>
+        <p><strong>Invoice #:</strong> {{ invoice.invoice_number }}</p>
+        <p><strong>Date:</strong> {{ invoice.date|date:company_settings.invoice_date_format }}</p>
+        <p><strong>Due Date:</strong> {{ invoice.due_date|date:company_settings.invoice_date_format|default:"—" }}</p>
+      </div>
     </div>
-  </div>
-
-  <div class="bill-to">
-    <div class="bill-to-title">Bill To:</div>
-    <div class="bill-to-content">{{ invoice.get_bill_to_display|linebreaksbr }}</div>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th class="text-end" style="width:55px">Qty</th>
-        <th style="width:130px">Unit #</th>
-        <th style="width:130px">Part #</th>
+        <th class="text-end" style="width:50px">Qty</th>
+        <th style="width:160px">Unit # | Part #</th>
         <th>Description</th>
-        <th class="text-end" style="width:85px">Rate</th>
-        <th class="text-end" style="width:95px">Total</th>
+        <th class="text-end" style="width:90px">Rate</th>
+        <th class="text-end" style="width:100px">Total</th>
       </tr>
     </thead>
     <tbody>
       {% for item in invoice.items.all %}
       <tr>
         <td class="text-end">{{ item.quantity }}</td>
-        <td>{% if item.unit %}{{ item.unit.unit_number }}{% else %}—{% endif %}</td>
-        <td>{% if item.part %}{{ item.part.part_number }}{% else %}—{% endif %}</td>
+        <td>{% if item.unit %}{{ item.unit.unit_number }}{% elif item.part %}{{ item.part.part_number }}{% else %}—{% endif %}</td>
         <td>{{ item.description|default:"—" }}</td>
         <td class="text-end">{{ company_settings.invoice_currency_symbol }}{{ item.unit_price|floatformat:2 }}</td>
         <td class="text-end">{{ company_settings.invoice_currency_symbol }}{{ item.line_total|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+      {% for _ in invoice.empty_rows %}
+      <tr>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
       </tr>
       {% endfor %}
     </tbody>

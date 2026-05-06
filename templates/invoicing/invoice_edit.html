@@ -301,6 +301,36 @@
       if (delCheck) delCheck.checked = false;
       initTomSelects(hidden);
       updateTotals();
+    } else {
+      const totalFormsInput = document.querySelector('[name="items-TOTAL_FORMS"]');
+      const idx = parseInt(totalFormsInput.value);
+      const tbody = document.getElementById('item-rows');
+      const newRow = document.createElement('tr');
+      newRow.className = 'item-row';
+      newRow.setAttribute('data-index', idx);
+      newRow.innerHTML = `
+        <input type="hidden" name="items-${idx}-id" id="id_items-${idx}-id">
+        <td class="text-end"><input type="number" name="items-${idx}-quantity" id="id_items-${idx}-quantity" value="1" class="form-control form-control-sm text-end" min="1" style="width:60px"></td>
+        <td><select name="items-${idx}-unit" id="id_items-${idx}-unit" class="form-select form-select-sm item-unit"><option value="">---------</option></select></td>
+        <td><select name="items-${idx}-part" id="id_items-${idx}-part" class="form-select form-select-sm item-part"><option value="">---------</option></select></td>
+        <td><input type="text" name="items-${idx}-description" id="id_items-${idx}-description" class="form-control form-control-sm" maxlength="500"></td>
+        <td class="text-end"><input type="number" name="items-${idx}-unit_price" id="id_items-${idx}-unit_price" class="form-control form-control-sm text-end" step="0.01" value="0"></td>
+        <td class="text-end"><input type="number" name="items-${idx}-discount_pct" id="id_items-${idx}-discount_pct" class="form-control form-control-sm text-end" step="0.01" value="0"></td>
+        <td class="text-end line-total">—</td>
+        <td>
+          <div class="d-none"><input type="checkbox" name="items-${idx}-DELETE" id="id_items-${idx}-DELETE"></div>
+          <button type="button" class="btn btn-sm btn-outline-danger invoice-delete-btn">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(newRow);
+      totalFormsInput.value = idx + 1;
+      initTomSelects(newRow);
+      newRow.querySelector('.invoice-delete-btn')?.addEventListener('click', function() {
+        const row = this.closest('tr');
+        const delCheck = row?.querySelector('input[name*="-DELETE"]');
+        if (delCheck) { delCheck.checked = true; row.classList.add('d-none'); updateTotals(); }
+      });
+      updateTotals();
     }
   });
 
@@ -384,6 +414,12 @@
 
   initTomSelects(document);
   updateTotals();
+
+  document.addEventListener('focusin', function(e) {
+    if (e.target.matches('.item-price, .item-discount, .item-qty, input[id*="unit_price"], input[id*="discount_pct"], input[id*="quantity"]')) {
+      e.target.select();
+    }
+  });
 })();
 </script>
 {% endblock %}

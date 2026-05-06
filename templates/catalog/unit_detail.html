@@ -187,32 +187,46 @@
               <th>OEM</th>
               <th>Voltage</th>
               <th>Notes</th>
-              <th class="text-center">Details</th>
+              <th class="text-end pe-3" style="width:1%"></th>
             </tr>
           </thead>
           <tbody>
             {% for s in substitute_units %}
-            <tr>
-              {% if s.unit %}
+            {% if s.unit %}
+            <tr style="cursor:pointer" onclick="window.location='{% url 'catalog:unit_detail' s.unit.pk %}'">
               <td class="ps-3">{{ s.unit.unit_number }}</td>
               <td>{{ s.unit.unit_type|default:"—" }}</td>
               <td>{{ s.unit.oem|default:"—" }}</td>
               <td>{{ s.unit.voltage|default:"—" }}</td>
               <td>{{ s.ref.notes|default:"—" }}</td>
-              <td class="text-center">
-                <a href="{% url 'catalog:unit_detail' s.unit.pk %}" class="btn btn-sm btn-outline-primary">
-                  <i class="bi bi-eye"></i>
-                </a>
+              <td class="text-end pe-3" onclick="event.stopPropagation()">
+                <form method="post" action="{% url 'catalog:substitute_delete' unit.pk s.ref.pk %}"
+                      onsubmit="return confirm('Are you sure you want to remove substitute {{ s.unit.unit_number }}?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Remove substitute">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </form>
               </td>
-              {% else %}
+            </tr>
+            {% else %}
+            <tr>
               <td class="ps-3">{{ s.ref.substitute_number }}</td>
               <td>—</td>
               <td>—</td>
               <td>—</td>
               <td>{{ s.ref.notes|default:"—" }}</td>
-              <td class="text-center text-muted"><small>manual entry</small></td>
-              {% endif %}
+              <td class="text-end pe-3">
+                <form method="post" action="{% url 'catalog:substitute_delete' unit.pk s.ref.pk %}"
+                      onsubmit="return confirm('Are you sure you want to remove substitute {{ s.ref.substitute_number }}?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Remove substitute">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </form>
+              </td>
             </tr>
+            {% endif %}
             {% endfor %}
           </tbody>
         </table>
@@ -321,33 +335,47 @@
       </div>
     </div>
 
-    {# Unit Image #}
+    {# Images (gallery) #}
     <div class="card mb-3">
-      <div class="card-header fw-semibold">Unit Image</div>
+      <div class="card-header fw-semibold">Images</div>
       <div class="card-body text-center">
-        {% if unit.unit_image %}
-          <img src="{{ unit.unit_image.url }}" alt="Unit image"
-               class="img-fluid rounded" style="max-height: 250px;">
-        {% else %}
-          <div class="text-muted py-4">
-            <i class="bi bi-image fs-1 d-block mb-2"></i>
-            No image available
+        {% if unit.unit_image or unit.plug_image or unit.images.exists %}
+          <div class="row g-2 justify-content-center">
+            {% if unit.unit_image %}
+            <div class="col-auto">
+              <a href="{% url 'catalog:image_viewer' %}?src={{ unit.unit_image.url|urlencode }}&title={{ unit.unit_number|urlencode }}+—+Unit+Image"
+                 target="_blank" title="Click to view full size">
+                <img src="{{ unit.unit_image.url }}" alt="Unit image"
+                     class="img-fluid rounded border lightbox-thumb"
+                     style="max-height: 200px;">
+              </a>
+            </div>
+            {% endif %}
+            {% if unit.plug_image %}
+            <div class="col-auto">
+              <a href="{% url 'catalog:image_viewer' %}?src={{ unit.plug_image.url|urlencode }}&title={{ unit.unit_number|urlencode }}+—+Plug+Image"
+                 target="_blank" title="Click to view full size">
+                <img src="{{ unit.plug_image.url }}" alt="Plug image"
+                     class="img-fluid rounded border lightbox-thumb"
+                     style="max-height: 200px;">
+              </a>
+            </div>
+            {% endif %}
+            {% for img in unit.images.all %}
+            <div class="col-auto">
+              <a href="{% url 'catalog:image_viewer' %}?src={{ img.image.url|urlencode }}&title={{ unit.unit_number|urlencode }}+—+{{ img.caption|default:'Image'|urlencode }}"
+                 target="_blank" title="Click to view full size">
+                <img src="{{ img.image.url }}" alt="{{ img.caption|default:'Unit image' }}"
+                     class="img-fluid rounded border lightbox-thumb"
+                     style="max-height: 200px;">
+              </a>
+            </div>
+            {% endfor %}
           </div>
-        {% endif %}
-      </div>
-    </div>
-
-    {# Plug Image #}
-    <div class="card mb-3">
-      <div class="card-header fw-semibold">Plug Image</div>
-      <div class="card-body text-center">
-        {% if unit.plug_image %}
-          <img src="{{ unit.plug_image.url }}" alt="Plug image"
-               class="img-fluid rounded" style="max-height: 250px;">
         {% else %}
           <div class="text-muted py-4">
             <i class="bi bi-image fs-1 d-block mb-2"></i>
-            No plug image available
+            No images available
           </div>
         {% endif %}
       </div>

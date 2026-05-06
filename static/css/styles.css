@@ -411,8 +411,8 @@ main::-webkit-scrollbar-thumb:hover {
   top: calc(var(--me-breadcrumb-h, 0px) + var(--me-toolbar-h, 0px));
   z-index: 8;
   background-color: var(--me-body-bg);
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--me-footer-border);
+  padding: 0.4rem 0 0 0;
+  border-bottom: none;
   font-size: 0.875rem;
 }
 
@@ -758,4 +758,13 @@ thead.table-dark th {
   color: inherit;
   transform: translateY(-2px);
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Lightbox thumbnails */
+.lightbox-thumb {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.lightbox-thumb:hover {
+  opacity: 0.85;
+  transform: scale(1.03);
 }

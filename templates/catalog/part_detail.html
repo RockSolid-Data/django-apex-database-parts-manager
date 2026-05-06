@@ -35,7 +35,7 @@
 
     {# Basic Information ===== #}
     <div class="card mb-3">
-      <div class="card-header fw-semibold">Basic Information</div>
+      <div class="card-header fw-semibold">Part Information</div>
       <div class="card-body p-0">
         <table class="table table-sm table-striped table-hover mb-0">
           <tbody>
@@ -58,6 +58,23 @@
         </table>
       </div>
     </div>
+
+    {# Description & Footnotes ===== #}
+    {% if part.description or part.foot_notes %}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Description &amp; Notes</div>
+      <div class="card-body">
+        {% if part.description %}
+        <h6 class="text-muted small">Description</h6>
+        <p>{{ part.description|linebreaksbr }}</p>
+        {% endif %}
+        {% if part.foot_notes %}
+        <h6 class="text-muted small">Footnotes</h6>
+        <p class="mb-0">{{ part.foot_notes|linebreaksbr }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
 
     {# Stock & Inventory (4.5) ===== #}
     <div class="card mb-3">
@@ -293,23 +310,6 @@
 
     {# Category specs are now merged into Basic Information above #}
 
-    {# Description & Footnotes ===== #}
-    {% if part.description or part.foot_notes %}
-    <div class="card mb-3">
-      <div class="card-header fw-semibold">Description &amp; Notes</div>
-      <div class="card-body">
-        {% if part.description %}
-        <h6 class="text-muted small">Description</h6>
-        <p>{{ part.description|linebreaksbr }}</p>
-        {% endif %}
-        {% if part.foot_notes %}
-        <h6 class="text-muted small">Footnotes</h6>
-        <p class="mb-0">{{ part.foot_notes|linebreaksbr }}</p>
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
-
   </div>
 
   {# ===== RIGHT COLUMN ===== #}
@@ -323,14 +323,22 @@
           <div class="row g-2 justify-content-center">
             {% for img in part.images.all %}
             <div class="col-auto">
-              <img src="{{ img.image.url }}" alt="Part image"
-                   class="img-fluid rounded border" style="max-height: 200px;">
+              <a href="{% url 'catalog:image_viewer' %}?src={{ img.image.url|urlencode }}&title={{ part.part_number|urlencode }}+—+Image+{{ forloop.counter }}"
+                 target="_blank" title="Click to view full size">
+                <img src="{{ img.image.url }}" alt="Part image"
+                     class="img-fluid rounded border lightbox-thumb"
+                     style="max-height: 200px;">
+              </a>
             </div>
             {% endfor %}
           </div>
         {% elif part.image %}
-          <img src="{{ part.image.url }}" alt="Part image"
-               class="img-fluid rounded" style="max-height: 250px;">
+          <a href="{% url 'catalog:image_viewer' %}?src={{ part.image.url|urlencode }}&title={{ part.part_number|urlencode }}+—+Image"
+             target="_blank" title="Click to view full size">
+            <img src="{{ part.image.url }}" alt="Part image"
+                 class="img-fluid rounded lightbox-thumb"
+                 style="max-height: 250px;">
+          </a>
         {% else %}
           <div class="text-muted py-4">
             <i class="bi bi-image fs-1 d-block mb-2"></i>
@@ -342,10 +350,13 @@
 
     {# Linked Units ===== #}
     <div class="card mb-3">
-      <div class="card-header fw-semibold">Linked Units</div>
-      <div class="card-body">
-        {% if part.units.exists %}
-          {% for u in part.units.all %}
+      <div class="card-header fw-semibold">
+        Linked Units
+        {% if linked_unit_count %}<span class="badge bg-secondary ms-1">{{ linked_unit_count }}</span>{% endif %}
+      </div>
+      <div class="card-body" style="max-height: 480px; overflow-y: auto;">
+        {% if linked_units %}
+          {% for u in linked_units %}
           <a href="{% url 'catalog:unit_detail' u.pk %}" class="d-block">{{ u.unit_number }}</a>
           {% endfor %}
         {% elif part.unit %}

@@ -88,27 +88,39 @@ class InvoiceItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         from catalog.models import Part, Unit
 
+        part_pks = []
+        unit_pks = []
+
+        if self.instance and self.instance.pk:
+            if self.instance.part_id:
+                part_pks.append(self.instance.part_id)
+            if self.instance.unit_id:
+                unit_pks.append(self.instance.unit_id)
+
         if self.is_bound:
-            # POST: full queryset for validation (.get() lookup only, not iterated)
-            self.fields["part"].queryset = Part.objects.filter(is_active=True)
-            self.fields["unit"].queryset = Unit.objects.filter(is_active=True)
+            prefix = self.prefix or ""
+            part_val = self.data.get(f"{prefix}-part")
+            unit_val = self.data.get(f"{prefix}-unit")
+            if part_val:
+                try:
+                    part_pks.append(int(part_val))
+                except (ValueError, TypeError):
+                    pass
+            if unit_val:
+                try:
+                    unit_pks.append(int(unit_val))
+                except (ValueError, TypeError):
+                    pass
         else:
-            # GET: minimal queryset so the HTML only contains selected items
-            part_pks = []
-            unit_pks = []
-            if self.instance and self.instance.pk:
-                if self.instance.part_id:
-                    part_pks.append(self.instance.part_id)
-                if self.instance.unit_id:
-                    unit_pks.append(self.instance.unit_id)
             init_part = self.initial.get("part")
             if init_part:
                 part_pks.append(init_part.pk if hasattr(init_part, "pk") else init_part)
             init_unit = self.initial.get("unit")
             if init_unit:
                 unit_pks.append(init_unit.pk if hasattr(init_unit, "pk") else init_unit)
-            self.fields["part"].queryset = Part.objects.filter(pk__in=part_pks) if part_pks else Part.objects.none()
-            self.fields["unit"].queryset = Unit.objects.filter(pk__in=unit_pks) if unit_pks else Unit.objects.none()
+
+        self.fields["part"].queryset = Part.objects.filter(pk__in=part_pks) if part_pks else Part.objects.none()
+        self.fields["unit"].queryset = Unit.objects.filter(pk__in=unit_pks) if unit_pks else Unit.objects.none()
 
         self.fields["part"].required = False
         self.fields["part"].empty_label = "— Select part —"
@@ -156,6 +168,8 @@ InvoiceItemFormSet = inlineformset_factory(
     form=InvoiceItemForm,
     formset=InvoiceItemFormSet,
     extra=9,
+    max_num=1000,
+    absolute_max=1500,
     min_num=1,
     validate_min=True,
     can_delete=True,
@@ -185,7 +199,7 @@ class CompanySettingsForm(forms.ModelForm):
             "default_net_days": forms.NumberInput(attrs={"class": "form-control", "min": 0, "placeholder": "e.g. 15"}),
             "default_tax_rate": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0, "placeholder": "e.g. 0"}),
             "pricing_method": forms.Select(attrs={"class": "form-select"}),
-            "invoice_number_prefix": forms.TextInput(attrs={"class": "form-control", "placeholder": "INV-"}),
+            "invoice_number_prefix": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. INV-  (leave blank for no prefix)"}),
             "invoice_number_include_year": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "invoice_number_include_month": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "invoice_number_padding": forms.NumberInput(attrs={"class": "form-control", "min": 1, "max": 10, "placeholder": "4"}),
@@ -197,6 +211,7 @@ class CompanySettingsForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["invoice_number_prefix"].required = False
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-check-input")

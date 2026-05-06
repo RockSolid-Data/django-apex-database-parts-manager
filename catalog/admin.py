@@ -5,6 +5,7 @@ from .models import (
     Application,
     ApplicationSpecification,
     Unit,
+    UnitImage,
     ApplicationUnit,
     CrossReference,
     Substitute,
@@ -39,6 +40,11 @@ class ApplicationUnitInline(admin.TabularInline):
     fields = ["unit", "position", "notes"]
 
 
+class UnitImageInline(admin.TabularInline):
+    model = UnitImage
+    extra = 1
+
+
 class ApplicationUnitInlineForUnit(admin.TabularInline):
     """Manage linked applications from the Unit edit page (Applications)."""
 
@@ -62,7 +68,7 @@ class UnitAdmin(admin.ModelAdmin):
     list_display = ["unit_number", "yt_number", "oem", "unit_type", "voltage", "rpm", "is_active"]
     list_filter = ["is_active", "unit_type"]
     search_fields = ["unit_number", "yt_number", "oem"]
-    inlines = [ApplicationUnitInlineForUnit]
+    inlines = [UnitImageInline, ApplicationUnitInlineForUnit]
 
 
 @admin.register(ApplicationUnit)

@@ -12,61 +12,59 @@
 
 {% block content %}
 
-{# ===== Page header: BOM Details title + top-right action buttons ===== #}
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4 me-sticky-toolbar">
-  <h1 class="page-heading mb-0">
-    <i class="bi bi-diagram-3"></i> BOM Details
-  </h1>
-  <div class="d-flex flex-wrap gap-2">
-    <a href="#" class="btn btn-success" data-print-url="{% url 'catalog:bom_print' bom.pk %}?all=1">
-      <i class="bi bi-printer"></i> Print All
-    </a>
-    <a href="#" id="bom-print-selected" class="btn btn-info text-white" data-bom-print-url="{% url 'catalog:bom_print' bom.pk %}">
-      <i class="bi bi-printer"></i> Print Selected (<span id="bom-selected-count">0</span>)
-    </a>
-    <a href="{% url 'catalog:bom_edit' bom.pk %}" class="btn btn-outline-secondary">
-      <i class="bi bi-pencil"></i> Edit
-    </a>
-    <form method="post" action="{% url 'catalog:bom_delete' bom.pk %}" class="d-inline">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-outline-danger" data-confirm="Delete this BOM? This cannot be undone.">
-        <i class="bi bi-trash"></i> Delete
+{# ===== Sticky toolbar: title + info + actions (all one block) ===== #}
+<div class="me-sticky-toolbar">
+  {# Row 1: Title + action buttons #}
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1 class="page-heading mb-0">
+      <i class="bi bi-diagram-3"></i> BOM Details
+    </h1>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="#" class="btn btn-success" data-print-url="{% url 'catalog:bom_print' bom.pk %}?all=1">
+        <i class="bi bi-printer"></i> Print All
+      </a>
+      <a href="#" id="bom-print-selected" class="btn btn-info text-white" data-bom-print-url="{% url 'catalog:bom_print' bom.pk %}">
+        <i class="bi bi-printer"></i> Print Selected (<span id="bom-selected-count">0</span>)
+      </a>
+      <a href="{% url 'catalog:bom_edit' bom.pk %}" class="btn btn-outline-secondary">
+        <i class="bi bi-pencil"></i> Edit
+      </a>
+      <form method="post" action="{% url 'catalog:bom_delete' bom.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-danger" data-confirm="Delete this BOM? This cannot be undone.">
+          <i class="bi bi-trash"></i> Delete
+        </button>
+      </form>
+      <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back
       </button>
-    </form>
-    <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Back
-    </button>
+    </div>
   </div>
-</div>
 
-{# ===== BOM header info (name, created, description) ===== #}
-<div class="mb-4">
-  <h2 class="h4 mb-2">{{ bom.name }}</h2>
-  <p class="text-muted mb-2">Created: {{ bom.created_at|date:"F j, Y" }}</p>
-  {% if bom.description %}
-  <div class="mt-2">
-    <strong>Description</strong>
-    <p class="mb-0 mt-1">{{ bom.description|linebreaksbr }}</p>
+  {# Row 2: BOM info — compact horizontal layout #}
+  <div class="d-flex flex-wrap align-items-baseline gap-3 mt-2 small">
+    <span class="fw-semibold fs-5">{{ bom.name }}</span>
+    <span class="text-muted">Created: {{ bom.created_at|date:"M j, Y" }}</span>
+    {% if bom.description %}<span><strong>Desc:</strong> {{ bom.description }}</span>{% endif %}
+    {% if bom.unit %}
+    <span><strong>Unit:</strong> <a href="{% url 'catalog:unit_detail' bom.unit.pk %}">{{ bom.unit }}</a></span>
+    {% endif %}
+    {% if bom.application %}
+    <span><strong>App:</strong> <a href="{% url 'catalog:application_detail' bom.application.pk %}">{{ bom.application.name }}</a></span>
+    {% endif %}
   </div>
-  {% endif %}
-  {% if bom.unit %}
-  <p class="mb-1 mt-2"><strong>Unit:</strong> <a href="{% url 'catalog:unit_detail' bom.unit.pk %}">{{ bom.unit }}</a></p>
-  {% else %}
-  <p class="mb-1 mt-2"><strong>Unit:</strong> <span class="text-muted">— (none assigned)</span></p>
-  {% endif %}
-  {% if bom.application %}
-  <p class="mb-1"><strong>Application:</strong> <a href="{% url 'catalog:application_detail' bom.application.pk %}">{{ bom.application.name }}</a></p>
-  {% endif %}
-</div>
 
-{# ===== Parts in BOM table ===== #}
-<div class="card mb-4">
-  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-    <span>Parts in BOM ({{ bom.items.all|length }})</span>
+  {# Row 3: Parts count + Add Part button #}
+  <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+    <span class="fw-semibold">Parts in BOM ({{ bom.items.all|length }})</span>
     <a href="{% url 'catalog:bom_item_add' bom.pk %}" class="btn btn-sm btn-primary">
       <i class="bi bi-plus-lg"></i> Add Part
     </a>
   </div>
+</div>
+
+{# ===== Parts in BOM table ===== #}
+<div class="card mb-4">
   <div class="card-body p-0">
     {% if bom.items.all %}
     <div class="table-responsive">

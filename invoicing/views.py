@@ -266,13 +266,20 @@ def invoice_bulk_print(request):
     """Print multiple invoices in one print dialog. GET ?ids=1,2,3"""
     ids_param = request.GET.get("ids", "")
     ids = [int(i) for i in ids_param.split(",") if i.strip().isdigit()]
-    invoices = (
+    invoices = list(
         Invoice.objects
         .filter(pk__in=ids)
         .select_related("customer")
         .prefetch_related("items__part", "items__unit")
         .order_by("invoice_number")
     )
+    min_lines = 12
+    for inv in invoices:
+        item_count = inv.items.count()
+        if item_count <= min_lines:
+            inv.empty_rows = range(min_lines - item_count)
+        else:
+            inv.empty_rows = range(0)
     return render(request, "invoicing/invoice_bulk_print.html", {
         "invoices": invoices,
         "company_settings": CompanySettings.get(),
@@ -314,9 +321,16 @@ def invoice_print(request, pk):
         invoice.status = Invoice.Status.SENT
         invoice.save(update_fields=["status", "updated_at"])
     company_settings = CompanySettings.get()
+    min_lines = 12
+    item_count = invoice.items.count()
+    if item_count <= min_lines:
+        empty_rows = range(min_lines - item_count)
+    else:
+        empty_rows = range(0)
     return render(request, "invoicing/invoice_print.html", {
         "invoice": invoice,
         "company_settings": company_settings,
+        "empty_rows": empty_rows,
     })
 
 
@@ -599,8 +613,10 @@ def api_parts_search(request):
             Q(part_number__icontains=q)
             | Q(part_name__icontains=q)
             | Q(manufacturer_number__icontains=q)
+            | Q(yt_number__icontains=q)
             | Q(j_and_n__icontains=q)
             | Q(oem_number__icontains=q)
+            | Q(item_no__icontains=q)
             | Q(category__icontains=q)
             | Q(description__icontains=q)
         )
@@ -636,24 +652,32 @@ def api_units_search(request):
             Q(unit_number__icontains=q)
             | Q(yt_number__icontains=q)
             | Q(oem__icontains=q)
+            | Q(j_and_n_number__icontains=q)
+            | Q(model_cat_number__icontains=q)
             | Q(unit_type__name__icontains=q)
             | Q(unit_type_category__icontains=q)
             | Q(manufacturer__icontains=q)
+            | Q(family__icontains=q)
             | Q(voltage__icontains=q)
+            | Q(description__icontains=q)
         )
         .select_related("unit_type")[:50]
     )
     results = []
     for u in units:
         type_label = u.unit_type_category or (u.unit_type.name if u.unit_type else "")
-        label_parts = [u.unit_number]
+        label_parts = []
+        if u.unit_number:
+            label_parts.append(u.unit_number)
+        if u.yt_number and u.yt_number != u.unit_number:
+            label_parts.append(f"YT: {u.yt_number}")
+        elif u.yt_number and not u.unit_number:
+            label_parts.append(u.yt_number)
         if type_label:
             label_parts.append(type_label)
-        if u.yt_number:
-            label_parts.append(f"YT: {u.yt_number}")
         if u.oem:
             label_parts.append(u.oem)
-        text = " — ".join(label_parts)
+        text = " — ".join(label_parts) if label_parts else f"Unit #{u.id}"
         price = u.rebuilt_unit_price or u.new_unit_price or 0
         results.append({
             "value": str(u.id),

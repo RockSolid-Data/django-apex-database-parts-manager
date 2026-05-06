@@ -290,12 +290,11 @@ class PartForm(forms.ModelForm):
         db_categories = list(PartCategory.objects.values_list("name", flat=True))
         category_choices = [("", "— Select Category —")]
         category_choices += [(k, k) for k in db_categories]
-        category_choices.append(("Other", "Other"))
 
         current_val = self.initial.get("category", "") or (self.instance.category if self.instance.pk else "")
         known_keys = {c[0] for c in category_choices}
         if current_val and current_val not in known_keys:
-            category_choices.insert(-1, (current_val, current_val))
+            category_choices.append((current_val, current_val))
 
         self.fields["category"].widget = forms.Select(choices=category_choices)
         self.fields["category"].widget.attrs["class"] = "form-select"

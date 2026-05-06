@@ -79,11 +79,11 @@ class CompanySettings(models.Model):
     )
 
     # Invoice numbering
-    invoice_number_prefix = models.CharField(max_length=20, default="INV-")
+    invoice_number_prefix = models.CharField(max_length=20, default="INV-", blank=True)
     invoice_number_include_year = models.BooleanField(default=True)
     invoice_number_include_month = models.BooleanField(
         default=False,
-        help_text="Include month in number (e.g. INV-202602-0001). Only applies when year is included.",
+        help_text="Include month in number (e.g. INV-2602-0001). Only applies when year is included.",
     )
     invoice_number_padding = models.PositiveIntegerField(default=4)
 
@@ -129,18 +129,24 @@ class CompanySettings(models.Model):
         return invoice_date + timedelta(days=days)
 
     def get_next_invoice_number(self, as_of_date=None):
-        """Generate next invoice number using prefix, year, month, padding settings."""
+        """Generate next invoice number using prefix, year, month, padding settings.
+
+        Format examples (prefix="INV-", padding=4):
+          No year/month:  INV-0001
+          Year only:      INV-26-0001
+          Year + month:   INV-2605-0001
+          No prefix:      26-0001 or 2605-0001 or 0001
+        """
         if as_of_date is None:
             as_of_date = date.today()
-        prefix = self.invoice_number_prefix or "INV-"
+        prefix = self.invoice_number_prefix or ""
         padding = max(1, min(10, self.invoice_number_padding or 4))
         if self.invoice_number_include_year:
-            year = as_of_date.year
+            yy = as_of_date.strftime("%y")
             if self.invoice_number_include_month:
-                month = as_of_date.month
-                search_prefix = f"{prefix}{year}{month:02d}-"
+                search_prefix = f"{prefix}{yy}{as_of_date.month:02d}-"
             else:
-                search_prefix = f"{prefix}{year}-"
+                search_prefix = f"{prefix}{yy}-"
             last = (
                 Invoice.objects.filter(invoice_number__startswith=search_prefix)
                 .order_by("-invoice_number")

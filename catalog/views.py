@@ -99,6 +99,16 @@ def home(request):
     return render(request, "catalog/home.html")
 
 
+def image_viewer(request):
+    """Standalone image viewer with zoom, pan, and print."""
+    image_url = request.GET.get("src", "")
+    title = request.GET.get("title", "Image Viewer")
+    return render(request, "catalog/image_viewer.html", {
+        "image_url": image_url,
+        "title": title,
+    })
+
+
 def application_list(request):
     """List applications with search, filters (Make, Year, Mfr, Volt, Unit), MAKE, ENGINE, YEAR, etc."""
     applications = Application.objects.filter(is_active=True).order_by("name")
@@ -918,6 +928,9 @@ def part_detail(request, pk):
         part=part
     ).select_related("old_part")
 
+    linked_units = part.units.all().order_by("unit_number")
+    linked_unit_count = linked_units.count()
+
     return render(request, "catalog/part_detail.html", {
         "part": part,
         "part_display_number": _part_display_number(part),
@@ -925,6 +938,8 @@ def part_detail(request, pk):
         "part_substitutes": part_substitutes,
         "part_interchanges": part_interchanges,
         "part_supersedings": part_supersedings,
+        "linked_units": linked_units,
+        "linked_unit_count": linked_unit_count,
     })
 
 
@@ -2055,21 +2070,24 @@ def unit_list(request):
 
 def unit_detail(request, pk):
     """Show full details for a single unit."""
-    unit = get_object_or_404(Unit.objects.select_related("unit_type"), pk=pk)
+    unit = get_object_or_404(
+        Unit.objects.select_related("unit_type").prefetch_related("images"), pk=pk
+    )
 
-    # Build spec sections for the template (only Identification kept as hardcoded)
+    # Build spec sections for the template (Identification = basics only)
+    # Unit Number only shows when it differs from YT Number
+    unit_number_display = (
+        unit.unit_number
+        if unit.unit_number and unit.unit_number != unit.yt_number
+        else ""
+    )
     spec_sections = [
         ("Identification", [
-            ("Unit Number", unit.unit_number),
+            ("Unit Number", unit_number_display),
             ("YT Number", unit.yt_number),
             ("OEM", unit.oem),
             ("J&N Number", unit.j_and_n_number),
-            ("Model/Cat Number", unit.model_cat_number),
-            ("Unit Type", str(unit.unit_type) if unit.unit_type else ""),
             ("Manufacturer", unit.manufacturer),
-            ("Family", unit.family),
-            ("Voltage", unit.voltage),
-            ("Rotation", unit.rotation),
             ("Description", unit.description),
         ]),
     ]
@@ -2108,14 +2126,24 @@ def unit_detail(request, pk):
     ).select_related("unit", "substitute_unit", "unit__unit_type", "substitute_unit__unit_type")
 
     substitute_units = []
+    seen_sub_units = set()
     for s in subs_qs:
         other = s.substitute_unit if s.unit_id == unit.pk else s.unit
+        dedup_key = other.pk if other else s.substitute_number
+        if dedup_key in seen_sub_units:
+            continue
+        seen_sub_units.add(dedup_key)
         substitute_units.append({"ref": s, "unit": other})
 
     # Gear Reduction Substitutions
     gear_reductions = GearReductionSubstitution.objects.filter(unit=unit).order_by("number")
 
     # Dynamic unit type specifications (from JSON specs, with model-field fallback)
+    # Exclude fields already shown in the Identification section
+    _identification_fields = {
+        "yt_number", "oem", "manufacturer", "j_n_number", "j_and_n_number",
+        "unit_number", "description",
+    }
     unit_spec_display = []
     utc_fields = _get_unit_type_field_defs()
     field_defs = utc_fields.get(unit.unit_type_category, [])
@@ -2124,6 +2152,9 @@ def unit_detail(request, pk):
     _spec_to_model = {"j_n_number": "j_and_n_number"}
     seen = set()
     for fd in field_defs:
+        if fd["name"] in _identification_fields:
+            seen.add(fd["name"])
+            continue
         val = specs_json.get(fd["name"], "")
         if not val:
             model_name = _spec_to_model.get(fd["name"], fd["name"])
@@ -2133,7 +2164,7 @@ def unit_detail(request, pk):
             unit_spec_display.append({"label": fd["label"], "value": val})
         seen.add(fd["name"])
     for key, val in specs_json.items():
-        if key not in seen and val:
+        if key not in seen and key not in _identification_fields and val:
             unit_spec_display.append({"label": key, "value": val})
 
     return render(request, "catalog/unit_detail.html", {
@@ -2254,6 +2285,18 @@ def substitute_add(request, pk):
         "form": form,
         "unit": unit,
     })
+
+
+def substitute_delete(request, pk, sub_pk):
+    """Remove a substitute link from a unit."""
+    unit = get_object_or_404(Unit, pk=pk)
+    obj = get_object_or_404(Substitute, pk=sub_pk, unit=unit)
+    if request.method == "POST":
+        label = obj.substitute_unit.unit_number if obj.substitute_unit else obj.substitute_number
+        obj.delete()
+        logger.info("[Unit] Removed substitute %s from %s", label, unit)
+        messages.success(request, f"Substitute {label} removed.")
+    return redirect("catalog:unit_detail", pk=unit.pk)
 
 
 def gear_reduction_add(request, pk):
