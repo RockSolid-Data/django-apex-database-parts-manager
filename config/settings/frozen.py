@@ -37,6 +37,9 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": Path(os.environ["DATABASE_PATH"]) if os.environ.get("DATABASE_PATH") else DATA_DIR / "db.sqlite3",
+        "OPTIONS": {
+            "transaction_mode": "IMMEDIATE",
+        },
     }
 }
 

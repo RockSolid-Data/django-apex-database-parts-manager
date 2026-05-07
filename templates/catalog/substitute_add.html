@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Add Substitute — {{ unit.unit_number }} — Apex Database{% endblock %}
+{% block title %}{% if editing %}Edit{% else %}Add{% endif %} Substitute — {{ unit.unit_number }} — Apex Database{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="page-heading mb-0">
-    <i class="bi bi-arrow-left-right"></i> Add Substitute
+    <i class="bi bi-arrow-left-right"></i> {% if editing %}Edit{% else %}Add{% endif %} Substitute
   </h1>
   <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left"></i> Back
@@ -16,7 +16,7 @@
   <div class="col-md-7">
     <div class="card">
       <div class="card-header fw-semibold">
-        Add a substitute to <strong>{{ unit.unit_number }}</strong>
+        {% if editing %}Edit{% else %}Add a{% endif %} substitute {% if not editing %}to {% endif %}<strong>{{ unit.unit_number }}</strong>
       </div>
       <div class="card-body">
         {% if form.errors %}
@@ -48,7 +48,7 @@
           </div>
 
           <hr>
-          <h6 class="text-muted mb-3">Option B: Unit Number</h6>
+          <h6 class="text-muted mb-3">Option B: Manual Entry</h6>
 
           <div class="mb-3">
             <label class="form-label" for="{{ form.substitute_number.id_for_label }}">
@@ -60,6 +60,21 @@
             {% endif %}
           </div>
 
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label" for="{{ form.substitute_unit_type.id_for_label }}">
+                {{ form.substitute_unit_type.label }}
+              </label>
+              {{ form.substitute_unit_type }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="{{ form.substitute_supplier.id_for_label }}">
+                {{ form.substitute_supplier.label }}
+              </label>
+              {{ form.substitute_supplier }}
+            </div>
+          </div>
+
           <hr>
 
           <div class="mb-3">
@@ -69,7 +84,7 @@
 
           <div class="d-flex gap-2 me-sticky-actions">
             <button type="submit" class="btn btn-primary">
-              <i class="bi bi-check-lg"></i> Add Substitute
+              <i class="bi bi-check-lg"></i> {% if editing %}Save Changes{% else %}Add Substitute{% endif %}
             </button>
             <a href="{% url 'catalog:unit_detail' unit.pk %}" class="btn btn-outline-secondary">Cancel</a>
           </div>

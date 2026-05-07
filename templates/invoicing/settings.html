@@ -79,6 +79,11 @@
           {{ form.default_net_days }}
           <p class="form-text small mb-0">Used when Default Net Terms is "Custom"</p>
         </div>
+        <div class="col-12">
+          <label class="form-label" for="{{ form.invoice_footer_message.id_for_label }}">Default Footer Message</label>
+          {{ form.invoice_footer_message }}
+          <p class="form-text small mb-0">Appears centered at the bottom of every printed invoice (e.g. "Thank you for your business!")</p>
+        </div>
       </div>
     </div>
   </div>

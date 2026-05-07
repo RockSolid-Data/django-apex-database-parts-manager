@@ -262,6 +262,40 @@ def invoice_delete(request, pk):
     return redirect("invoicing:invoice_list")
 
 
+PAGE1_ROWS = 22
+OVERFLOW_PAGE_ROWS = 32
+
+
+def _paginate_invoice_items(invoice):
+    """Split invoice items into page-1 and overflow pages with subtotals."""
+    items = list(invoice.items.select_related("part", "unit").all())
+    page1_items = items[:PAGE1_ROWS]
+    overflow_items = items[PAGE1_ROWS:]
+
+    page1_subtotal = sum(i.line_total for i in page1_items)
+    overflow_subtotal = sum(i.line_total for i in overflow_items)
+    page1_empty = range(max(0, PAGE1_ROWS - len(page1_items)))
+
+    overflow_pages = []
+    for idx in range(0, len(overflow_items), OVERFLOW_PAGE_ROWS):
+        chunk = overflow_items[idx:idx + OVERFLOW_PAGE_ROWS]
+        overflow_pages.append({
+            "items": chunk,
+            "empty_rows": range(max(0, OVERFLOW_PAGE_ROWS - len(chunk))),
+        })
+
+    total_pages = 1 + len(overflow_pages)
+
+    return {
+        "page1_items": page1_items,
+        "page1_empty": page1_empty,
+        "page1_subtotal": page1_subtotal,
+        "overflow_pages": overflow_pages,
+        "overflow_subtotal": overflow_subtotal,
+        "total_pages": total_pages,
+    }
+
+
 def invoice_bulk_print(request):
     """Print multiple invoices in one print dialog. GET ?ids=1,2,3"""
     ids_param = request.GET.get("ids", "")
@@ -273,13 +307,8 @@ def invoice_bulk_print(request):
         .prefetch_related("items__part", "items__unit")
         .order_by("invoice_number")
     )
-    min_lines = 12
     for inv in invoices:
-        item_count = inv.items.count()
-        if item_count <= min_lines:
-            inv.empty_rows = range(min_lines - item_count)
-        else:
-            inv.empty_rows = range(0)
+        inv.page_data = _paginate_invoice_items(inv)
     return render(request, "invoicing/invoice_bulk_print.html", {
         "invoices": invoices,
         "company_settings": CompanySettings.get(),
@@ -314,23 +343,18 @@ def invoice_detail(request, pk):
 def invoice_print(request, pk):
     """Print-friendly invoice view (8.4). Auto-sets status to Sent when printing Draft."""
     invoice = get_object_or_404(
-        Invoice.objects.select_related("customer").prefetch_related("items"),
+        Invoice.objects.select_related("customer").prefetch_related("items__part", "items__unit"),
         pk=pk,
     )
     if invoice.status == Invoice.Status.DRAFT:
         invoice.status = Invoice.Status.SENT
         invoice.save(update_fields=["status", "updated_at"])
     company_settings = CompanySettings.get()
-    min_lines = 12
-    item_count = invoice.items.count()
-    if item_count <= min_lines:
-        empty_rows = range(min_lines - item_count)
-    else:
-        empty_rows = range(0)
+    page_data = _paginate_invoice_items(invoice)
     return render(request, "invoicing/invoice_print.html", {
         "invoice": invoice,
         "company_settings": company_settings,
-        "empty_rows": empty_rows,
+        **page_data,
     })
 
 

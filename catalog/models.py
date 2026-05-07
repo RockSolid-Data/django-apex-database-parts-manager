@@ -64,6 +64,9 @@ class Application(models.Model):
             models.Index(fields=["mfr"]),
             models.Index(fields=["volt"]),
             models.Index(fields=["is_active"]),
+            models.Index(fields=["unit_number"]),
+            models.Index(fields=["model"]),
+            models.Index(fields=["part_number"]),
         ]
 
     def __str__(self):
@@ -226,6 +229,9 @@ class Unit(models.Model):
             models.Index(fields=["oem"]),
             models.Index(fields=["voltage"]),
             models.Index(fields=["family"]),
+            models.Index(fields=["manufacturer"]),
+            models.Index(fields=["j_and_n_number"]),
+            models.Index(fields=["model_cat_number"]),
         ]
 
     def __str__(self):
@@ -300,7 +306,7 @@ class CrossReference(models.Model):
     )
     cross_ref_number = models.CharField(max_length=100, blank=True, default="")
     interchange_type = models.CharField(
-        "Manufacturer / Source",
+        "Cross Ref Name",
         max_length=150,
         blank=True,
         default="",
@@ -342,11 +348,16 @@ class Substitute(models.Model):
         related_name="substituted_by",
     )
     substitute_number = models.CharField(max_length=100, blank=True, default="")
+    substitute_unit_type = models.CharField("Unit Type", max_length=100, blank=True, default="")
+    substitute_supplier = models.CharField("Supplier", max_length=200, blank=True, default="")
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = [("unit", "substitute_unit")]
+        indexes = [
+            models.Index(fields=["substitute_number"]),
+        ]
 
     def __str__(self):
         label = self.substitute_unit.unit_number if self.substitute_unit else self.substitute_number
@@ -363,7 +374,9 @@ class GearReductionSubstitution(models.Model):
     unit = models.ForeignKey(
         Unit, on_delete=models.CASCADE, related_name="gear_reductions"
     )
-    number = models.CharField(max_length=50, blank=True, default="")
+    number = models.CharField("Unit Number", max_length=50, blank=True, default="")
+    unit_type = models.CharField("Unit Type", max_length=100, blank=True, default="")
+    supplier = models.CharField("Supplier", max_length=200, blank=True, default="")
     description = models.CharField(max_length=255)
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -574,6 +587,8 @@ class Part(models.Model):
             models.Index(fields=["oem_number"]),
             models.Index(fields=["j_and_n"]),
             models.Index(fields=["yt_number"]),
+            models.Index(fields=["manufacturer_number"]),
+            models.Index(fields=["item_no"]),
         ]
 
     def __str__(self):
@@ -651,6 +666,9 @@ class PartInterchange(models.Model):
 
     class Meta:
         unique_together = [("part", "interchange_part")]
+        indexes = [
+            models.Index(fields=["interchange_number"]),
+        ]
 
     def __str__(self):
         part_label = self.part.part_number or self.part.yt_number or f"Part #{self.part_id}"
@@ -686,6 +704,9 @@ class PartSuperseding(models.Model):
 
     class Meta:
         unique_together = [("part", "old_part_number")]
+        indexes = [
+            models.Index(fields=["old_part_number"]),
+        ]
 
     def __str__(self):
         return f"{self.old_part_number} → {self.part.part_number}"
@@ -749,6 +770,9 @@ class BOMItem(models.Model):
         verbose_name_plural = "BOM Items"
         indexes = [
             models.Index(fields=["bom", "part"]),
+            models.Index(fields=["oem_number"]),
+            models.Index(fields=["j_and_n"]),
+            models.Index(fields=["yt_number"]),
         ]
 
     def __str__(self):

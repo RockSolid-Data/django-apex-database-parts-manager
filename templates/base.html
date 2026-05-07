@@ -89,8 +89,11 @@
 
       <div class="nav-section">
         <div class="nav-section-title">System</div>
-        <a href="{% url 'invoicing:settings' %}" data-tooltip="Settings" class="{% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+        <a href="{% url 'invoicing:settings' %}" data-tooltip="Settings" class="{% if request.resolver_match.url_name == 'settings' and request.resolver_match.app_name == 'invoicing' %}active{% endif %}">
           <i class="bi bi-gear"></i><span class="sidebar-text">Settings</span>
+        </a>
+        <a href="{% url 'backup:settings' %}" data-tooltip="Backup" class="{% if request.resolver_match.app_name == 'backup' %}active{% endif %}">
+          <i class="bi bi-hdd"></i><span class="sidebar-text">Backup</span>
         </a>
       </div>
     </nav>

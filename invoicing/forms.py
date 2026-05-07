@@ -188,6 +188,7 @@ class CompanySettingsForm(forms.ModelForm):
             "default_tax_rate", "pricing_method",
             "invoice_number_prefix", "invoice_number_include_year", "invoice_number_include_month", "invoice_number_padding",
             "invoice_paper_size", "invoice_layout_style", "invoice_date_format", "invoice_currency_symbol",
+            "invoice_footer_message",
         ]
         widgets = {
             "company_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Company name"}),
@@ -207,6 +208,7 @@ class CompanySettingsForm(forms.ModelForm):
             "invoice_layout_style": forms.Select(attrs={"class": "form-select"}),
             "invoice_date_format": forms.Select(attrs={"class": "form-select"}),
             "invoice_currency_symbol": forms.TextInput(attrs={"class": "form-control", "placeholder": "$"}),
+            "invoice_footer_message": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "e.g. Thank you for your business!"}),
         }
 
     def __init__(self, *args, **kwargs):

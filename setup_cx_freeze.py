@@ -59,6 +59,7 @@ PACKAGES = [
     "invoicing.management.commands",
     "data_import", "data_import.management", "data_import.management.commands",
     "data_import.pdf_parsers",
+    "backup", "backup.migrations",
 
     "waitress", "waitress.adjustments", "waitress.channel",
     "waitress.parser", "waitress.receiver", "waitress.task",
@@ -133,7 +134,7 @@ BUILD_OPTIONS = {
     "build_exe": f"build/{APP_NAME}",
     "zip_exclude_packages": [
         "django", DJANGO_PROJECT,
-        "catalog", "inventory", "invoicing", "data_import",
+        "catalog", "inventory", "invoicing", "data_import", "backup",
     ],
 }
 

@@ -107,44 +107,44 @@
               <th>Name</th>
               <th>Category</th>
               <th>Notes</th>
-              <th class="text-center">Actions</th>
+              <th class="text-end pe-3" style="width:1%"></th>
             </tr>
           </thead>
           <tbody>
             {% for s in part_substitutes %}
-            <tr>
-              {% if s.part %}
+            {% if s.part %}
+            <tr style="cursor:pointer" onclick="window.location='{% url 'catalog:part_detail' s.part.pk %}'">
               <td class="ps-3">{{ s.part.part_number|default:s.part.yt_number|default:"—" }}</td>
               <td>{{ s.part.part_name|default:"—" }}</td>
               <td>{{ s.part.category|default:"—" }}</td>
               <td>{{ s.ref.notes|default:"—" }}</td>
-              <td class="text-center">
-                <a href="{% url 'catalog:part_detail' s.part.pk %}" class="btn btn-sm btn-outline-primary me-1" title="View">
-                  <i class="bi bi-eye"></i>
-                </a>
-                <form method="post" action="{% url 'catalog:part_substitute_delete' part.pk s.ref.pk %}" class="d-inline">
+              <td class="text-end pe-3" onclick="event.stopPropagation()">
+                <form method="post" action="{% url 'catalog:part_substitute_delete' part.pk s.ref.pk %}"
+                      onsubmit="return confirm('Remove this substitute?')">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this substitute?">
-                    <i class="bi bi-trash"></i>
+                  <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Remove">
+                    <i class="bi bi-x-lg"></i>
                   </button>
                 </form>
               </td>
-              {% else %}
+            </tr>
+            {% else %}
+            <tr>
               <td class="ps-3">{{ s.ref.substitute_number }}</td>
               <td>—</td>
               <td>—</td>
               <td>{{ s.ref.notes|default:"—" }}</td>
-              <td class="text-center">
-                <span class="text-muted me-2"><small>manual entry</small></span>
-                <form method="post" action="{% url 'catalog:part_substitute_delete' part.pk s.ref.pk %}" class="d-inline">
+              <td class="text-end pe-3">
+                <form method="post" action="{% url 'catalog:part_substitute_delete' part.pk s.ref.pk %}"
+                      onsubmit="return confirm('Remove this substitute?')">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this substitute?">
-                    <i class="bi bi-trash"></i>
+                  <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Remove">
+                    <i class="bi bi-x-lg"></i>
                   </button>
                 </form>
               </td>
-              {% endif %}
             </tr>
+            {% endif %}
             {% endfor %}
           </tbody>
         </table>
@@ -187,53 +187,51 @@
               <th>Linked Part</th>
               <th>Source / Name</th>
               <th>Notes</th>
-              <th class="text-center">Actions</th>
+              <th class="text-end pe-3" style="width:1%"></th>
             </tr>
           </thead>
           <tbody>
             {% for i in part_interchanges %}
-            <tr class="js-interchange-edit-row cursor-pointer"
-                title="Double-click to edit"
-                data-edit-url="{% url 'catalog:part_interchange_edit' part.pk i.ref.pk %}">
-              {% if i.part %}
+            {% if i.part %}
+            <tr style="cursor:pointer" onclick="window.location='{% url 'catalog:part_detail' i.part.pk %}'">
               <td class="ps-3">{{ i.ref.interchange_number|default:i.part.part_number|default:i.part.yt_number|default:"—" }}</td>
               <td>
-                <a href="{% url 'catalog:part_detail' i.part.pk %}">
-                  {{ i.part.part_number|default:i.part.yt_number|default:"—" }}
-                </a>
+                {{ i.part.part_number|default:i.part.yt_number|default:"—" }}
                 {% if i.part.part_name %}
                 <div class="small text-muted">{{ i.part.part_name }}</div>
                 {% endif %}
               </td>
               <td>{{ i.ref.source_name|default:"—" }}</td>
               <td>{{ i.ref.notes|default:"—" }}</td>
-              <td class="text-center">
-                <a href="{% url 'catalog:part_detail' i.part.pk %}" class="btn btn-sm btn-outline-primary me-1" title="View linked part">
-                  <i class="bi bi-eye"></i>
-                </a>
-                <form method="post" action="{% url 'catalog:part_interchange_delete' part.pk i.ref.pk %}" class="d-inline">
+              <td class="text-end pe-3" onclick="event.stopPropagation()">
+                <form method="post" action="{% url 'catalog:part_interchange_delete' part.pk i.ref.pk %}"
+                      onsubmit="return confirm('Remove this interchange?')">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this interchange?">
-                    <i class="bi bi-trash"></i>
+                  <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Remove">
+                    <i class="bi bi-x-lg"></i>
                   </button>
                 </form>
               </td>
-              {% else %}
+            </tr>
+            {% else %}
+            <tr class="js-interchange-edit-row cursor-pointer"
+                title="Double-click to edit"
+                data-edit-url="{% url 'catalog:part_interchange_edit' part.pk i.ref.pk %}">
               <td class="ps-3">{{ i.ref.interchange_number|default:"—" }}</td>
               <td>—</td>
               <td>{{ i.ref.source_name|default:"—" }}</td>
               <td>{{ i.ref.notes|default:"—" }}</td>
-              <td class="text-center">
-                <span class="text-muted me-2"><small>manual entry</small></span>
-                <form method="post" action="{% url 'catalog:part_interchange_delete' part.pk i.ref.pk %}" class="d-inline">
+              <td class="text-end pe-3" onclick="event.stopPropagation()">
+                <form method="post" action="{% url 'catalog:part_interchange_delete' part.pk i.ref.pk %}"
+                      onsubmit="return confirm('Remove this interchange?')">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this interchange?">
-                    <i class="bi bi-trash"></i>
+                  <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Remove">
+                    <i class="bi bi-x-lg"></i>
                   </button>
                 </form>
               </td>
-              {% endif %}
             </tr>
+            {% endif %}
             {% endfor %}
           </tbody>
         </table>
@@ -262,26 +260,27 @@
               <th class="ps-3">Old Part Number</th>
               <th>Linked Part</th>
               <th>Notes</th>
-              <th class="text-center">Actions</th>
+              <th class="text-end pe-3" style="width:1%"></th>
             </tr>
           </thead>
           <tbody>
             {% for sup in part_supersedings %}
-            <tr>
+            <tr {% if sup.old_part %}style="cursor:pointer" onclick="window.location='{% url 'catalog:part_detail' sup.old_part.pk %}'"{% endif %}>
               <td class="ps-3">{{ sup.old_part_number }}</td>
               <td>
                 {% if sup.old_part %}
-                  <a href="{% url 'catalog:part_detail' sup.old_part.pk %}">{{ sup.old_part.part_number|default:sup.old_part.yt_number|default:"—" }}</a>
+                  {{ sup.old_part.part_number|default:sup.old_part.yt_number|default:"—" }}
                 {% else %}
                   <span class="text-muted">—</span>
                 {% endif %}
               </td>
               <td>{{ sup.notes|default:"—" }}</td>
-              <td class="text-center">
-                <form method="post" action="{% url 'catalog:part_superseding_delete' part.pk sup.pk %}" class="d-inline">
+              <td class="text-end pe-3" onclick="event.stopPropagation()">
+                <form method="post" action="{% url 'catalog:part_superseding_delete' part.pk sup.pk %}"
+                      onsubmit="return confirm('Remove this superseding entry?')">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" data-confirm="Remove this superseding entry?">
-                    <i class="bi bi-trash"></i>
+                  <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Remove">
+                    <i class="bi bi-x-lg"></i>
                   </button>
                 </form>
               </td>

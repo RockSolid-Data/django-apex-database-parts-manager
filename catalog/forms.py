@@ -538,7 +538,7 @@ class CrossReferenceForm(forms.ModelForm):
         labels = {
             "cross_ref_unit": "Cross-Reference Unit (optional)",
             "cross_ref_number": "Manufacturer Part Number",
-            "interchange_type": "Manufacturer / Source",
+            "interchange_type": "Cross Ref Name",
         }
 
     def __init__(self, *args, unit=None, **kwargs):
@@ -578,13 +578,15 @@ class SubstituteForm(forms.ModelForm):
 
     class Meta:
         model = Substitute
-        fields = ["substitute_unit", "substitute_number", "notes"]
+        fields = ["substitute_unit", "substitute_number", "substitute_unit_type", "substitute_supplier", "notes"]
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 2}),
         }
         labels = {
             "substitute_unit": "Substitute Unit (optional)",
             "substitute_number": "Unit Number",
+            "substitute_unit_type": "Unit Type",
+            "substitute_supplier": "Supplier",
         }
 
     def __init__(self, *args, unit=None, **kwargs):
@@ -602,8 +604,8 @@ class SubstituteForm(forms.ModelForm):
             "data-url": "/api/units/autocomplete/",
             "data-placeholder": "Search units...",
         })
-        self.fields["substitute_number"].widget.attrs["class"] = "form-control"
-        self.fields["notes"].widget.attrs["class"] = "form-control"
+        for fname in ("substitute_number", "substitute_unit_type", "substitute_supplier", "notes"):
+            self.fields[fname].widget.attrs["class"] = "form-control"
 
     def clean(self):
         cleaned = super().clean()
@@ -623,7 +625,7 @@ class GearReductionForm(forms.ModelForm):
 
     class Meta:
         model = GearReductionSubstitution
-        fields = ["number", "description", "notes"]
+        fields = ["number", "unit_type", "supplier", "description", "notes"]
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 2}),
         }

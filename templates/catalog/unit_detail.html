@@ -132,7 +132,7 @@
             <tr>
               <th class="ps-3">Unit / Part Number</th>
               <th>Unit Type</th>
-              <th>Manufacturer / Source</th>
+              <th>Cross Ref Name</th>
               <th>OEM</th>
               <th>Voltage</th>
               <th>Notes</th>
@@ -184,8 +184,7 @@
             <tr>
               <th class="ps-3">Unit Number</th>
               <th>Unit Type</th>
-              <th>OEM</th>
-              <th>Voltage</th>
+              <th>Supplier</th>
               <th>Notes</th>
               <th class="text-end pe-3" style="width:1%"></th>
             </tr>
@@ -197,7 +196,6 @@
               <td class="ps-3">{{ s.unit.unit_number }}</td>
               <td>{{ s.unit.unit_type|default:"—" }}</td>
               <td>{{ s.unit.oem|default:"—" }}</td>
-              <td>{{ s.unit.voltage|default:"—" }}</td>
               <td>{{ s.ref.notes|default:"—" }}</td>
               <td class="text-end pe-3" onclick="event.stopPropagation()">
                 <form method="post" action="{% url 'catalog:substitute_delete' unit.pk s.ref.pk %}"
@@ -210,13 +208,12 @@
               </td>
             </tr>
             {% else %}
-            <tr>
+            <tr style="cursor:pointer" onclick="window.location='{% url 'catalog:substitute_edit' unit.pk s.ref.pk %}'">
               <td class="ps-3">{{ s.ref.substitute_number }}</td>
-              <td>—</td>
-              <td>—</td>
-              <td>—</td>
+              <td>{{ s.ref.substitute_unit_type|default:"—" }}</td>
+              <td>{{ s.ref.substitute_supplier|default:"—" }}</td>
               <td>{{ s.ref.notes|default:"—" }}</td>
-              <td class="text-end pe-3">
+              <td class="text-end pe-3" onclick="event.stopPropagation()">
                 <form method="post" action="{% url 'catalog:substitute_delete' unit.pk s.ref.pk %}"
                       onsubmit="return confirm('Are you sure you want to remove substitute {{ s.ref.substitute_number }}?')">
                   {% csrf_token %}
@@ -253,27 +250,26 @@
         <table class="table table-sm table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
-              <th class="ps-3">Number</th>
-              <th>Description</th>
+              <th class="ps-3">Unit Number</th>
+              <th>Unit Type</th>
+              <th>Supplier</th>
               <th>Notes</th>
-              <th class="text-center">Actions</th>
+              <th class="text-end pe-3" style="width:1%"></th>
             </tr>
           </thead>
           <tbody>
             {% for gr in gear_reductions %}
-            <tr>
+            <tr style="cursor:pointer" onclick="window.location='{% url 'catalog:gear_reduction_edit' unit.pk gr.pk %}'">
               <td class="ps-3">{{ gr.number|default:"—" }}</td>
-              <td>{{ gr.description }}</td>
+              <td>{{ gr.unit_type|default:"—" }}</td>
+              <td>{{ gr.supplier|default:"—" }}</td>
               <td>{{ gr.notes|default:"—" }}</td>
-              <td class="text-center">
-                <a href="{% url 'catalog:gear_reduction_edit' unit.pk gr.pk %}" class="btn btn-sm btn-outline-secondary me-1" title="Edit">
-                  <i class="bi bi-pencil"></i>
-                </a>
-                <form method="post" action="{% url 'catalog:gear_reduction_delete' unit.pk gr.pk %}" class="d-inline">
+              <td class="text-end pe-3" onclick="event.stopPropagation()">
+                <form method="post" action="{% url 'catalog:gear_reduction_delete' unit.pk gr.pk %}"
+                      onsubmit="return confirm('Delete this gear reduction?')">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"
-                    data-confirm="Delete this gear reduction?">
-                    <i class="bi bi-trash"></i>
+                  <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Remove">
+                    <i class="bi bi-x-lg"></i>
                   </button>
                 </form>
               </td>

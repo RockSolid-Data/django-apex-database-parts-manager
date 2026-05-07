@@ -4,6 +4,7 @@ Entry point for the frozen application.
 """
 
 import os
+import signal
 import sys
 import time
 import shutil
@@ -322,6 +323,59 @@ def open_browser_delayed(url, delay=2):
     threading.Thread(target=_open, daemon=True).start()
 
 
+_shutdown_event = threading.Event()
+
+
+def auto_backup(reason="startup"):
+    """Run an automatic backup if configured. Never raises."""
+    try:
+        from backup.models import BackupSettings
+        from backup.utils import sync_to_all_paths
+
+        settings = BackupSettings.get()
+        if not settings.auto_backup_enabled:
+            return
+        if not settings.local_backup_path and not settings.external_backup_path:
+            return
+
+        result = sync_to_all_paths(reason=reason)
+        print(f"  {result}")
+    except Exception as exc:
+        print(f"  Auto-backup ({reason}) failed: {exc}")
+
+
+def _periodic_backup_loop():
+    """Background thread: backs up at the configured interval until shutdown."""
+    while not _shutdown_event.is_set():
+        try:
+            from backup.models import BackupSettings
+            settings = BackupSettings.get()
+            interval_secs = max(3600, (settings.backup_interval_hours or 2) * 3600)
+        except Exception:
+            interval_secs = 7200  # 2-hour fallback
+
+        if _shutdown_event.wait(timeout=interval_secs):
+            break  # shutdown requested
+        auto_backup(reason="periodic")
+
+
+def start_periodic_backup_thread():
+    """Start the background periodic-backup daemon thread."""
+    t = threading.Thread(target=_periodic_backup_loop, daemon=True, name="periodic-backup")
+    t.start()
+    return t
+
+
+def shutdown_backup():
+    """Attempt a final backup on graceful shutdown (30s timeout)."""
+    _shutdown_event.set()
+    t = threading.Thread(target=auto_backup, kwargs={"reason": "shutdown"}, daemon=True)
+    t.start()
+    t.join(timeout=30)
+    if t.is_alive():
+        print("  Shutdown backup timed out -- skipping.")
+
+
 def run_server(host='127.0.0.1', port=DEFAULT_PORT):
     from waitress import serve
     from django.core.wsgi import get_wsgi_application
@@ -373,6 +427,23 @@ def main():
     if install_type == "upgrade":
         sync_catalog_data()
 
+    # --- Backup layer 1: startup backup ---
+    print("Checking auto-backup...")
+    auto_backup(reason="startup")
+
+    # --- Backup layer 2: periodic background backups ---
+    start_periodic_backup_thread()
+
+    # Register signal handlers for graceful shutdown with final backup
+    def _signal_handler(signum, frame):
+        print(f"\nReceived signal {signum} -- shutting down (running final backup)...")
+        shutdown_backup()
+        print("Goodbye.")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
     port = DEFAULT_PORT
     if not find_and_kill_old_instance(port):
         port = find_available_port(port + 1)
@@ -381,7 +452,10 @@ def main():
     try:
         run_server(port=port)
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        # --- Backup layer 3: shutdown backup ---
+        print("\nShutting down (running final backup)...")
+        shutdown_backup()
+        print("Goodbye.")
     except Exception as e:
         print(f"\nServer error: {e}")
         import traceback

@@ -3,6 +3,15 @@
 {% block title %}Home — Apex Database{% endblock %}
 
 {% block content %}
+{% if not backup_configured %}
+<div class="alert alert-warning alert-dismissible fade show mx-auto mt-3" style="max-width: 800px;" role="alert">
+  <i class="bi bi-shield-exclamation me-1"></i>
+  <strong>Backups not configured.</strong>
+  Protect your data by setting up automatic backups to a USB drive or external folder.
+  <a href="{% url 'backup:settings' %}" class="alert-link">Set up backups now</a>
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
 <div class="text-center py-5">
   <h1 class="page-heading">
     <i class="bi bi-lightning-charge-fill"></i> Apex Database

@@ -76,6 +76,7 @@ urlpatterns = [
     path("units/<int:pk>/cross-ref/<int:cr_pk>/edit/", views.cross_reference_edit, name="cross_reference_edit"),
     path("units/<int:pk>/cross-ref/<int:cr_pk>/delete/", views.cross_reference_delete, name="cross_reference_delete"),
     path("units/<int:pk>/substitute/add/", views.substitute_add, name="substitute_add"),
+    path("units/<int:pk>/substitute/<int:sub_pk>/edit/", views.substitute_edit, name="substitute_edit"),
     path("units/<int:pk>/substitute/<int:sub_pk>/delete/", views.substitute_delete, name="substitute_delete"),
     path("units/<int:pk>/gear-reduction/add/", views.gear_reduction_add, name="gear_reduction_add"),
     path("units/<int:pk>/gear-reduction/<int:gr_pk>/edit/", views.gear_reduction_edit, name="gear_reduction_edit"),

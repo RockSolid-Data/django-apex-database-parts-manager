@@ -96,7 +96,16 @@ def _get_unit_type_field_defs():
 
 def home(request):
     """Landing page for Apex Database."""
-    return render(request, "catalog/home.html")
+    backup_configured = False
+    try:
+        from backup.models import BackupSettings
+        settings = BackupSettings.get()
+        backup_configured = bool(settings.local_backup_path or settings.external_backup_path)
+    except Exception:
+        pass
+    return render(request, "catalog/home.html", {
+        "backup_configured": backup_configured,
+    })
 
 
 def image_viewer(request):
@@ -781,7 +790,7 @@ def part_list(request):
             | Q(j_and_n__icontains=q)
             | Q(oem_number__icontains=q)
         )
-        if direct_qs.exists():
+        if direct_qs[:1].exists():
             parts = direct_qs
             search_tier = 1
         else:
@@ -801,23 +810,15 @@ def part_list(request):
     else:
         parts = base_qs
 
-    # --- Build category choices for dropdown ---
-    category_choices = (
-        Part.objects.filter(is_active=True)
-        .exclude(category="")
-        .values_list("category", flat=True)
-        .distinct()
-        .order_by("category")
-    )
+    # --- Build category choices for dropdown (cached 5 min) ---
+    category_choices = cache.get_or_set("part_category_choices",
+        lambda: list(Part.objects.filter(is_active=True).exclude(category="").values_list("category", flat=True).distinct().order_by("category")),
+        300)
 
-    # --- Build voltage choices for dropdown ---
-    voltage_choices = (
-        Part.objects.filter(is_active=True)
-        .exclude(voltage="")
-        .values_list("voltage", flat=True)
-        .distinct()
-        .order_by("voltage")
-    )
+    # --- Build voltage choices for dropdown (cached 5 min) ---
+    voltage_choices = cache.get_or_set("part_voltage_choices",
+        lambda: list(Part.objects.filter(is_active=True).exclude(voltage="").values_list("voltage", flat=True).distinct().order_by("voltage")),
+        300)
 
     total_count = parts.count()
     try:
@@ -1677,12 +1678,14 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
     """
     Search every major catalog number field: units, parts (incl. interchange/supersede/sub/BOM),
     applications, unit cross-refs, substitutes, gear reductions, application specs.
+
+    Queries are ordered by relevance and short-circuit once the limit is reached.
     """
     q = (q_raw or "").strip()
     if not q:
         return []
 
-    per_q = min(80, max(20, limit // 4))
+    per_q = min(40, max(15, limit // 6))
     hits: list[dict] = []
     dup: set[tuple[str, int]] = set()
 
@@ -1693,15 +1696,18 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
         dup.add(key)
         hits.append(row)
 
-    unit_field_q = Q()
-    for fname_b in _unit_char_text_field_names():
-        unit_field_q |= Q(**{f"{fname_b}__icontains": q})
+    def full():
+        return len(hits) >= limit
 
+    # 1. Cross-references (most relevant for "cross ref" search)
     for cr in CrossReference.objects.filter(
         Q(cross_ref_number__icontains=q)
         | Q(interchange_type__icontains=q)
-        | Q(notes__icontains=q)
-    ).select_related("unit", "unit__unit_type")[:per_q]:
+    ).select_related("unit", "unit__unit_type").only(
+        "id", "cross_ref_number", "interchange_type",
+        "unit__id", "unit__unit_number", "unit__yt_number", "unit__oem",
+        "unit__unit_type__id", "unit__unit_type__name",
+    )[:per_q]:
         u = cr.unit
         add("xref", cr.pk, {
             "hit_type": "Unit cross-reference",
@@ -1712,8 +1718,22 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
             "tertiary": u.oem or "—",
             "href": reverse("catalog:unit_detail", args=[u.pk]),
         })
+    if full():
+        return hits
 
-    for u in Unit.objects.filter(is_active=True).filter(unit_field_q).select_related("unit_type").distinct()[:per_q]:
+    # 2. Units — search key identification fields only (not every CharField)
+    unit_q = (
+        Q(unit_number__icontains=q)
+        | Q(yt_number__icontains=q)
+        | Q(oem__icontains=q)
+        | Q(j_and_n_number__icontains=q)
+        | Q(model_cat_number__icontains=q)
+        | Q(manufacturer__icontains=q)
+    )
+    for u in Unit.objects.filter(is_active=True).filter(unit_q).select_related("unit_type").only(
+        "id", "unit_number", "yt_number", "oem",
+        "unit_type__id", "unit_type__name",
+    )[:per_q]:
         add("unit", u.pk, {
             "hit_type": "Unit",
             "match": q,
@@ -1723,17 +1743,23 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
             "tertiary": u.oem or "—",
             "href": reverse("catalog:unit_detail", args=[u.pk]),
         })
+    if full():
+        return hits
 
-    part_q = Q()
-    for fn_p in [
-        "part_number", "part_name", "manufacturer_number", "yt_number", "j_and_n", "oem_number",
-        "item_no", "category", "type", "oem_type", "item_typ", "oem", "primary_vendor",
-        "catalog", "plug_id", "bin_number", "voltage", "description", "foot_notes", "superseding_notes",
-    ]:
-        part_q |= Q(**{f"{fn_p}__icontains": q})
-    part_q |= _part_related_number_q(q)
-
-    for part in Part.objects.filter(is_active=True).filter(part_q).select_related("unit").distinct()[:per_q]:
+    # 3. Parts — search primary number fields first (no expensive JOINs)
+    part_q = (
+        Q(part_number__icontains=q)
+        | Q(manufacturer_number__icontains=q)
+        | Q(yt_number__icontains=q)
+        | Q(j_and_n__icontains=q)
+        | Q(oem_number__icontains=q)
+        | Q(item_no__icontains=q)
+        | Q(part_name__icontains=q)
+    )
+    for part in Part.objects.filter(is_active=True).filter(part_q).only(
+        "id", "part_number", "yt_number", "part_name", "j_and_n",
+        "oem_number", "category",
+    )[:per_q]:
         add("part", part.pk, {
             "hit_type": "Part",
             "match": q,
@@ -1743,16 +1769,23 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
             "tertiary": part.j_and_n or part.oem_number or "—",
             "href": reverse("catalog:part_detail", args=[part.pk]),
         })
+    if full():
+        return hits
 
-    app_q = Q()
-    for fn_a in [
-        "name", "make", "model", "engine", "year", "mfr", "volt", "amp", "kw",
-        "fuel_type", "vin", "alt_pulley", "unit_type_name", "part_number", "other_number",
-        "unit_number", "options", "notes",
-    ]:
-        app_q |= Q(**{f"{fn_a}__icontains": q})
-
-    for app in Application.objects.filter(is_active=True).filter(app_q).distinct()[:per_q]:
+    # 4. Applications — search key fields only
+    app_q = (
+        Q(name__icontains=q)
+        | Q(make__icontains=q)
+        | Q(model__icontains=q)
+        | Q(engine__icontains=q)
+        | Q(year__icontains=q)
+        | Q(mfr__icontains=q)
+        | Q(unit_number__icontains=q)
+        | Q(part_number__icontains=q)
+    )
+    for app in Application.objects.filter(is_active=True).filter(app_q).only(
+        "id", "name", "make", "model", "year", "engine", "unit_number",
+    )[:per_q]:
         add("app", app.pk, {
             "hit_type": "Application",
             "match": q,
@@ -1762,24 +1795,17 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
             "tertiary": app.engine or "—",
             "href": reverse("catalog:application_detail", args=[app.pk]),
         })
+    if full():
+        return hits
 
-    for spec in ApplicationSpecification.objects.filter(specification__icontains=q).select_related("application")[:per_q]:
-        app = spec.application
-        if not app.is_active:
-            continue
-        add("appspec", spec.pk, {
-            "hit_type": "Application spec",
-            "match": spec.specification[:100],
-            "detail": f"{spec.category} / {spec.type}".strip(" /") or "—",
-            "primary": app.name[:80],
-            "secondary": app.unit_number or "—",
-            "tertiary": app.make or "—",
-            "href": reverse("catalog:application_detail", args=[app.pk]),
-        })
-
+    # 5. Substitutes
     for sub in Substitute.objects.filter(
-        Q(substitute_number__icontains=q) | Q(notes__icontains=q)
-    ).select_related("unit", "substitute_unit")[:per_q]:
+        Q(substitute_number__icontains=q)
+    ).select_related("unit", "substitute_unit").only(
+        "id", "substitute_number",
+        "unit__id", "unit__unit_number", "unit__yt_number", "unit__oem",
+        "substitute_unit__id", "substitute_unit__unit_number",
+    )[:per_q]:
         u = sub.unit
         add("sub", sub.pk, {
             "hit_type": "Unit substitute",
@@ -1790,10 +1816,16 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
             "tertiary": u.oem or "—",
             "href": reverse("catalog:unit_detail", args=[u.pk]),
         })
+    if full():
+        return hits
 
+    # 6. Gear reductions
     for gr in GearReductionSubstitution.objects.filter(
-        Q(number__icontains=q) | Q(description__icontains=q) | Q(notes__icontains=q)
-    ).select_related("unit")[:per_q]:
+        Q(number__icontains=q) | Q(description__icontains=q)
+    ).select_related("unit").only(
+        "id", "number", "description",
+        "unit__id", "unit__unit_number", "unit__yt_number", "unit__oem",
+    )[:per_q]:
         u = gr.unit
         add("gear", gr.pk, {
             "hit_type": "Gear reduction",
@@ -1804,15 +1836,20 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
             "tertiary": u.oem or "—",
             "href": reverse("catalog:unit_detail", args=[u.pk]),
         })
+    if full():
+        return hits
 
+    # 7. BOM items
     for bi in BOMItem.objects.filter(
         Q(oem_number__icontains=q)
         | Q(j_and_n__icontains=q)
         | Q(yt_number__icontains=q)
-        | Q(description__icontains=q)
-        | Q(notes__icontains=q)
-        | Q(bin_number__icontains=q)
-    ).select_related("part", "bom")[:per_q]:
+    ).select_related("part", "bom").only(
+        "id", "oem_number", "j_and_n", "yt_number",
+        "part__id", "part__part_number", "part__yt_number", "part__part_name",
+        "part__j_and_n", "part__is_active",
+        "bom__id", "bom__name",
+    )[:per_q]:
         p = bi.part
         if not p.is_active:
             continue
@@ -1824,6 +1861,29 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
             "secondary": p.part_name or "—",
             "tertiary": p.j_and_n or "—",
             "href": reverse("catalog:part_detail", args=[p.pk]),
+        })
+    if full():
+        return hits
+
+    # 8. Application specifications (only if still need more hits)
+    for spec in ApplicationSpecification.objects.filter(
+        specification__icontains=q
+    ).select_related("application").only(
+        "id", "specification", "category", "type",
+        "application__id", "application__name", "application__unit_number",
+        "application__make", "application__is_active",
+    )[:per_q]:
+        app = spec.application
+        if not app.is_active:
+            continue
+        add("appspec", spec.pk, {
+            "hit_type": "Application spec",
+            "match": spec.specification[:100],
+            "detail": f"{spec.category} / {spec.type}".strip(" /") or "—",
+            "primary": app.name[:80],
+            "secondary": app.unit_number or "—",
+            "tertiary": app.make or "—",
+            "href": reverse("catalog:application_detail", args=[app.pk]),
         })
 
     return hits
@@ -1969,7 +2029,7 @@ def unit_search(request):
 
 def unit_list(request):
     """List units with type tabs, search, and dropdown filters."""
-    units = Unit.objects.filter(is_active=True).annotate(
+    units = Unit.objects.select_related("unit_type").filter(is_active=True).annotate(
         _sort_yt=NullIf("yt_number", Value("")),
         _sort_un=NullIf("unit_number", Value("")),
     ).order_by(
@@ -2284,6 +2344,27 @@ def substitute_add(request, pk):
     return render(request, "catalog/substitute_add.html", {
         "form": form,
         "unit": unit,
+    })
+
+
+def substitute_edit(request, pk, sub_pk):
+    """Edit a substitute on a unit."""
+    unit = get_object_or_404(Unit, pk=pk)
+    obj = get_object_or_404(Substitute, pk=sub_pk, unit=unit)
+    if request.method == "POST":
+        form = SubstituteForm(request.POST, instance=obj, unit=unit)
+        if form.is_valid():
+            form.save()
+            label = obj.substitute_unit.unit_number if obj.substitute_unit else obj.substitute_number
+            logger.info("[Unit] Edited substitute %s on %s", label, unit)
+            messages.success(request, f"Substitute {label} updated.")
+            return redirect("catalog:unit_detail", pk=unit.pk)
+    else:
+        form = SubstituteForm(instance=obj, unit=unit)
+    return render(request, "catalog/substitute_add.html", {
+        "form": form,
+        "unit": unit,
+        "editing": True,
     })
 
 

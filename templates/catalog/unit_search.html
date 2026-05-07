@@ -69,7 +69,6 @@
 
 {% elif tab == 'units' %}
 {# ===== Units search form — matches Add Unit layout ===== #}
-<div style="max-width:900px;">
 <form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form"
       data-live-search-key="catalog:unit_search:units">
   <input type="hidden" name="tab" value="units">
@@ -129,11 +128,9 @@
        data-live-search-key="catalog:unit_search:units">Clear</a>
   </div>
 </form>
-</div>
 
 {% elif tab == 'parts' %}
 {# ===== Parts search form — matches Add Part layout ===== #}
-<div style="max-width:900px;">
 <form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form"
       data-live-search-key="catalog:unit_search:parts">
   <input type="hidden" name="tab" value="parts">
@@ -214,11 +211,9 @@
        data-live-search-key="catalog:unit_search:parts">Clear</a>
   </div>
 </form>
-</div>
 
 {% elif tab == 'applications' %}
 {# ===== Applications search form — matches Add Application layout ===== #}
-<div style="max-width:900px;">
 <form method="get" action="{% url 'catalog:unit_search' %}" class="js-live-search-form"
       data-live-search-key="catalog:unit_search:applications">
   <input type="hidden" name="tab" value="applications">
@@ -328,7 +323,6 @@
        data-live-search-key="catalog:unit_search:applications">Clear</a>
   </div>
 </form>
-</div>
 {% endif %}
 
 {# ===== Results ===== #}

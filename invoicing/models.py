@@ -115,6 +115,12 @@ class CompanySettings(models.Model):
         default=DATE_FMT_FULL,
     )
     invoice_currency_symbol = models.CharField(max_length=10, default="$")
+    invoice_footer_message = models.TextField(
+        "Default Footer Message",
+        blank=True,
+        default="",
+        help_text="Appears at the bottom of every invoice (e.g. thank-you note, payment instructions).",
+    )
 
     class Meta:
         verbose_name = "Company Settings"
