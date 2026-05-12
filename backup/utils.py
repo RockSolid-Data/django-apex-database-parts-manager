@@ -88,6 +88,7 @@ def sync_backup(destination_dir, *, reason="manual"):
     # --- 3. Incremental media sync (add/update, never delete) ---
     media_copied = 0
     media_skipped = 0
+    media_total_bytes = 0
     if media_root.is_dir():
         dest_media = dest / "media"
         dest_media.mkdir(exist_ok=True)
@@ -114,12 +115,14 @@ def sync_backup(destination_dir, *, reason="manual"):
                 rel = os.path.relpath(src_full, src_root_str)
                 dst_full = os.path.join(dst_root_str, rel)
 
+                try:
+                    src_st = os.stat(src_full)
+                except OSError:
+                    continue
+                media_total_bytes += src_st.st_size
+
                 existing = dst_index.get(rel)
                 if existing is not None:
-                    try:
-                        src_st = os.stat(src_full)
-                    except OSError:
-                        continue
                     if abs(src_st.st_mtime - existing[0]) < 1 and src_st.st_size == existing[1]:
                         media_skipped += 1
                         continue
@@ -129,6 +132,7 @@ def sync_backup(destination_dir, *, reason="manual"):
                 media_copied += 1
 
     # --- 4. Write manifest ---
+    media_total_files = media_copied + media_skipped
     manifest = {
         "timestamp": timestamp,
         "synced_at": timezone.now().isoformat(),
@@ -136,6 +140,8 @@ def sync_backup(destination_dir, *, reason="manual"):
         "db_size_mb": round(db_size_mb, 1),
         "media_copied": media_copied,
         "media_skipped": media_skipped,
+        "media_total_files": media_total_files,
+        "media_total_size_mb": round(media_total_bytes / (1024 * 1024), 1),
     }
     try:
         from version import __version__
@@ -363,7 +369,11 @@ def get_snapshot_list(backup_dir):
 
 
 def get_backup_info(backup_dir):
-    """Get summary info about a backup folder."""
+    """Get summary info about a backup folder.
+
+    Reads stats from manifest.json (written during sync) to avoid walking
+    the entire media tree on every page load.
+    """
     dest = Path(backup_dir)
     if not dest.is_dir():
         return None
@@ -375,17 +385,6 @@ def get_backup_info(backup_dir):
         info["has_db"] = True
         info["db_size_mb"] = round(db_file.stat().st_size / (1024 * 1024), 1)
 
-    media_dir = dest / "media"
-    if media_dir.is_dir():
-        total = 0
-        count = 0
-        for f in media_dir.rglob("*"):
-            if f.is_file():
-                total += f.stat().st_size
-                count += 1
-        info["media_count"] = count
-        info["media_size_mb"] = round(total / (1024 * 1024), 1)
-
     manifest_file = dest / "manifest.json"
     if manifest_file.exists():
         try:
@@ -393,6 +392,8 @@ def get_backup_info(backup_dir):
             info["last_synced"] = manifest.get("synced_at")
             info["app_version"] = manifest.get("app_version")
             info["reason"] = manifest.get("reason")
+            info["media_count"] = manifest.get("media_total_files", 0)
+            info["media_size_mb"] = manifest.get("media_total_size_mb", 0)
         except Exception:
             pass
 

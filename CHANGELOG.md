@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.2.0 — Fast Upgrades & Launch Experience (2026-05-11)
+
+### Improved
+- **Upgrade sync speed:** rewrote `sync_catalog` to use bulk SQL
+  (`ATTACH DATABASE` + `INSERT INTO...SELECT`) instead of row-by-row
+  inserts. Syncing ~3 million catalog records now completes in seconds
+  instead of 10-20 minutes.
+- **Launch experience:** the browser now opens immediately with a
+  professional loading page ("Preparing your system...") while Django,
+  migrations, catalog sync, and backup run in the background. The page
+  auto-redirects to the app once the server is ready — no more blank
+  wait after clicking Launch.
+
+### Fixed
+- **Build size:** the 14 GB `staging_dbs` dev directory is now moved
+  out of the `data_import` package before cx_Freeze runs, reducing
+  the build from ~15 GB to ~670 MB and cutting freeze time from
+  timeout to ~75 seconds.
+
+## v1.1.4 — Catalog Sync Fix (2026-05-11)
+
+### Fixed
+- **Seed export: seed_id backfill** — `export_seed_data` now sets
+  `seed_id = id` on all 14 catalog tables where it was NULL before
+  bundling into the installer. Previously ~1.96 million records imported
+  after migration 0028 had no `seed_id`, so `sync_catalog` silently
+  skipped them during customer upgrades. First-time installs and upgrades
+  now ship identical catalog data.
+
+## v1.1.3 — Performance & UX Consistency (2026-05-11)
+
+### Fixed
+- **Unit substitute delete:** removing a reverse-linked substitute no longer
+  returns a 404 — the delete view now uses a bidirectional lookup matching
+  the display logic
+
+### Improved
+- **List page performance:** eliminated duplicate COUNT queries in unit, part,
+  and application list views; removed unnecessary `select_related` JOINs that
+  the templates never used; added database indexes on `is_active`,
+  `unit_type_category`, `unit_type_name`, and `category` for faster filtering
+- **Backup page load time:** media file count and size are now read from the
+  backup manifest instead of walking the filesystem on every page load
+- **Gear reductions:** full row is now clickable to edit; delete uses an inline
+  "x" button matching substitutes; removed unused Description field
+- **Part compatibility sections:** substitutes, interchange, and superseding
+  rows are all clickable for editing with a consistent UX pattern
+
+### Changed
+- Default maximum backup snapshots reduced from 10 to 4
+
 ## v1.1.2 — UI Polish & Data Quality (2026-04-28)
 
 ### Fixed

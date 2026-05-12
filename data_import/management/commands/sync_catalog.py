@@ -2,41 +2,41 @@
 Additive catalog sync: inserts new reference records from seed.sqlite3
 into the customer database. Never updates or deletes existing records.
 
+Uses SQLite ATTACH DATABASE for bulk INSERT INTO...SELECT operations
+instead of row-by-row inserts — syncs ~3 million records in seconds.
+
 Lookup key is seed_id. If a record with that seed_id already exists in
 the customer DB, it is skipped entirely (even if the customer edited it).
 """
 
-import sqlite3
+import time
 from pathlib import Path
 
-from django.apps import apps
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
 SYNC_MODELS = [
-    ("catalog", "UnitType"),
-    ("catalog", "Application"),
-    ("catalog", "ApplicationSpecification"),
-    ("catalog", "Unit"),
-    ("catalog", "ApplicationUnit"),
-    ("catalog", "CrossReference"),
-    ("catalog", "Substitute"),
-    ("catalog", "GearReductionSubstitution"),
-    ("catalog", "Part"),
-    ("catalog", "PartSubstitute"),
-    ("catalog", "PartInterchange"),
-    ("catalog", "PartSuperseding"),
-    ("catalog", "BOM"),
-    ("catalog", "BOMItem"),
+    ("catalog", "UnitType", "catalog_unittype"),
+    ("catalog", "Application", "catalog_application"),
+    ("catalog", "ApplicationSpecification", "catalog_applicationspecification"),
+    ("catalog", "Unit", "catalog_unit"),
+    ("catalog", "ApplicationUnit", "catalog_applicationunit"),
+    ("catalog", "CrossReference", "catalog_crossreference"),
+    ("catalog", "Substitute", "catalog_substitute"),
+    ("catalog", "GearReductionSubstitution", "catalog_gearreductionsubstitution"),
+    ("catalog", "Part", "catalog_part"),
+    ("catalog", "PartSubstitute", "catalog_partsubstitute"),
+    ("catalog", "PartInterchange", "catalog_partinterchange"),
+    ("catalog", "PartSuperseding", "catalog_partsuperseding"),
+    ("catalog", "BOM", "catalog_bom"),
+    ("catalog", "BOMItem", "catalog_bomitem"),
 ]
 
 SKIP_COLUMNS = {"id"}
 
-FK_SUFFIX = "_id"
-
 
 class Command(BaseCommand):
-    help = "Sync new catalog records from seed.sqlite3 (additive only)."
+    help = "Sync new catalog records from seed.sqlite3 (additive only, bulk SQL)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -55,94 +55,80 @@ class Command(BaseCommand):
         if not seed_path.exists():
             raise CommandError(f"Seed database not found: {seed_path}")
 
-        seed_conn = sqlite3.connect(str(seed_path))
-        seed_conn.row_factory = sqlite3.Row
+        t0 = time.perf_counter()
+        db_cursor = connection.cursor()
 
-        totals = {"inserted": 0, "skipped": 0}
+        seed_path_str = str(seed_path).replace("'", "''")
+        db_cursor.execute(f"ATTACH DATABASE '{seed_path_str}' AS seed")
 
-        for app_label, model_name in SYNC_MODELS:
-            inserted, skipped = self._sync_model(
-                seed_conn, app_label, model_name, dry_run
-            )
-            totals["inserted"] += inserted
-            totals["skipped"] += skipped
+        try:
+            totals = {"inserted": 0, "skipped": 0}
 
-        seed_conn.close()
+            for _app, model_name, db_table in SYNC_MODELS:
+                inserted, skipped = self._sync_table(
+                    db_cursor, model_name, db_table, dry_run
+                )
+                totals["inserted"] += inserted
+                totals["skipped"] += skipped
 
+            if not dry_run:
+                connection.connection.commit()
+        finally:
+            db_cursor.execute("DETACH DATABASE seed")
+
+        elapsed = time.perf_counter() - t0
         prefix = "[DRY RUN] " if dry_run else ""
         self.stdout.write(self.style.SUCCESS(
             f"{prefix}Catalog sync complete: "
-            f"{totals['inserted']} new records inserted, "
-            f"{totals['skipped']} existing records skipped."
+            f"{totals['inserted']:,} new records inserted, "
+            f"{totals['skipped']:,} existing records skipped "
+            f"({elapsed:.1f}s)."
         ))
 
-    def _sync_model(self, seed_conn, app_label, model_name, dry_run):
-        Model = apps.get_model(app_label, model_name)
-        db_table = Model._meta.db_table
-        cursor = seed_conn.cursor()
-
+    def _sync_table(self, db_cursor, model_name, db_table, dry_run):
         try:
-            cursor.execute(f"SELECT * FROM [{db_table}] WHERE seed_id IS NOT NULL")
-        except sqlite3.OperationalError:
+            db_cursor.execute(
+                f"SELECT COUNT(*) FROM seed.[{db_table}] WHERE seed_id IS NOT NULL"
+            )
+            seed_total = db_cursor.fetchone()[0]
+        except Exception:
             self.stderr.write(f"  {model_name}: table not found in seed -- skipping")
             return 0, 0
 
-        seed_rows = cursor.fetchall()
-        if not seed_rows:
+        if seed_total == 0:
             return 0, 0
 
-        columns = [desc[0] for desc in cursor.description]
+        db_cursor.execute(f"PRAGMA seed.table_info([{db_table}])")
+        all_columns = [row[1] for row in db_cursor.fetchall()]
+        insert_columns = [c for c in all_columns if c not in SKIP_COLUMNS]
 
-        existing_seed_ids = set(
-            Model.objects.filter(seed_id__isnull=False)
-            .values_list("seed_id", flat=True)
+        col_list = ", ".join(f"[{c}]" for c in insert_columns)
+
+        new_count_sql = (
+            f"SELECT COUNT(*) FROM seed.[{db_table}] s "
+            f"WHERE s.seed_id IS NOT NULL "
+            f"AND s.seed_id NOT IN ("
+            f"  SELECT seed_id FROM main.[{db_table}] WHERE seed_id IS NOT NULL"
+            f")"
         )
+        db_cursor.execute(new_count_sql)
+        to_insert = db_cursor.fetchone()[0]
+        skipped = seed_total - to_insert
 
-        inserted = 0
-        skipped = 0
+        if to_insert > 0 and not dry_run:
+            insert_sql = (
+                f"INSERT INTO main.[{db_table}] ({col_list}) "
+                f"SELECT {col_list} FROM seed.[{db_table}] s "
+                f"WHERE s.seed_id IS NOT NULL "
+                f"AND s.seed_id NOT IN ("
+                f"  SELECT seed_id FROM main.[{db_table}] WHERE seed_id IS NOT NULL"
+                f")"
+            )
+            db_cursor.execute(insert_sql)
 
-        for row in seed_rows:
-            row_dict = dict(zip(columns, row))
-            seed_id = row_dict.get("seed_id")
-            if seed_id is None:
-                continue
-
-            if seed_id in existing_seed_ids:
-                skipped += 1
-                continue
-
-            if dry_run:
-                inserted += 1
-                continue
-
-            insert_data = {}
-            for col in columns:
-                if col in SKIP_COLUMNS:
-                    continue
-                value = row_dict[col]
-                insert_data[col] = value
-
-            col_names = list(insert_data.keys())
-            placeholders = ", ".join(["?" for _ in col_names])
-            col_str = ", ".join([f"[{c}]" for c in col_names])
-            values = [insert_data[c] for c in col_names]
-
-            try:
-                with connection.cursor() as db_cursor:
-                    db_cursor.execute(
-                        f"INSERT INTO [{db_table}] ({col_str}) VALUES ({placeholders})",
-                        values,
-                    )
-                inserted += 1
-                existing_seed_ids.add(seed_id)
-            except Exception as e:
-                self.stderr.write(
-                    f"  {model_name} seed_id={seed_id}: insert failed -- {e}"
-                )
-
-        if inserted or skipped:
+        if to_insert or skipped:
             self.stdout.write(
-                f"  {model_name}: {inserted} inserted, {skipped} skipped"
+                f"  {model_name}: {to_insert:,} inserted, {skipped:,} skipped"
             )
 
-        return inserted, skipped
+        return to_insert, skipped

@@ -60,6 +60,16 @@ test_compare_random.py
 test_reparse.py
 test_reparse_full.py
 test_reparse_quick.py
+_import_counts.py
+_show_*.py
+_test_picker.*
+
+# Build log output
+iscc_err.txt
+iscc_out.txt
+
+# Database snapshot backups
+*.bak
 
 # Cursor project cache (rules are committed separately under .cursor/rules/)
 .cursor/projects/

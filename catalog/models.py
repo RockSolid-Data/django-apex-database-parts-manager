@@ -67,6 +67,7 @@ class Application(models.Model):
             models.Index(fields=["unit_number"]),
             models.Index(fields=["model"]),
             models.Index(fields=["part_number"]),
+            models.Index(fields=["unit_type_name"]),
         ]
 
     def __str__(self):
@@ -232,6 +233,8 @@ class Unit(models.Model):
             models.Index(fields=["manufacturer"]),
             models.Index(fields=["j_and_n_number"]),
             models.Index(fields=["model_cat_number"]),
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["unit_type_category"]),
         ]
 
     def __str__(self):
@@ -377,7 +380,7 @@ class GearReductionSubstitution(models.Model):
     number = models.CharField("Unit Number", max_length=50, blank=True, default="")
     unit_type = models.CharField("Unit Type", max_length=100, blank=True, default="")
     supplier = models.CharField("Supplier", max_length=200, blank=True, default="")
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, blank=True, default="")
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -589,6 +592,8 @@ class Part(models.Model):
             models.Index(fields=["yt_number"]),
             models.Index(fields=["manufacturer_number"]),
             models.Index(fields=["item_no"]),
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["category"]),
         ]
 
     def __str__(self):

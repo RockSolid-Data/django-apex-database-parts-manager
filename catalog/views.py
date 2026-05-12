@@ -755,7 +755,7 @@ def _get_deep_match_label(part, q_lower: str, ic_map: dict, sup_map: dict) -> st
 
 def part_list(request):
     """List parts with search, category filter, Part Number, YT Number, J&N, OEM #, Description, In Stock."""
-    base_qs = Part.objects.select_related("unit").filter(is_active=True).annotate(
+    base_qs = Part.objects.filter(is_active=True).annotate(
         _sort_yt=NullIf("yt_number", Value("")),
         _sort_pn=NullIf("part_number", Value("")),
     ).order_by(
@@ -820,7 +820,6 @@ def part_list(request):
         lambda: list(Part.objects.filter(is_active=True).exclude(voltage="").values_list("voltage", flat=True).distinct().order_by("voltage")),
         300)
 
-    total_count = parts.count()
     try:
         per_page = min(int(request.GET.get("per_page", 50)), 100)
     except (ValueError, TypeError):
@@ -828,6 +827,7 @@ def part_list(request):
     paginator = Paginator(parts, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+    total_count = paginator.count
 
     # Build (part, match_label) pairs for the current page.
     # match_label is non-empty only for tier-2 deep results.
@@ -1091,6 +1091,30 @@ def part_substitute_add(request, pk):
     return render(request, "catalog/part_substitute_add.html", {"form": form, "part": part})
 
 
+def part_substitute_edit(request, pk, sub_pk):
+    """Edit a substitute link on a part."""
+    part = get_object_or_404(Part, pk=pk)
+    obj = get_object_or_404(
+        PartSubstitute.objects.filter(Q(part=part) | Q(substitute_part=part)),
+        pk=sub_pk,
+    )
+    if request.method == "POST":
+        form = PartSubstituteForm(request.POST, instance=obj, part=part)
+        if form.is_valid():
+            form.save()
+            label = obj.substitute_part.part_number if obj.substitute_part else obj.substitute_number
+            logger.info("[Part] Edited substitute '%s' on %s", label, part)
+            messages.success(request, f"Substitute '{label}' updated.")
+            return redirect("catalog:part_detail", pk=part.pk)
+    else:
+        form = PartSubstituteForm(instance=obj, part=part)
+    return render(request, "catalog/part_substitute_add.html", {
+        "form": form,
+        "part": part,
+        "editing": True,
+    })
+
+
 def part_substitute_delete(request, pk, sub_pk):
     """Delete a substitute link from a part."""
     part = get_object_or_404(Part, pk=pk)
@@ -1176,6 +1200,26 @@ def part_superseding_add(request, pk):
     else:
         form = PartSupersedingForm(part=part)
     return render(request, "catalog/part_superseding_add.html", {"form": form, "part": part})
+
+
+def part_superseding_edit(request, pk, sup_pk):
+    """Edit a superseding entry on a part."""
+    part = get_object_or_404(Part, pk=pk)
+    obj = get_object_or_404(PartSuperseding, pk=sup_pk, part=part)
+    if request.method == "POST":
+        form = PartSupersedingForm(request.POST, instance=obj, part=part)
+        if form.is_valid():
+            form.save()
+            logger.info("[Part] Edited superseding '%s' on %s", obj.old_part_number, part)
+            messages.success(request, f"Superseding '{obj.old_part_number}' updated.")
+            return redirect("catalog:part_detail", pk=part.pk)
+    else:
+        form = PartSupersedingForm(instance=obj, part=part)
+    return render(request, "catalog/part_superseding_add.html", {
+        "form": form,
+        "part": part,
+        "editing": True,
+    })
 
 
 def part_superseding_delete(request, pk, sup_pk):
@@ -2029,7 +2073,7 @@ def unit_search(request):
 
 def unit_list(request):
     """List units with type tabs, search, and dropdown filters."""
-    units = Unit.objects.select_related("unit_type").filter(is_active=True).annotate(
+    units = Unit.objects.filter(is_active=True).annotate(
         _sort_yt=NullIf("yt_number", Value("")),
         _sort_un=NullIf("unit_number", Value("")),
     ).order_by(
@@ -2098,7 +2142,6 @@ def unit_list(request):
     else:
         selected_unit_type_name = selected_type if selected_type in unit_type_categories else None
 
-    total_count = units.count()
     try:
         per_page = min(int(request.GET.get("per_page", 50)), 100)
     except (ValueError, TypeError):
@@ -2106,6 +2149,7 @@ def unit_list(request):
     paginator = Paginator(units, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+    total_count = paginator.count
 
     context = {
         "units": page_obj,
@@ -2371,7 +2415,10 @@ def substitute_edit(request, pk, sub_pk):
 def substitute_delete(request, pk, sub_pk):
     """Remove a substitute link from a unit."""
     unit = get_object_or_404(Unit, pk=pk)
-    obj = get_object_or_404(Substitute, pk=sub_pk, unit=unit)
+    obj = get_object_or_404(
+        Substitute.objects.filter(Q(unit=unit) | Q(substitute_unit=unit)),
+        pk=sub_pk,
+    )
     if request.method == "POST":
         label = obj.substitute_unit.unit_number if obj.substitute_unit else obj.substitute_number
         obj.delete()

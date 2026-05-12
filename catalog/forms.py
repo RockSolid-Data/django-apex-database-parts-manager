@@ -625,7 +625,7 @@ class GearReductionForm(forms.ModelForm):
 
     class Meta:
         model = GearReductionSubstitution
-        fields = ["number", "unit_type", "supplier", "description", "notes"]
+        fields = ["number", "unit_type", "supplier", "notes"]
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 2}),
         }

@@ -97,6 +97,7 @@ INT = "_internal"
 INCLUDE_FILES = [
     (str(BASE_DIR / "VERSION"), f"{INT}/VERSION"),
     (str(BASE_DIR / "version.py"), f"{INT}/version.py"),
+    (str(BASE_DIR / "loading.html"), f"{INT}/loading.html"),
 ]
 
 if (BASE_DIR / "changelog.json").exists():

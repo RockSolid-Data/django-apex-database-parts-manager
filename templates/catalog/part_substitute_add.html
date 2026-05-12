@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Add Substitute — {{ part.part_number }} — Apex Database{% endblock %}
+{% block title %}{% if editing %}Edit{% else %}Add{% endif %} Substitute — {{ part.part_number }} — Apex Database{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 me-sticky-toolbar">
   <h1 class="page-heading mb-0">
-    <i class="bi bi-arrow-left-right"></i> Add Substitute
+    <i class="bi bi-arrow-left-right"></i> {% if editing %}Edit{% else %}Add{% endif %} Substitute
   </h1>
   <button type="button" onclick="history.back()" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left"></i> Back
@@ -16,7 +16,7 @@
   <div class="col-md-7">
     <div class="card">
       <div class="card-header fw-semibold">
-        Add a substitute to <strong>{{ part.part_number }}</strong>
+        {% if editing %}Edit{% else %}Add a{% endif %} substitute {% if not editing %}to {% endif %}<strong>{{ part.part_number }}</strong>
       </div>
       <div class="card-body">
         {% if form.errors %}
@@ -69,7 +69,7 @@
 
           <div class="d-flex gap-2 me-sticky-actions">
             <button type="submit" class="btn btn-primary">
-              <i class="bi bi-check-lg"></i> Add Substitute
+              <i class="bi bi-check-lg"></i> {% if editing %}Save Changes{% else %}Add Substitute{% endif %}
             </button>
             <a href="{% url 'catalog:part_detail' part.pk %}" class="btn btn-outline-secondary">Cancel</a>
           </div>

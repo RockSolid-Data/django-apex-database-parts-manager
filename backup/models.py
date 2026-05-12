@@ -30,7 +30,7 @@ class BackupSettings(models.Model):
     )
     max_backups = models.PositiveIntegerField(
         "Max DB snapshots to keep",
-        default=10,
+        default=4,
         help_text="Number of historical database snapshots to keep. Oldest are deleted automatically.",
     )
     last_backup_at = models.DateTimeField(

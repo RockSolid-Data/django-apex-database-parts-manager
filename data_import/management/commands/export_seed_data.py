@@ -12,6 +12,16 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
+SEED_ID_TABLES = [
+    "catalog_unittype", "catalog_application",
+    "catalog_applicationspecification", "catalog_unit",
+    "catalog_applicationunit", "catalog_crossreference",
+    "catalog_substitute", "catalog_gearreductionsubstitution",
+    "catalog_part", "catalog_partsubstitute",
+    "catalog_partinterchange", "catalog_partsuperseding",
+    "catalog_bom", "catalog_bomitem",
+]
+
 TABLES_TO_CLEAR = [
     # Customer / transactional data
     "invoicing_invoice",
@@ -27,6 +37,9 @@ TABLES_TO_CLEAR = [
 
     # User-uploaded images (not reference data)
     "catalog_partimage",
+
+    # Backup configuration (per-install)
+    "backup_backupsettings",
 
     # Django auth / session data (but NOT schema tables like
     # django_migrations, django_content_type, auth_permission, auth_group)
@@ -82,10 +95,26 @@ class Command(BaseCommand):
                 self.stderr.write(f"  Warning: could not clear {table}: {e}")
 
         conn.commit()
+
+        backfilled = 0
+        for table in SEED_ID_TABLES:
+            try:
+                cursor.execute(
+                    f"UPDATE [{table}] SET seed_id = id WHERE seed_id IS NULL"
+                )
+                count = cursor.rowcount
+                if count:
+                    backfilled += count
+                    self.stdout.write(f"  {table}: backfilled seed_id on {count} rows")
+            except Exception as e:
+                self.stderr.write(f"  Warning: could not backfill {table}: {e}")
+
+        conn.commit()
         cursor.execute("VACUUM")
         conn.close()
 
         size_mb = output_path.stat().st_size / (1024 * 1024)
         self.stdout.write(self.style.SUCCESS(
-            f"Seed exported: {output_path} ({size_mb:.1f} MB, {cleared} tables cleared)"
+            f"Seed exported: {output_path} ({size_mb:.1f} MB, "
+            f"{cleared} tables cleared, {backfilled} seed_ids backfilled)"
         ))

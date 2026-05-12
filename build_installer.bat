@@ -65,10 +65,19 @@ echo [1/3] Exporting seed data...
 if errorlevel 1 (echo [WARNING] Seed export failed -- building without seed data)
 echo [2/3] Collecting static files...
 %PYTHON% manage.py collectstatic --noinput
-echo [3/3] Freezing application...
+echo [3/4] Freezing application...
 if exist "%BUILD_DIR%" rmdir /s /q "%BUILD_DIR%" 2>nul
+:: Move staging_dbs out so cx_Freeze doesn't copy 14 GB of dev-only import sources
+if exist "data_import\staging_dbs" (
+    move "data_import\staging_dbs" "_staging_dbs_tmp" >nul
+)
 %PYTHON% setup_cx_freeze.py build
-if errorlevel 1 (echo [ERROR] Build failed! & exit /b 1)
+set FREEZE_ERR=%errorlevel%
+:: Restore staging_dbs regardless of freeze outcome
+if exist "_staging_dbs_tmp" (
+    move "_staging_dbs_tmp" "data_import\staging_dbs" >nul
+)
+if %FREEZE_ERR% neq 0 (echo [ERROR] Build failed! & exit /b 1)
 if not exist "%BUILD_DIR%\%APP_NAME%.exe" (echo [ERROR] Output not found! & exit /b 1)
 echo [DONE] Frozen app: %BUILD_DIR%\
 if "%BUILD_MODE%"=="freeze" exit /b 0
@@ -99,17 +108,18 @@ if "!ISCC!"=="" (echo [ERROR] Inno Setup 6 not found! Download: https://jrsoftwa
 
 if not exist dist mkdir dist
 
-:: Quote defines that contain spaces to avoid ISCC argument splitting
-set "DEFINES=/DAppName=%APP_NAME%"
-set "DEFINES=%DEFINES% "/DAppDisplayName=%APP_DISPLAY_NAME%""
-set "DEFINES=%DEFINES% /DAppVersion=%APP_VERSION%"
-set "DEFINES=%DEFINES% "/DAppAuthor=%APP_AUTHOR%""
-set "DEFINES=%DEFINES% "/DAppDescription=%APP_DESCRIPTION%""
-set "DEFINES=%DEFINES% /DUpgradeCode=!UPGRADE_CODE!"
-set "DEFINES=%DEFINES% /DBuildDir=%BUILD_DIR%"
-if exist "app.ico" set "DEFINES=%DEFINES% /DIconFile=app.ico"
+:: Quote defines that contain spaces to avoid ISCC argument splitting.
+:: Use delayed expansion (!VAR!) so & in APP_DESCRIPTION is not parsed.
+set "DEFINES=/DAppName=!APP_NAME!"
+set "DEFINES=!DEFINES! "/DAppDisplayName=!APP_DISPLAY_NAME!""
+set "DEFINES=!DEFINES! /DAppVersion=!APP_VERSION!"
+set "DEFINES=!DEFINES! "/DAppAuthor=!APP_AUTHOR!""
+set "DEFINES=!DEFINES! "/DAppDescription=!APP_DESCRIPTION!""
+set "DEFINES=!DEFINES! /DUpgradeCode=!UPGRADE_CODE!"
+set "DEFINES=!DEFINES! /DBuildDir=!BUILD_DIR!"
+if exist "app.ico" set "DEFINES=!DEFINES! /DIconFile=app.ico"
 
-"!ISCC!" %DEFINES% installer.iss
+"!ISCC!" !DEFINES! installer.iss
 if errorlevel 1 (echo [ERROR] Inno build failed! & exit /b 1)
 echo [DONE] Installer: dist\%APP_NAME%_Setup_v%APP_VERSION%.exe
 exit /b 0

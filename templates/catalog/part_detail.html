@@ -129,12 +129,12 @@
               </td>
             </tr>
             {% else %}
-            <tr>
+            <tr style="cursor:pointer" onclick="window.location='{% url 'catalog:part_substitute_edit' part.pk s.ref.pk %}'">
               <td class="ps-3">{{ s.ref.substitute_number }}</td>
               <td>—</td>
               <td>—</td>
               <td>{{ s.ref.notes|default:"—" }}</td>
-              <td class="text-end pe-3">
+              <td class="text-end pe-3" onclick="event.stopPropagation()">
                 <form method="post" action="{% url 'catalog:part_substitute_delete' part.pk s.ref.pk %}"
                       onsubmit="return confirm('Remove this substitute?')">
                   {% csrf_token %}
@@ -214,9 +214,7 @@
               </td>
             </tr>
             {% else %}
-            <tr class="js-interchange-edit-row cursor-pointer"
-                title="Double-click to edit"
-                data-edit-url="{% url 'catalog:part_interchange_edit' part.pk i.ref.pk %}">
+            <tr style="cursor:pointer" onclick="window.location='{% url 'catalog:part_interchange_edit' part.pk i.ref.pk %}'">
               <td class="ps-3">{{ i.ref.interchange_number|default:"—" }}</td>
               <td>—</td>
               <td>{{ i.ref.source_name|default:"—" }}</td>
@@ -265,7 +263,7 @@
           </thead>
           <tbody>
             {% for sup in part_supersedings %}
-            <tr {% if sup.old_part %}style="cursor:pointer" onclick="window.location='{% url 'catalog:part_detail' sup.old_part.pk %}'"{% endif %}>
+            <tr style="cursor:pointer" onclick="window.location='{% if sup.old_part %}{% url 'catalog:part_detail' sup.old_part.pk %}{% else %}{% url 'catalog:part_superseding_edit' part.pk sup.pk %}{% endif %}'">
               <td class="ps-3">{{ sup.old_part_number }}</td>
               <td>
                 {% if sup.old_part %}
@@ -398,14 +396,6 @@
 (function () {
   var IX_STORAGE = 'mePartIxFilter:';
 
-  document.querySelectorAll('.js-interchange-edit-row').forEach(function (row) {
-    row.addEventListener('dblclick', function (e) {
-      if (e.target.closest('a, button, input, label')) return;
-      var url = row.getAttribute('data-edit-url');
-      if (url) window.location.href = url;
-    });
-  });
-
   var card = document.getElementById('part-interchange-card');
   if (!card) return;
   var partPk = card.getAttribute('data-part-pk');
@@ -413,7 +403,7 @@
   var table = document.getElementById('part-interchange-table');
   if (!input || !table) return;
 
-  var rows = table.querySelectorAll('tbody tr.js-interchange-edit-row');
+  var rows = table.querySelectorAll('tbody tr');
   var clearBtn = card.querySelector('.js-part-ix-filter-clear');
   var storageKey = IX_STORAGE + partPk;
 

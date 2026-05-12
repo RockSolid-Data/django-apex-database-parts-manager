@@ -316,6 +316,31 @@ def find_available_port(start=DEFAULT_PORT):
     return start
 
 
+def open_loading_page(port):
+    """Open the loading page in the browser immediately.
+
+    The page polls the server and auto-redirects once Waitress is up.
+    """
+    app_dir = get_app_dir()
+    internal_dir = app_dir / '_internal' if is_frozen() else app_dir
+    loading_path = internal_dir / "loading.html"
+
+    if not loading_path.exists():
+        loading_path = app_dir / "loading.html"
+
+    if not loading_path.exists():
+        return
+
+    try:
+        from version import __version__
+        ver = __version__
+    except Exception:
+        ver = ""
+
+    file_url = loading_path.as_uri() + f"?port={port}&v={ver}"
+    webbrowser.open(file_url)
+
+
 def open_browser_delayed(url, delay=2):
     def _open():
         time.sleep(delay)
@@ -390,7 +415,6 @@ def run_server(host='127.0.0.1', port=DEFAULT_PORT):
     print(f"  Close this window to stop")
     print(f"{'='*50}\n")
 
-    open_browser_delayed(url)
     serve(application, host=host, port=port, threads=4)
 
 
@@ -411,7 +435,16 @@ def main():
         _pause_if_debug("Already running. Press Enter to close...")
         sys.exit(0)
 
+    # Determine port early so we can open the loading page immediately
+    port = DEFAULT_PORT
+    if not find_and_kill_old_instance(port):
+        port = find_available_port(port + 1)
+        print(f"Using fallback port {port}.")
+
     install_type = ensure_database()
+
+    # Open loading page in the browser right away (polls until server is up)
+    open_loading_page(port)
 
     print("Setting up Django...")
     setup_django()
@@ -443,11 +476,6 @@ def main():
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
-
-    port = DEFAULT_PORT
-    if not find_and_kill_old_instance(port):
-        port = find_available_port(port + 1)
-        print(f"Using fallback port {port}.")
 
     try:
         run_server(port=port)
