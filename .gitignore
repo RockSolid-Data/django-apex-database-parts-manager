@@ -24,7 +24,6 @@ LesterCD_Decrypted.db
 /staticfiles/
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
