@@ -157,13 +157,13 @@
     </div>
   </div>
 
-  {# ===== Description & Notes ===== #}
+  {# ===== Notes ===== #}
   <div class="card mb-3">
-    <div class="card-header fw-semibold">Description &amp; Notes</div>
+    <div class="card-header fw-semibold">Notes</div>
     <div class="card-body">
       <div class="row g-3">
         {% for field in form %}
-          {% if field.name in "description,foot_notes,superseding_notes" %}
+          {% if field.name in "notes,foot_notes,superseding_notes" %}
           <div class="col-12">
             <label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
             {{ field }}

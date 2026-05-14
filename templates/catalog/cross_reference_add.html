@@ -73,6 +73,17 @@
           <hr>
 
           <div class="mb-3">
+            <label class="form-label" for="{{ form.price.id_for_label }}">Price</label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              {{ form.price }}
+            </div>
+            {% if form.price.errors %}
+              <div class="invalid-feedback d-block">{{ form.price.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
             <label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>
             {{ form.notes }}
           </div>
@@ -88,4 +99,16 @@
     </div>
   </div>
 </div>
+<script>
+document.querySelectorAll('.js-price-input').forEach(function(input) {
+  function formatPrice() {
+    var val = input.value.replace(/[^0-9.]/g, '');
+    if (val === '') return;
+    var num = parseFloat(val);
+    if (!isNaN(num)) input.value = num.toFixed(2);
+  }
+  formatPrice();
+  input.addEventListener('blur', formatPrice);
+});
+</script>
 {% endblock %}

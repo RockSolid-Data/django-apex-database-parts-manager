@@ -205,7 +205,7 @@
       if (form._lsBound) return;
       form._lsBound = true;
 
-      const debouncedSearch = debounce(() => doLiveSearch(form), 400);
+      const debouncedSearch = debounce(() => doLiveSearch(form), 250);
 
       form.querySelectorAll('input[type="text"], input[type="search"]').forEach(input => {
         input.addEventListener('input', debouncedSearch);

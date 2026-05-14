@@ -67,17 +67,13 @@
 </div>{# /.me-sticky-toolbar #}
 
 <div id="live-search-results">
-<p class="text-muted mb-0 me-sticky-count">{{ total_count }} part{{ total_count|pluralize }} found{% if page_obj.has_other_pages %} — page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}
-  {% if search_tier == 2 and q %}
-    <span class="ms-2 badge bg-info text-dark"><i class="bi bi-layers me-1"></i>Deep search</span>
-  {% endif %}
-</p>
+<p class="text-muted mb-0 me-sticky-count">{{ total_count }} part{{ total_count|pluralize }} found{% if page_obj.has_other_pages %} — page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</p>
 
 <div class="table-responsive">
   <table class="table table-striped table-hover align-middle">
     <thead class="table-dark">
       <tr>
-        {% if q %}<th style="padding-right:4px;white-space:nowrap;">Match</th>{% endif %}
+        {% if deep_search_used %}<th style="padding-right:4px;white-space:nowrap;">Match</th>{% endif %}
         <th>Part Number</th>
         <th>YT Number</th>
         <th style="padding-right:22px;">J&N</th>
@@ -90,7 +86,7 @@
     <tbody>
       {% for part, match_label in parts_with_match %}
       <tr data-href="{% url 'catalog:part_detail' part.pk %}">
-        {% if q %}
+        {% if deep_search_used %}
         <td style="padding-right:4px;white-space:nowrap;">
           {% if match_label %}
             <span class="badge rounded-pill text-bg-warning fw-normal text-truncate d-inline-block" style="max-width:150px;" title="{{ match_label }}">{{ match_label }}</span>
@@ -101,13 +97,13 @@
         <td>{{ part.yt_number|default:"—" }}</td>
         <td style="padding-right:22px;">{{ part.j_and_n|default:"—" }}</td>
         <td>{{ part.oem_number|default:"—" }}</td>
-        <td>{{ part.description|truncatewords:12 }}</td>
+        <td>{{ part.notes|truncatewords:12 }}</td>
         <td>{{ part.voltage|default:"" }}</td>
         <td class="text-center">{{ part.stock_quantity }}</td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="{% if q %}8{% else %}7{% endif %}" class="text-center text-muted py-4">
+        <td colspan="{% if deep_search_used %}8{% else %}7{% endif %}" class="text-center text-muted py-4">
           <i class="bi bi-inbox fs-3 d-block mb-2"></i>
           No parts found.
         </td>

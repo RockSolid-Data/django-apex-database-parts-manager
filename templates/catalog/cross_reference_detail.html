@@ -20,23 +20,27 @@
       </div>
       <div class="card-body">
 
-        {% if cr.cross_ref_unit %}
         <div class="mb-3">
-          <label class="form-label fw-semibold">Linked Unit</label>
+          <label class="form-label fw-semibold">Unit / Part Number</label>
           <div class="form-control bg-light">
-            <a href="{% url 'catalog:unit_detail' cr.cross_ref_unit.pk %}">{{ cr.cross_ref_unit.unit_number }}</a>
+            {% if cr.cross_ref_unit %}
+              <a href="{% url 'catalog:unit_detail' cr.cross_ref_unit.pk %}">{{ cr.cross_ref_unit.unit_number }}</a>
+            {% else %}
+              {{ cr.cross_ref_number|default:"—" }}
+            {% endif %}
           </div>
-        </div>
-        {% endif %}
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Part Number</label>
-          <div class="form-control bg-light">{{ cr.cross_ref_number|default:"—" }}</div>
         </div>
 
         <div class="mb-3">
           <label class="form-label fw-semibold">Cross Ref Name</label>
           <div class="form-control bg-light">{{ cr.interchange_type|default:"—" }}</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Price</label>
+          <div class="form-control bg-light">
+            {% if cr.price != None %}${{ cr.price|floatformat:2 }}{% else %}—{% endif %}
+          </div>
         </div>
 
         <div class="mb-3">

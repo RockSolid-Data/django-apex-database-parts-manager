@@ -70,7 +70,7 @@ STORAGES = {
     },
 }
 
-# Logging to file in DATA_DIR
+# Logging to file in DATA_DIR — daily rotation, keep 14 days
 LOG_DIR = DATA_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -84,11 +84,12 @@ LOGGING = {
     },
     "handlers": {
         "file": {
-            "class": "logging.handlers.RotatingFileHandler",
+            "class": "logging.handlers.TimedRotatingFileHandler",
             "filename": str(LOG_DIR / "app.log"),
-            "maxBytes": 2 * 1024 * 1024,
-            "backupCount": 3,
+            "when": "midnight",
+            "backupCount": 14,
             "formatter": "standard",
+            "encoding": "utf-8",
         },
     },
     "root": {

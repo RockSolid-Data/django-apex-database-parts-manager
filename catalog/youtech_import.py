@@ -79,7 +79,7 @@ def import_youtech_rows(
         defaults = {
             "part_name": desc,
             "category": category,
-            "description": desc,
+            "notes": desc,
             "has_interchange": bool(interchanges),
         }
         if not category:

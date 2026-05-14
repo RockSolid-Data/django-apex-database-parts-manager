@@ -91,28 +91,11 @@
     {% endif %}
 
     {# Notes section #}
-    {% if unit.description or unit.notes %}
+    {% if unit.notes %}
     <div class="card mb-3">
       <div class="card-header fw-semibold">Notes</div>
       <div class="card-body">
-        {% if unit.description %}
-        <h6 class="text-muted small">Description</h6>
-        <p>{{ unit.description|linebreaksbr }}</p>
-        {% endif %}
-        {% if unit.notes %}
-        <h6 class="text-muted small">Notes</h6>
         <p class="mb-0">{{ unit.notes|linebreaksbr }}</p>
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
-
-    {# Attributes section #}
-    {% if unit.unit_attributes %}
-    <div class="card mb-3">
-      <div class="card-header fw-semibold">Attributes</div>
-      <div class="card-body">
-        <p class="mb-0">{{ unit.unit_attributes|linebreaksbr }}</p>
       </div>
     </div>
     {% endif %}
@@ -130,11 +113,9 @@
         <table class="table table-sm table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
-              <th class="ps-3">Unit / Part Number</th>
-              <th>Unit Type</th>
-              <th>Cross Ref Name</th>
-              <th>OEM</th>
-              <th>Voltage</th>
+              <th class="ps-3" style="width:25%">Unit / Part Number</th>
+              <th style="width:25%">Cross Ref Name</th>
+              <th style="width:15%">Price</th>
               <th>Notes</th>
             </tr>
           </thead>
@@ -143,19 +124,12 @@
             <tr data-href="{% url 'catalog:cross_reference_detail' unit.pk cr.ref.pk %}">
               {% if cr.unit %}
               <td class="ps-3">{{ cr.unit.unit_number }}</td>
-              <td>{{ cr.unit.unit_type|default:"—" }}</td>
-              <td>{{ cr.ref.interchange_type|default:"—" }}</td>
-              <td>{{ cr.unit.oem|default:"—" }}</td>
-              <td>{{ cr.unit.voltage|default:"—" }}</td>
-              <td>{{ cr.ref.notes|default:"—" }}</td>
               {% else %}
               <td class="ps-3">{{ cr.ref.cross_ref_number }}</td>
-              <td>—</td>
-              <td>{{ cr.ref.interchange_type|default:"—" }}</td>
-              <td>—</td>
-              <td>—</td>
-              <td>{{ cr.ref.notes|default:"—" }}</td>
               {% endif %}
+              <td>{{ cr.ref.interchange_type|default:"—" }}</td>
+              <td>{% if cr.ref.price != None %}${{ cr.ref.price|floatformat:2 }}{% else %}—{% endif %}</td>
+              <td>{{ cr.ref.notes|default:"—" }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -308,25 +282,35 @@
     <div class="card mb-3">
       <div class="card-header fw-semibold">Pricing</div>
       <div class="card-body">
-        <div class="d-flex justify-content-between mb-2">
-          <span class="text-muted">New Unit Price</span>
-          <strong>
+        <div class="d-flex align-items-baseline mb-2">
+          <span class="text-muted" style="width:40%">New Unit Price</span>
+          <strong class="text-center" style="width:30%">
             {% if unit.new_unit_price != None %}
-              ${{ unit.new_unit_price }}
+              ${{ unit.new_unit_price|floatformat:2 }}
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
           </strong>
+          <span class="text-muted small text-end" style="width:30%">
+            {% if unit.new_price_updated_at %}
+              {{ unit.new_price_updated_at|date:"M d, Y" }}
+            {% endif %}
+          </span>
         </div>
-        <div class="d-flex justify-content-between">
-          <span class="text-muted">Rebuilt Unit Price</span>
-          <strong>
+        <div class="d-flex align-items-baseline">
+          <span class="text-muted" style="width:40%">Rebuilt Unit Price</span>
+          <strong class="text-center" style="width:30%">
             {% if unit.rebuilt_unit_price != None %}
-              ${{ unit.rebuilt_unit_price }}
+              ${{ unit.rebuilt_unit_price|floatformat:2 }}
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
           </strong>
+          <span class="text-muted small text-end" style="width:30%">
+            {% if unit.rebuilt_price_updated_at %}
+              {{ unit.rebuilt_price_updated_at|date:"M d, Y" }}
+            {% endif %}
+          </span>
         </div>
       </div>
     </div>

@@ -35,9 +35,6 @@ TABLES_TO_CLEAR = [
     "inventory_inventorycount",
     "inventory_inventorycountitem",
 
-    # User-uploaded images (not reference data)
-    "catalog_partimage",
-
     # Backup configuration (per-install)
     "backup_backupsettings",
 

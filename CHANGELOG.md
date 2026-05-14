@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.2.1 — Search & Data Cleanup (2026-05-14)
+
+### Improved
+- **Applications page speed:** down from ~550ms to ~25ms (warm) — added
+  composite index on (is_active, name), cached total count and dropdown
+  values for 30 minutes
+- **Deep search speed:** consolidated 6 sequential PK-collection queries
+  into fewer combined queries; reduced live-search debounce from 400ms to
+  250ms; short queries (< 3 chars) skip the deep search entirely
+- **Part description → Notes:** renamed the field for clarity across all
+  forms, detail pages, and list views
+
+### Fixed
+- **BOM data cleanup:** removed 20,200 incomplete J&N-imported BOMs and
+  rebuilt 18,259 BOMs exclusively from Buyers Guide PDF data, ensuring
+  every unit has a single accurate BOM
+- **Deep search only as fallback:** the Match column and deep search
+  queries no longer fire when primary identifiers (YT, J&N, Part#, OEM#)
+  already match — eliminates unnecessary overhead on most searches
+- **Cross-reference price field:** added dedicated price field to cross
+  references with separate created/updated timestamps
+
+### Added
+- **Media pack auto-extract:** on first launch the app searches for
+  `ApexDatabase_Media.zip` on USB drives and the install directory, then
+  extracts part images automatically — updates skip extraction since images
+  are already installed
+- **Part images included in seed:** the seed database now contains image
+  metadata so new installs get full image references out of the box
+- **Daily rotating log files:** app logs rotate at midnight and auto-delete
+  after 14 days — users can find them in %LOCALAPPDATA%\ApexDatabase\logs\
+  for troubleshooting
+
 ## v1.2.0 — Fast Upgrades & Launch Experience (2026-05-11)
 
 ### Improved

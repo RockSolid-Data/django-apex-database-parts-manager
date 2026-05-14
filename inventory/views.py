@@ -59,6 +59,7 @@ def inventory_list(request):
         parts = parts.filter(
             Q(part_name__icontains=q)
             | Q(part_number__icontains=q)
+            | Q(yt_number__icontains=q)
             | Q(description__icontains=q)
         )
 

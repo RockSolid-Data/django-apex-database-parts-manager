@@ -102,6 +102,14 @@
                 {{ field.label }}
               </label>
             </div>
+          {% elif field.name == "new_unit_price" or field.name == "rebuilt_unit_price" %}
+            <label class="form-label small mb-1" for="{{ field.id_for_label }}">
+              {{ field.label }}
+            </label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              {{ field }}
+            </div>
           {% else %}
             <label class="form-label small mb-1" for="{{ field.id_for_label }}">
               {{ field.label }}
@@ -291,5 +299,16 @@
     });
   });
 })();
+
+document.querySelectorAll('.js-price-input').forEach(function(input) {
+  function formatPrice() {
+    var val = input.value.replace(/[^0-9.]/g, '');
+    if (val === '') return;
+    var num = parseFloat(val);
+    if (!isNaN(num)) input.value = num.toFixed(2);
+  }
+  formatPrice();
+  input.addEventListener('blur', formatPrice);
+});
 </script>
 {% endblock %}

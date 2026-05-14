@@ -1,0 +1,27 @@
+---
+description: Rebuild media pack when part images change
+alwaysApply: true
+---
+
+# Media Pack Maintenance
+
+When new part images are imported or uploaded to the `media/` folder, the media pack must be rebuilt so new installs get the latest images.
+
+## After importing or adding images
+
+1. Run `build_media_pack.bat` to regenerate `dist/ApexDatabase_Media.zip`
+2. The zip contains the full `media/` folder (35k+ files, ~7.5 GB uncompressed)
+3. Copy the updated zip to the USB drive alongside the installer
+
+## How the media pack works
+
+- `launcher.py` → `ensure_media()` checks if `%LOCALAPPDATA%\ApexDatabase\media\` has files
+- If empty (fresh install): searches for `ApexDatabase_Media.zip` on USB drives (D:–Z:) and the install directory
+- If found: extracts all images automatically on first launch
+- If already populated (update): skips entirely — existing images are preserved
+
+## Key files
+
+- `build_media_pack.bat` / `build_media_pack.py` — builds the zip
+- `launcher.py` — `ensure_media()` handles detection and extraction
+- `data_import/management/commands/export_seed_data.py` — `catalog_partimage` is included in the seed so image metadata ships with the database

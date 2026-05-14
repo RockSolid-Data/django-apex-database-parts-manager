@@ -66,6 +66,7 @@
       <tr>
         <th>Item Name</th>
         <th>Part Number</th>
+        <th>YT Number</th>
         <th>Supplier</th>
         <th class="text-end">Sale Price</th>
         <th class="text-center">Quantity</th>
@@ -77,6 +78,7 @@
       <tr data-href="{% url 'catalog:part_detail' part.pk %}">
         <td>{{ part.part_name|default:"—" }}</td>
         <td>{{ part.part_number }}</td>
+        <td>{{ part.yt_number|default:"—" }}</td>
         <td>{{ part.primary_vendor|default:"—" }}</td>
         <td class="text-end">{% if part.price %}${{ part.price|floatformat:2 }}{% else %}—{% endif %}</td>
         <td class="text-center">{{ part.stock_quantity }}</td>
@@ -84,7 +86,7 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="6" class="text-center text-muted py-4">
+        <td colspan="7" class="text-center text-muted py-4">
           <i class="bi bi-inbox fs-3 d-block mb-2"></i>
           No inventory items found.
         </td>

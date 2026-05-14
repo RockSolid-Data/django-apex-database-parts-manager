@@ -97,9 +97,7 @@ class UnitForm(forms.ModelForm):
             # Unit type category (dropdown for dynamic fields)
             "unit_type_category",
             # Notes
-            "description", "notes",
-            # Attributes
-            "unit_attributes",
+            "notes",
             # Pricing
             "new_unit_price", "rebuilt_unit_price",
             # Images
@@ -108,17 +106,12 @@ class UnitForm(forms.ModelForm):
             "is_active",
         ]
         widgets = {
-            "description": forms.Textarea(attrs={"rows": 3}),
             "notes": forms.Textarea(attrs={"rows": 3}),
-            "unit_attributes": forms.Textarea(attrs={"rows": 3}),
         }
 
     FIELDSETS = [
         ("Notes", [
-            "description", "notes",
-        ]),
-        ("Attributes", [
-            "unit_attributes",
+            "notes",
         ]),
         ("Pricing", [
             "new_unit_price", "rebuilt_unit_price",
@@ -135,7 +128,7 @@ class UnitForm(forms.ModelForm):
     CHECKABLE_FIELDS = [
         "unit_number", "yt_number", "oem", "j_and_n_number",
         "model_cat_number", "unit_type", "manufacturer", "family",
-        "voltage", "description", "notes",
+        "voltage", "notes",
     ]
 
     def __init__(self, *args, **kwargs):
@@ -159,8 +152,18 @@ class UnitForm(forms.ModelForm):
             "style": "min-width: 200px;",
         })
 
+        for price_field in ("new_unit_price", "rebuilt_unit_price"):
+            self.fields[price_field].widget.attrs.update({
+                "class": "form-control js-price-input",
+                "placeholder": "0.00",
+                "inputmode": "decimal",
+                "step": "0.01",
+            })
+
         for field_name, field in self.fields.items():
             if field_name == "unit_type_category":
+                continue
+            if field_name in ("new_unit_price", "rebuilt_unit_price"):
                 continue
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-check-input")
@@ -177,8 +180,29 @@ class UnitForm(forms.ModelForm):
             raise forms.ValidationError("Please fill in at least one field before saving.")
         return cleaned
 
+    _PRICE_TIMESTAMP_MAP = {
+        "new_unit_price": "new_price_updated_at",
+        "rebuilt_unit_price": "rebuilt_price_updated_at",
+    }
+
     def save(self, commit=True):
+        from django.utils import timezone
+        from .models import Unit
+
+        old_prices = {}
+        if self.instance.pk:
+            old_prices = Unit.objects.filter(pk=self.instance.pk).values(
+                *self._PRICE_TIMESTAMP_MAP.keys()
+            ).first() or {}
+
         instance = super().save(commit=False)
+
+        now = timezone.now()
+        for price_field, ts_field in self._PRICE_TIMESTAMP_MAP.items():
+            new_val = getattr(instance, price_field)
+            old_val = old_prices.get(price_field)
+            if not old_prices or new_val != old_val:
+                setattr(instance, ts_field, now)
 
         from .models import UnitTypeCategory
 
@@ -266,10 +290,10 @@ class PartForm(forms.ModelForm):
             "primary_vendor", "catalog", "plug_id",
             "cost_price", "markup_percent", "price",
             "track_inventory", "stock_quantity", "reorder_qty", "bin_number",
-            "description", "foot_notes", "superseding_notes",
+            "notes", "foot_notes", "superseding_notes",
         ]
         widgets = {
-            "description": forms.Textarea(attrs={"rows": 3}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
             "foot_notes": forms.Textarea(attrs={"rows": 2}),
             "superseding_notes": forms.Textarea(attrs={"rows": 2}),
         }
@@ -277,7 +301,7 @@ class PartForm(forms.ModelForm):
     CHECKABLE_FIELDS = [
         "part_number", "part_name", "manufacturer_number", "yt_number",
         "j_and_n", "oem_number", "voltage", "type", "oem",
-        "primary_vendor", "description",
+        "primary_vendor", "notes",
     ]
 
     def __init__(self, *args, **kwargs):
@@ -345,8 +369,22 @@ class PartForm(forms.ModelForm):
             raise forms.ValidationError("Please fill in at least one field before saving.")
         return cleaned
 
+    _PRICE_FIELDS = ("cost_price", "markup_percent", "price")
+
     def save(self, commit=True):
+        from django.utils import timezone
+        from .models import Part as PartModel
+
+        old_prices = {}
+        if self.instance.pk:
+            old_prices = PartModel.objects.filter(pk=self.instance.pk).values(*self._PRICE_FIELDS).first() or {}
+
         instance = super().save(commit=False)
+
+        new_prices = {f: getattr(instance, f) for f in self._PRICE_FIELDS}
+        if not old_prices or any(new_prices[f] != old_prices.get(f) for f in self._PRICE_FIELDS):
+            instance.price_updated_at = timezone.now()
+
         from .models import PartCategory
 
         specs = {}
@@ -531,7 +569,7 @@ class CrossReferenceForm(forms.ModelForm):
 
     class Meta:
         model = CrossReference
-        fields = ["cross_ref_unit", "cross_ref_number", "interchange_type", "notes"]
+        fields = ["cross_ref_unit", "cross_ref_number", "interchange_type", "price", "notes"]
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 2}),
         }
@@ -558,6 +596,12 @@ class CrossReferenceForm(forms.ModelForm):
         })
         self.fields["cross_ref_number"].widget.attrs["class"] = "form-control"
         self.fields["interchange_type"].widget.attrs["class"] = "form-control"
+        self.fields["price"].widget.attrs.update({
+            "class": "form-control js-price-input",
+            "placeholder": "0.00",
+            "inputmode": "decimal",
+            "step": "0.01",
+        })
         self.fields["notes"].widget.attrs["class"] = "form-control"
 
     def clean(self):

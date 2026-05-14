@@ -73,24 +73,32 @@ def _get_application_type_field_defs():
 
 
 def _get_category_field_defs():
-    """Build CATEGORY_FIELD_DEFINITIONS dict from the database."""
+    """Build CATEGORY_FIELD_DEFINITIONS dict from the database (cached 5 min)."""
+    cached = cache.get("part_category_field_defs")
+    if cached is not None:
+        return cached
     result = {}
     for cat in PartCategory.objects.prefetch_related("fields").all():
         result[cat.name] = [
             {"name": f.field_name, "label": f.field_label, "type": "text"}
             for f in cat.fields.all()
         ]
+    cache.set("part_category_field_defs", result, 300)
     return result
 
 
 def _get_unit_type_field_defs():
-    """Build unit type category field definitions dict from the database."""
+    """Build unit type category field definitions dict from the database (cached 5 min)."""
+    cached = cache.get("unit_type_field_defs")
+    if cached is not None:
+        return cached
     result = {}
     for cat in UnitTypeCategory.objects.prefetch_related("fields").all():
         result[cat.name] = [
             {"name": f.field_name, "label": f.field_label, "type": "text"}
             for f in cat.fields.all()
         ]
+    cache.set("unit_type_field_defs", result, 300)
     return result
 
 
@@ -162,21 +170,19 @@ def application_list(request):
     if filter_unit_type:
         applications = applications.filter(unit_type_name=filter_unit_type)
 
-    # --- Build distinct value lists for dropdowns (cached 5 min) ---
-    active_apps = Application.objects.filter(is_active=True)
+    # --- Build distinct value lists for dropdowns (cached 30 min) ---
     make_choices = cache.get_or_set("app_make_choices",
-        lambda: list(active_apps.exclude(make="").values_list("make", flat=True).distinct().order_by("make")),
-        300)
-    # Year uses text input (too many distinct values for a dropdown)
+        lambda: list(Application.objects.filter(is_active=True).exclude(make="").values_list("make", flat=True).distinct().order_by("make")),
+        1800)
     mfr_choices = cache.get_or_set("app_mfr_choices",
-        lambda: list(active_apps.exclude(mfr="").values_list("mfr", flat=True).distinct().order_by("mfr")),
-        300)
+        lambda: list(Application.objects.filter(is_active=True).exclude(mfr="").values_list("mfr", flat=True).distinct().order_by("mfr")),
+        1800)
     volt_choices = cache.get_or_set("app_volt_choices",
-        lambda: list(active_apps.exclude(volt="").values_list("volt", flat=True).distinct().order_by("volt")),
-        300)
+        lambda: list(Application.objects.filter(is_active=True).exclude(volt="").values_list("volt", flat=True).distinct().order_by("volt")),
+        1800)
     unit_type_choices = cache.get_or_set("app_unit_type_choices",
-        lambda: list(active_apps.exclude(unit_type_name="").values_list("unit_type_name", flat=True).distinct().order_by("unit_type_name")),
-        300)
+        lambda: list(Application.objects.filter(is_active=True).exclude(unit_type_name="").values_list("unit_type_name", flat=True).distinct().order_by("unit_type_name")),
+        1800)
 
     try:
         per_page = min(int(request.GET.get("per_page", 50)), 100)
@@ -185,7 +191,13 @@ def application_list(request):
     paginator = Paginator(applications, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-    total_count = paginator.count
+
+    # Use cached count for unfiltered queries to avoid expensive COUNT on 300k+ rows
+    if not q and not any([filter_make, filter_year, filter_mfr, filter_volt, filter_unit, filter_unit_type]):
+        total_count = cache.get_or_set("app_total_count",
+            lambda: Application.objects.filter(is_active=True).count(), 1800)
+    else:
+        total_count = paginator.count
 
     context = {
         "applications": page_obj,
@@ -735,8 +747,8 @@ def _get_deep_match_label(part, q_lower: str, ic_map: dict, sup_map: dict) -> st
         return part.manufacturer_number
     if part.part_name and q in part.part_name.lower():
         return part.part_name[:50]
-    if part.description and q in part.description.lower():
-        text = part.description
+    if part.notes and q in part.notes.lower():
+        text = part.notes
         idx = text.lower().index(q)
         start = max(0, idx - 12)
         end = min(len(text), idx + len(q) + 12)
@@ -773,40 +785,75 @@ def part_list(request):
     if filter_voltage:
         base_qs = base_qs.filter(voltage=filter_voltage)
 
-    # --- Two-tier search ---
-    # Tier 1 (direct): matches on the four primary number fields visible in the table.
-    #   → Match column stays blank; these bypass the deep search entirely.
-    # Tier 2 (deep): only reached when tier-1 yields nothing.
-    #   → searches manufacturer number, descriptions, interchange & superseding numbers;
-    #     Match column shows the value that caused each hit.
+    # --- Combined search (direct + deep) ---
+    # Direct: matches on the primary number fields visible in the table (no Match label).
+    # Deep: part name, notes, voltage, linked units, interchange & superseding numbers.
+    #   Uses separate PK lookups to avoid expensive multi-table JOINs.
     q = request.GET.get("q", "").strip()
     match_map: dict[int, str] = {}
-    search_tier = 0  # 0 = no query, 1 = direct, 2 = deep
+
+    deep_search_used = False
 
     if q:
-        direct_qs = base_qs.filter(
+        direct_q = (
             Q(manufacturer_number__icontains=q)
             | Q(yt_number__icontains=q)
             | Q(j_and_n__icontains=q)
             | Q(oem_number__icontains=q)
         )
-        if direct_qs[:1].exists():
-            parts = direct_qs
-            search_tier = 1
+
+        # Only run deep search if no match on YT, J&N, Part#, or OEM#
+        primary_match_exists = base_qs.filter(direct_q).exists()
+
+        if primary_match_exists:
+            parts = base_qs.filter(direct_q).order_by(
+                F("_sort_yt").asc(nulls_last=True), F("_sort_pn").asc(nulls_last=True)
+            )
+        elif len(q) < 3:
+            parts = base_qs.none()
         else:
-            deep_qs = base_qs.filter(
+            deep_search_used = True
+            _deep_pks: set[int] = set()
+
+            unit_pks = set(
+                Unit.objects.filter(unit_number__icontains=q).values_list("pk", flat=True)
+            )
+            if unit_pks:
+                _deep_pks.update(
+                    Part.objects.filter(unit_id__in=unit_pks).values_list("pk", flat=True)
+                )
+                _deep_pks.update(
+                    Part.units.through.objects.filter(
+                        unit_id__in=unit_pks
+                    ).values_list("part_id", flat=True)
+                )
+
+            ic_pairs = PartInterchange.objects.filter(
+                interchange_number__icontains=q
+            ).values_list("part_id", "interchange_part_id")
+            _deep_pks.update(pk for pair in ic_pairs for pk in pair if pk)
+
+            _deep_pks.update(
+                PartSuperseding.objects.filter(
+                    old_part_number__icontains=q
+                ).values_list("part_id", flat=True)
+            )
+
+            deep_q = (
                 Q(part_number__icontains=q)
                 | Q(part_name__icontains=q)
-                | Q(description__icontains=q)
+                | Q(notes__icontains=q)
                 | Q(voltage__icontains=q)
-                | Q(unit__unit_number__icontains=q)
-                | Q(units__unit_number__icontains=q)
-                | Q(part_interchanges__interchange_number__icontains=q)
-                | Q(interchanged_by_parts__interchange_number__icontains=q)
-                | Q(supersedings__old_part_number__icontains=q)
-            ).distinct()
-            parts = deep_qs
-            search_tier = 2
+            )
+            if _deep_pks:
+                deep_q = deep_q | Q(pk__in=_deep_pks)
+
+            parts = base_qs.filter(direct_q | deep_q).annotate(
+                _is_deep=Case(
+                    When(direct_q, then=Value(0)),
+                    default=Value(1),
+                ),
+            ).order_by("_is_deep", F("_sort_yt").asc(nulls_last=True), F("_sort_pn").asc(nulls_last=True))
     else:
         parts = base_qs
 
@@ -829,10 +876,9 @@ def part_list(request):
     page_obj = paginator.get_page(page_number)
     total_count = paginator.count
 
-    # Build (part, match_label) pairs for the current page.
-    # match_label is non-empty only for tier-2 deep results.
+    # Build (part, match_label) pairs — label shown for deep-only matches
     parts_with_match: list[tuple] = []
-    if q and search_tier == 2:
+    if q and deep_search_used:
         q_lower = q.lower()
         page_pks = [p.pk for p in page_obj]
 
@@ -863,7 +909,7 @@ def part_list(request):
         "total_count": total_count,
         "per_page": per_page,
         "q": q,
-        "search_tier": search_tier,
+        "deep_search_used": deep_search_used,
         "filter_category": filter_category,
         "category_choices": category_choices,
         "filter_voltage": filter_voltage,
@@ -1422,7 +1468,7 @@ _PART_CSV_ALIASES = {
     "part_type": "type",
     "part_category": "category",
     "vendor": "primary_vendor",
-    "desc": "description",
+    "desc": "notes",
     "name": "part_name",
     "unit_#": "unit_number",
     "unit_no": "unit_number",
@@ -1616,7 +1662,7 @@ _PART_CSV_LABELS = {
     "type": "Type",
     "voltage": "Voltage",
     "primary_vendor": "Primary Vendor",
-    "description": "Description",
+    "notes": "Notes",
     "price": "Sell Price",
     "cost_price": "Cost Price",
     "stock_quantity": "Stock Quantity",
@@ -1634,7 +1680,7 @@ _PART_CSV_TEMPLATE_COLUMNS = [
     "category", "part_number", "part_name", "unit_number",
     "manufacturer_number", "yt_number", "j_and_n", "oem_number",
     "oem", "type", "voltage", "primary_vendor",
-    "description", "price", "cost_price",
+    "notes", "price", "cost_price",
     "stock_quantity", "bin_number",
 ]
 
@@ -2073,7 +2119,12 @@ def unit_search(request):
 
 def unit_list(request):
     """List units with type tabs, search, and dropdown filters."""
-    units = Unit.objects.filter(is_active=True).annotate(
+    _LIST_FIELDS = (
+        "pk", "unit_number", "yt_number", "oem", "manufacturer",
+        "model_cat_number", "voltage", "family", "unit_type_category",
+        "is_active",
+    )
+    units = Unit.objects.filter(is_active=True).only(*_LIST_FIELDS).annotate(
         _sort_yt=NullIf("yt_number", Value("")),
         _sort_un=NullIf("unit_number", Value("")),
     ).order_by(
@@ -2094,16 +2145,63 @@ def unit_list(request):
     elif selected_type:
         units = units.filter(unit_type_category=selected_type)
 
-    # --- Text search ---
+    # --- Combined search (direct + deep) ---
+    # Direct matches: primary fields visible in the table (no Match label).
+    # Deep matches: cross-reference numbers/names, substitute numbers,
+    #   design, family, voltage — shown with a Match column label.
     q = request.GET.get("q", "").strip()
+    _deep_pks: set[int] = set()
+    deep_search_used = False
+
     if q:
-        units = units.filter(
+        direct_q = (
             Q(unit_number__icontains=q)
             | Q(oem__icontains=q)
-            | Q(design__icontains=q)
             | Q(yt_number__icontains=q)
             | Q(manufacturer__icontains=q)
+            | Q(model_cat_number__icontains=q)
+            | Q(j_and_n_number__icontains=q)
         )
+
+        # Only run deep search if no YT number match exists
+        yt_match_exists = units.filter(yt_number__icontains=q).exists()
+
+        if yt_match_exists:
+            units = units.filter(direct_q).order_by(
+                F("_sort_yt").asc(nulls_last=True), F("_sort_un").asc(nulls_last=True)
+            )
+        elif len(q) < 3:
+            units = units.filter(direct_q).order_by(
+                F("_sort_yt").asc(nulls_last=True), F("_sort_un").asc(nulls_last=True)
+            )
+        else:
+            deep_search_used = True
+            _deep_pks: set[int] = set()
+
+            cr_pairs = CrossReference.objects.filter(
+                Q(cross_ref_number__icontains=q) | Q(interchange_type__icontains=q)
+            ).values_list("unit_id", "cross_ref_unit_id")
+            _deep_pks.update(pk for pair in cr_pairs for pk in pair if pk)
+
+            sub_pairs = Substitute.objects.filter(
+                substitute_number__icontains=q
+            ).values_list("unit_id", "substitute_unit_id")
+            _deep_pks.update(pk for pair in sub_pairs for pk in pair if pk)
+
+            deep_q = (
+                Q(design__icontains=q)
+                | Q(family__icontains=q)
+                | Q(voltage__icontains=q)
+            )
+            if _deep_pks:
+                deep_q = deep_q | Q(pk__in=_deep_pks)
+
+            units = units.filter(direct_q | deep_q).distinct().annotate(
+                _is_deep=Case(
+                    When(direct_q, then=Value(0)),
+                    default=Value(1),
+                ),
+            ).order_by("_is_deep", F("_sort_yt").asc(nulls_last=True), F("_sort_un").asc(nulls_last=True))
 
     # --- Dropdown filters ---
     filter_oem = request.GET.get("oem", "").strip()
@@ -2151,8 +2249,53 @@ def unit_list(request):
     page_obj = paginator.get_page(page_number)
     total_count = paginator.count
 
+    # Build (unit, match_label) pairs — label shown for deep matches only
+    units_with_match: list[tuple] = []
+    if q and deep_search_used:
+        q_lower = q.lower()
+        page_pks = [u.pk for u in page_obj]
+
+        cr_map: dict[int, str] = {}
+        for cr in CrossReference.objects.filter(
+            Q(unit_id__in=page_pks) | Q(cross_ref_unit_id__in=page_pks)
+        ).values("unit_id", "cross_ref_unit_id", "cross_ref_number", "interchange_type"):
+            for pk_field in ("unit_id", "cross_ref_unit_id"):
+                pk = cr[pk_field]
+                if pk and pk in page_pks and pk not in cr_map:
+                    num = cr["cross_ref_number"] or ""
+                    name = cr["interchange_type"] or ""
+                    if num and q_lower in num.lower():
+                        cr_map[pk] = num
+                    elif name and q_lower in name.lower():
+                        cr_map[pk] = name
+
+        sub_map: dict[int, str] = {}
+        for s in Substitute.objects.filter(
+            Q(unit_id__in=page_pks) | Q(substitute_unit_id__in=page_pks)
+        ).values("unit_id", "substitute_unit_id", "substitute_number"):
+            for pk_field in ("unit_id", "substitute_unit_id"):
+                pk = s[pk_field]
+                if pk and pk in page_pks and pk not in sub_map:
+                    num = s["substitute_number"] or ""
+                    if num and q_lower in num.lower():
+                        sub_map[pk] = num
+
+        for unit in page_obj:
+            label = cr_map.get(unit.pk) or sub_map.get(unit.pk, "")
+            if not label:
+                if unit.design and q_lower in unit.design.lower():
+                    label = unit.design
+                elif unit.family and q_lower in unit.family.lower():
+                    label = unit.family
+                elif unit.voltage and q_lower in unit.voltage.lower():
+                    label = unit.voltage
+            units_with_match.append((unit, label))
+    else:
+        units_with_match = [(unit, "") for unit in page_obj]
+
     context = {
         "units": page_obj,
+        "units_with_match": units_with_match,
         "page_obj": page_obj,
         "total_count": total_count,
         "per_page": per_page,
@@ -2162,6 +2305,7 @@ def unit_list(request):
         "selected_color": category_color_map.get(selected_type, ""),
         "selected_unit_type_name": selected_unit_type_name,
         "q": q,
+        "deep_search_used": deep_search_used,
         "filter_oem": filter_oem,
         "filter_voltage": filter_voltage,
         "filter_family": filter_family,
@@ -2192,7 +2336,6 @@ def unit_detail(request, pk):
             ("OEM", unit.oem),
             ("J&N Number", unit.j_and_n_number),
             ("Manufacturer", unit.manufacturer),
-            ("Description", unit.description),
         ]),
     ]
 

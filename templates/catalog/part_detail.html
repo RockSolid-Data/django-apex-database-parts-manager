@@ -59,14 +59,13 @@
       </div>
     </div>
 
-    {# Description & Footnotes ===== #}
-    {% if part.description or part.foot_notes %}
+    {# Notes & Footnotes ===== #}
+    {% if part.notes or part.foot_notes %}
     <div class="card mb-3">
-      <div class="card-header fw-semibold">Description &amp; Notes</div>
+      <div class="card-header fw-semibold">Notes</div>
       <div class="card-body">
-        {% if part.description %}
-        <h6 class="text-muted small">Description</h6>
-        <p>{{ part.description|linebreaksbr }}</p>
+        {% if part.notes %}
+        <p>{{ part.notes|linebreaksbr }}</p>
         {% endif %}
         {% if part.foot_notes %}
         <h6 class="text-muted small">Footnotes</h6>
@@ -82,7 +81,7 @@
       <div class="card-body p-0">
         <table class="table table-sm table-striped table-hover mb-0">
           <tbody>
-            <tr><th class="ps-3" style="width: 30%;">Sale Price</th><td>{% if part.price != None %}${{ part.price|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+            <tr><th class="ps-3" style="width: 30%;">Sale Price</th><td>{% if part.price != None %}${{ part.price|floatformat:2 }}{% else %}—{% endif %}{% if part.price_updated_at %}<br><small class="text-muted">Updated on {{ part.price_updated_at|date:"M d, Y g:i A" }}</small>{% endif %}</td></tr>
             <tr><th class="ps-3">Reorder Qty</th><td>{{ part.reorder_qty }}</td></tr>
             <tr><th class="ps-3">In Stock</th><td>{{ part.stock_quantity }}</td></tr>
           </tbody>
@@ -159,22 +158,9 @@
 
     {# ===== Interchange ===== #}
     <div class="card mb-3" id="part-interchange-card" data-part-pk="{{ part.pk }}">
-      <div class="card-header fw-semibold d-flex flex-wrap align-items-center gap-2">
-        <span class="me-1">Interchange</span>
-        {% if part_interchanges %}
-        <div class="d-flex align-items-center gap-1 ms-auto">
-          <label class="visually-hidden" for="part-ix-filter-{{ part.pk }}">Filter interchanges</label>
-          <div class="input-group input-group-sm" style="max-width: 15rem;">
-            <span class="input-group-text py-0 px-2 bg-body-secondary"><i class="bi bi-search small"></i></span>
-            <input type="search" class="form-control form-control-sm" id="part-ix-filter-{{ part.pk }}"
-                   placeholder="# or source…" autocomplete="off" inputmode="search">
-            <button type="button" class="btn btn-outline-secondary px-2 js-part-ix-filter-clear" title="Clear filter" aria-label="Clear filter">
-              <i class="bi bi-x-lg small"></i>
-            </button>
-          </div>
-        </div>
-        {% endif %}
-        <a href="{% url 'catalog:part_interchange_add' part.pk %}" class="btn btn-sm btn-outline-primary {% if part_interchanges %}ms-sm-0{% else %}ms-auto{% endif %}">
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>Interchange</span>
+        <a href="{% url 'catalog:part_interchange_add' part.pk %}" class="btn btn-sm btn-outline-primary">
           <i class="bi bi-plus-lg"></i> Add Interchange
         </a>
       </div>

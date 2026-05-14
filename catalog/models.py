@@ -64,6 +64,7 @@ class Application(models.Model):
             models.Index(fields=["mfr"]),
             models.Index(fields=["volt"]),
             models.Index(fields=["is_active"]),
+            models.Index(fields=["is_active", "name"]),
             models.Index(fields=["unit_number"]),
             models.Index(fields=["model"]),
             models.Index(fields=["part_number"]),
@@ -200,6 +201,12 @@ class Unit(models.Model):
     rebuilt_unit_price = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )
+    new_price_updated_at = models.DateTimeField(
+        "New Price Updated", null=True, blank=True
+    )
+    rebuilt_price_updated_at = models.DateTimeField(
+        "Rebuilt Price Updated", null=True, blank=True
+    )
 
     # -- Images --
     unit_image = models.ImageField(upload_to="units/", blank=True)
@@ -313,6 +320,9 @@ class CrossReference(models.Model):
         max_length=150,
         blank=True,
         default="",
+    )
+    price = models.DecimalField(
+        "Price", max_digits=10, decimal_places=2, null=True, blank=True
     )
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -537,6 +547,9 @@ class Part(models.Model):
     price = models.DecimalField(
         "Sell Price", max_digits=10, decimal_places=2, null=True, blank=True
     )
+    price_updated_at = models.DateTimeField(
+        "Price Updated", null=True, blank=True
+    )
 
     # -- Stock / Inventory --
     track_inventory = models.BooleanField("Track Inventory", default=False)
@@ -547,8 +560,8 @@ class Part(models.Model):
     # -- Electrical --
     voltage = models.CharField("Voltage", max_length=50, blank=True, default="")
 
-    # -- Descriptive --
-    description = models.TextField(blank=True, default="")
+    # -- Notes --
+    notes = models.TextField("Notes", blank=True, default="")
     foot_notes = models.TextField("Footnotes", blank=True, default="")
     superseding_notes = models.TextField(blank=True, default="")
 

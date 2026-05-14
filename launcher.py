@@ -9,7 +9,9 @@ import sys
 import time
 import shutil
 import socket
+import string
 import msvcrt
+import zipfile
 import threading
 import webbrowser
 import subprocess
@@ -179,6 +181,100 @@ def ensure_database():
     else:
         print(f"Existing database found at {db_path}")
         return "upgrade"
+
+
+MEDIA_ZIP_NAME = "ApexDatabase_Media.zip"
+MEDIA_MIN_FILES = 10
+
+
+def _count_files(directory):
+    """Count files in a directory tree (non-recursive stat for speed)."""
+    count = 0
+    try:
+        for _, _, files in os.walk(directory):
+            count += len(files)
+            if count >= MEDIA_MIN_FILES:
+                return count
+    except OSError:
+        pass
+    return count
+
+
+def _find_media_zip():
+    """Search for the media zip in likely locations."""
+    candidates = []
+
+    app_dir = get_app_dir()
+
+    # 1. Install directory and _internal
+    candidates.append(app_dir)
+    internal = app_dir / '_internal' if is_frozen() else app_dir
+    candidates.append(internal)
+
+    # 2. One folder up from install dir (USB root if installed to subfolder)
+    candidates.append(app_dir.parent)
+
+    # 3. Data directory (where db.sqlite3 lives)
+    candidates.append(get_data_dir())
+
+    # 4. Common user folders (Downloads, Desktop)
+    user_home = Path.home()
+    candidates.append(user_home / "Downloads")
+    candidates.append(user_home / "Desktop")
+
+    # 5. All drive roots including C:\ (covers USB drives and local copies)
+    for letter in string.ascii_uppercase[2:]:  # C through Z
+        drive = Path(f"{letter}:\\")
+        if drive.exists():
+            candidates.append(drive)
+
+    seen = set()
+    for folder in candidates:
+        folder = folder.resolve()
+        if folder in seen:
+            continue
+        seen.add(folder)
+        candidate = folder / MEDIA_ZIP_NAME
+        if candidate.is_file():
+            print(f"  Found media pack: {candidate}")
+            return candidate
+
+    return None
+
+
+def ensure_media():
+    """Extract media files from the zip if the media folder is empty."""
+    data_dir = get_data_dir()
+    media_dir = data_dir / "media"
+
+    if media_dir.is_dir() and _count_files(media_dir) >= MEDIA_MIN_FILES:
+        return
+
+    print("Media folder is empty -- searching for media pack...")
+    zip_path = _find_media_zip()
+    if not zip_path:
+        print("  No media pack found. Images will not be available.")
+        print(f"  Place {MEDIA_ZIP_NAME} next to the installer or on a USB drive.")
+        return
+
+    media_dir.mkdir(parents=True, exist_ok=True)
+    print(f"  Extracting media files to {media_dir}...")
+
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            members = zf.namelist()
+            total = len(members)
+            for i, member in enumerate(members, 1):
+                zf.extract(member, data_dir)
+                if i % 500 == 0 or i == total:
+                    pct = i * 100 // total
+                    print(f"  Extracting... {i:,}/{total:,} ({pct}%)")
+
+        print(f"  Media extraction complete ({total:,} files).")
+    except Exception as e:
+        print(f"  Media extraction error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def run_migrations():
@@ -442,6 +538,7 @@ def main():
         print(f"Using fallback port {port}.")
 
     install_type = ensure_database()
+    ensure_media()
 
     # Open loading page in the browser right away (polls until server is up)
     open_loading_page(port)
