@@ -184,6 +184,7 @@ def ensure_database():
 
 
 MEDIA_ZIP_NAME = "ApexDatabase_Media.zip"
+MEDIA_VERSION_FILE = ".media_version"
 MEDIA_MIN_FILES = 10
 
 
@@ -198,6 +199,24 @@ def _count_files(directory):
     except OSError:
         pass
     return count
+
+
+def _get_bundled_media_version():
+    """Read the expected media version from the build."""
+    app_dir = get_app_dir()
+    internal_dir = app_dir / '_internal' if is_frozen() else app_dir
+    version_path = internal_dir / MEDIA_VERSION_FILE
+    if version_path.exists():
+        return version_path.read_text(encoding="utf-8").strip()
+    return None
+
+
+def _get_installed_media_version(data_dir):
+    """Read the media version currently on disk."""
+    version_path = data_dir / "media" / MEDIA_VERSION_FILE
+    if version_path.exists():
+        return version_path.read_text(encoding="utf-8").strip()
+    return None
 
 
 def _find_media_zip():
@@ -243,13 +262,34 @@ def _find_media_zip():
 
 
 def ensure_media():
-    """Extract media files from the zip if the media folder is empty."""
+    """Ensure media files are up to date.
+
+    - Empty/missing media folder: full extraction
+    - Media exists but version differs: incremental (only add new files)
+    - Media exists and version matches: skip (fast path)
+    """
     data_dir = get_data_dir()
     media_dir = data_dir / "media"
 
-    if media_dir.is_dir() and _count_files(media_dir) >= MEDIA_MIN_FILES:
+    has_media = media_dir.is_dir() and _count_files(media_dir) >= MEDIA_MIN_FILES
+
+    if has_media:
+        bundled_version = _get_bundled_media_version()
+        installed_version = _get_installed_media_version(data_dir)
+
+        if bundled_version and bundled_version == installed_version:
+            return
+
+        # Versions differ (or no version file yet) — do incremental sync
+        zip_path = _find_media_zip()
+        if not zip_path:
+            return
+
+        print("Checking for new media files...")
+        _incremental_media_sync(zip_path, data_dir, media_dir)
         return
 
+    # No media at all — full extraction
     print("Media folder is empty -- searching for media pack...")
     zip_path = _find_media_zip()
     if not zip_path:
@@ -273,6 +313,42 @@ def ensure_media():
         print(f"  Media extraction complete ({total:,} files).")
     except Exception as e:
         print(f"  Media extraction error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _incremental_media_sync(zip_path, data_dir, media_dir):
+    """Extract only files from the zip that don't exist on disk."""
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            all_members = zf.namelist()
+            missing = []
+            for member in all_members:
+                if member.endswith("/"):
+                    continue
+                target = data_dir / member
+                if not target.exists():
+                    missing.append(member)
+
+            if not missing:
+                print("  Media is up to date (no new files).")
+            else:
+                print(f"  Adding {len(missing):,} new media files...")
+                for i, member in enumerate(missing, 1):
+                    zf.extract(member, data_dir)
+                    if i % 200 == 0 or i == len(missing):
+                        pct = i * 100 // len(missing)
+                        print(f"  Syncing... {i:,}/{len(missing):,} ({pct}%)")
+                print(f"  Media sync complete ({len(missing):,} new files added).")
+
+        # Update the installed version marker
+        bundled_version = _get_bundled_media_version()
+        if bundled_version:
+            version_path = media_dir / MEDIA_VERSION_FILE
+            version_path.write_text(bundled_version + "\n", encoding="utf-8")
+
+    except Exception as e:
+        print(f"  Media sync error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -306,7 +382,13 @@ def run_migrations():
 
 
 def sync_catalog_data():
-    """Sync new catalog records from the bundled seed database."""
+    """Sync new catalog records from the bundled seed database.
+
+    Runs on every upgrade. The sync_catalog command handles:
+    - INSERT OR IGNORE for new records (safe against UNIQUE conflicts)
+    - Fill-blank UPDATE for enriched data on existing records
+    - Per-table commits so partial progress is saved on failure
+    """
     app_dir = get_app_dir()
     internal_dir = app_dir / '_internal' if is_frozen() else app_dir
     seed_path = internal_dir / "seed.sqlite3"
@@ -317,13 +399,37 @@ def sync_catalog_data():
 
     try:
         from django.core.management import call_command
+        from io import StringIO
+
+        stdout_capture = StringIO()
+        stderr_capture = StringIO()
+
         print("Syncing catalog data from seed...")
-        call_command('sync_catalog', seed_db=str(seed_path), verbosity=1)
+        call_command(
+            'sync_catalog',
+            seed_db=str(seed_path),
+            verbosity=1,
+            stdout=stdout_capture,
+            stderr=stderr_capture,
+        )
+
+        stdout_text = stdout_capture.getvalue()
+        stderr_text = stderr_capture.getvalue()
+
+        if stdout_text.strip():
+            print(stdout_text.rstrip())
+        if stderr_text.strip():
+            print(f"[SYNC WARNINGS]\n{stderr_text.rstrip()}")
+
         print("Catalog sync complete.")
     except Exception as e:
-        print(f"Catalog sync warning: {e}")
+        print(f"[SYNC ERROR] Catalog sync failed: {e}")
         import traceback
         traceback.print_exc()
+        print(
+            "  The application will continue, but some catalog data may be "
+            "missing. Check the log file for details."
+        )
 
 
 def create_superuser_if_needed():

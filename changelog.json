@@ -1,0 +1,20 @@
+[
+  {
+    "version": "1.2.2",
+    "date": "2026-05-21",
+    "changes": [
+      "Fixed catalog sync failing silently on upgrades (INSERT OR IGNORE + per-table commits)",
+      "Sync now fills in blank fields on existing records from updated seed data",
+      "Installer skips media extraction on updates when images already present",
+      "Added incremental media sync — only new images are extracted on upgrade",
+      "Improved error logging for catalog sync (visible in launcher.log)"
+    ]
+  },
+  {
+    "version": "1.2.1",
+    "date": "2026-05-14",
+    "changes": [
+      "Initial release with catalog, inventory, and invoicing"
+    ]
+  }
+]

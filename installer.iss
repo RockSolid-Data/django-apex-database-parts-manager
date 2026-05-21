@@ -60,8 +60,9 @@ Name: "{group}\{#AppDisplayName} (Debug)"; Filename: "{app}\{#AppName}_Debug.exe
 Name: "{group}\Uninstall {#AppDisplayName}"; Filename: "{uninstallexe}"
 
 [Run]
-; Extract media zip if found next to the installer (USB drive scenario)
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -LiteralPath '{src}\{#AppName}_Media.zip' -DestinationPath '{localappdata}\{#AppName}' -Force"""; StatusMsg: "Extracting media files (this may take a few minutes)..."; Flags: runhidden; Check: MediaZipExists
+; Extract media zip only on FRESH install (no existing media folder).
+; On upgrades, the launcher handles incremental media sync.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -LiteralPath '{src}\{#AppName}_Media.zip' -DestinationPath '{localappdata}\{#AppName}' -Force"""; StatusMsg: "Extracting media files (this may take a few minutes)..."; Flags: runhidden; Check: ShouldExtractMedia
 Filename: "{app}\{#AppName}.exe"; Description: "Launch {#AppDisplayName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
@@ -72,4 +73,11 @@ Filename: "taskkill"; Parameters: "/F /IM {#AppName}_Debug.exe"; Flags: runhidde
 function MediaZipExists: Boolean;
 begin
   Result := FileExists(ExpandConstant('{src}\{#AppName}_Media.zip'));
+end;
+
+function ShouldExtractMedia: Boolean;
+begin
+  // Only extract if the zip exists AND the media folder is not already populated
+  Result := MediaZipExists
+    and not DirExists(ExpandConstant('{localappdata}\{#AppName}\media\parts'));
 end;

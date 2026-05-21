@@ -106,6 +106,9 @@ if (BASE_DIR / "changelog.json").exists():
 if (BASE_DIR / "seed.sqlite3").exists():
     INCLUDE_FILES.append((str(BASE_DIR / "seed.sqlite3"), f"{INT}/seed.sqlite3"))
 
+if (BASE_DIR / ".media_version").exists():
+    INCLUDE_FILES.append((str(BASE_DIR / ".media_version"), f"{INT}/.media_version"))
+
 if (BASE_DIR / "staticfiles").is_dir():
     INCLUDE_FILES.append((str(BASE_DIR / "staticfiles"), f"{INT}/staticfiles"))
 
