@@ -105,6 +105,127 @@ def _clean_interchange_number(num):
     return num
 
 
+# ---------------------------------------------------------------------------
+# Fix R1 — Per-page column midpoint from block geometry
+# ---------------------------------------------------------------------------
+
+def compute_page_midpoint(page) -> float:
+    """Pick a column-split x using block geometry; fall back to page_width/2.
+
+    Buyers Guide pages are two-column.  The geometric midpoint between the
+    right edge of the left column and the left edge of the right column is
+    more reliable than naive page_width/2 (which can split blocks that
+    overlap the geometric center).
+    """
+    width = page.rect.width
+    naive = width / 2.0
+    blocks = page.get_text("blocks") or []
+    if not blocks:
+        return naive
+    left_x1s = [b[2] for b in blocks if b[0] < naive and b[2] < naive + 10]
+    right_x0s = [b[0] for b in blocks if b[0] >= naive - 10]
+    if left_x1s and right_x0s:
+        mid = (max(left_x1s) + min(right_x0s)) / 2.0
+        if abs(mid - naive) <= 60:
+            return mid
+    return naive
+
+
+def _column_lines(page, mid: float):
+    """Yield (col_name, [lines]) for left column then right column.
+
+    Fix X — xref leak (PDF 9/11): the buyers-guide PDFs draw the
+    right-column section header labels ("APPLICATIONS", "PRODUCT ATTRIBUTES",
+    etc.) as blocks that start inside the gutter (x0 ~292) but extend into
+    the right column (x1 ~351-382).  Classifying by block CENTER pulled
+    those labels into the LEFT column.  When the left column's INTERCHANGES
+    wrap-around content followed such a misplaced "APPLICATIONS" header in
+    y-sort order, the parser switched current_section to APPLICATIONS and
+    appended interchange text to app_map, producing fake "Application" rows
+    whose model field was a "Brand: number | Brand: number" string.
+
+    Classify by the block's RIGHT edge (x1) instead: any block whose right
+    edge crosses the computed page midpoint belongs to the RIGHT column.
+    Truly-left-column content (x1 well below mid) and truly-right-column
+    content (x0 >= mid, so x1 >> mid) are unchanged; only gutter-straddling
+    section labels move from left to right where they belong.
+    """
+    blocks = page.get_text("blocks") or []
+    left_blocks = sorted(
+        [b for b in blocks if b[2] < mid],
+        key=lambda b: (b[1], b[0]),
+    )
+    right_blocks = sorted(
+        [b for b in blocks if b[2] >= mid],
+        key=lambda b: (b[1], b[0]),
+    )
+    for col_name, col_blocks in (("L", left_blocks), ("R", right_blocks)):
+        col_lines: list[str] = []
+        for block in col_blocks:
+            for ln in (block[4] or "").split("\n"):
+                ln = ln.strip()
+                if ln:
+                    col_lines.append(ln)
+        yield col_name, col_lines
+
+
+# ---------------------------------------------------------------------------
+# Fix C / C-extension — line-wrap rejoin for year ranges and J&N numbers
+# ---------------------------------------------------------------------------
+
+_TRAILING_YR_DASH = re.compile(r"\d{4}-\s*$")
+_LEADING_YR = re.compile(r"^\d{4}\b")
+_LEADING_DASH_YR = re.compile(r"^-\d{4}\b")
+_TRAILING_JN_DASH = re.compile(r"\d-\s*$")
+_LEADING_DIGITS = re.compile(r"^\d")
+
+
+def rejoin_year_wrap(lines):
+    """Rejoin lines where a year range or J&N number was split across lines.
+
+    Patterns rejoined:
+      * 'Model 2000-' + '2002 ...'        -> 'Model 2000-2002 ...'
+      * 'Model 2000' + '-2002 ...'        -> 'Model 2000-2002 ...'
+      * 'J&N 130-' + '05002'              -> '130-05002'
+
+    Also handles the C-extension case: engine descriptions whose year-range
+    fragment ('engine ... 2000-') wraps to the next line ('2002 ...'), which
+    leaks the year into the engine text.  Same rejoin pattern fixes both.
+
+    Returns (rejoined_lines, n_rejoins).
+    """
+    out: list[str] = []
+    rejoins = 0
+    i = 0
+    n = len(lines)
+    while i < n:
+        cur = lines[i].rstrip()
+        if i + 1 < n:
+            nxt = lines[i + 1].lstrip()
+            if _TRAILING_YR_DASH.search(cur) and _LEADING_YR.match(nxt):
+                out.append(cur + nxt)
+                rejoins += 1
+                i += 2
+                continue
+            if _LEADING_DASH_YR.match(nxt) and re.search(r"\d{4}\s*$", cur):
+                out.append(cur + nxt)
+                rejoins += 1
+                i += 2
+                continue
+            if (
+                _TRAILING_JN_DASH.search(cur)
+                and _LEADING_DIGITS.match(nxt)
+                and len(cur) < 30
+            ):
+                out.append(cur + nxt)
+                rejoins += 1
+                i += 2
+                continue
+        out.append(cur)
+        i += 1
+    return out, rejoins
+
+
 def parse_interchanges_text(text):
     """Parse pipe-delimited interchange text into (manufacturer, number) pairs."""
     results = []
@@ -288,8 +409,6 @@ def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
 
     for page_idx in range(first_page, total_pages):
         page = doc[page_idx]
-        text = page.get_text()
-        lines = text.split("\n")
 
         # --- Image extraction for this page ---
         unit_positions = _extract_unit_positions(page)
@@ -311,7 +430,15 @@ def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
                 elif yt not in image_map:
                     image_map[yt] = img_data
 
-        for raw_line in lines:
+        # Fix R1 / B — column-aware text walk (left column, then right column)
+        # rather than a single page.get_text() stream that can interleave
+        # blocks across the two-column layout.
+        mid = compute_page_midpoint(page)
+        page_lines = []
+        for _col_name, col_lines in _column_lines(page, mid):
+            page_lines.extend(col_lines)
+
+        for raw_line in page_lines:
             line = raw_line.strip()
             if not line:
                 continue
@@ -414,12 +541,14 @@ def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
 
             # --- BILL OF MATERIALS ---
             elif current_section == "BILL OF MATERIALS":
-                # Skip the column header row "BOM / YOUTECH / J&N"
-                if bom_in_header:
-                    if line in ("BOM", "YOUTECH", "J&N"):
-                        continue
-                    else:
-                        bom_in_header = False
+                # Fix I — Skip the column header words "BOM / YOUTECH / J&N"
+                # ANYWHERE inside the BOM section.  Multi-page BOMs repeat the
+                # column header on each new page; the old gate that only ran
+                # at the start of the section would otherwise consume them as
+                # part names.
+                if line in ("BOM", "YOUTECH", "J&N"):
+                    continue
+                bom_in_header = False
 
                 # Skip page numbers
                 if re.match(r'^Pg\.\s*\d+', line):
@@ -550,10 +679,16 @@ def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
         for sub_yt, sub_jn in subs:
             substitutes.append((yt, sub_yt, sub_jn))
 
-    # Combine raw application lines per unit into a single text blob
+    # Combine raw application lines per unit into a single text blob.
+    # Fix C / C-extension — rejoin lines where a year range was split across
+    # lines.  This catches both year-column wraps ('1998-' + '2002') and
+    # engine-text wraps (engine description ending in '... 1998-' continued
+    # on the next line with '2002 ...').  Applying once here keeps the
+    # importer's _parse_application_text simple.
     applications = []
     for yt, lines in app_map.items():
-        app_text = "\n".join(lines)
+        rejoined, _ = rejoin_year_wrap(lines)
+        app_text = "\n".join(rejoined)
         if app_text.strip():
             applications.append((yt, app_text))
 

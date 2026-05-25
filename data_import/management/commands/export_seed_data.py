@@ -5,7 +5,6 @@ Copies db.sqlite3 -> seed.sqlite3 then clears customer/config data while
 preserving all table schemas so django_migrations stays consistent.
 """
 
-import shutil
 import sqlite3
 from pathlib import Path
 
@@ -78,7 +77,7 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(f"Copying {source_path} -> {output_path} ...")
-        shutil.copy2(source_path, output_path)
+        self._safe_copy_db(source_path, output_path)
 
         conn = sqlite3.connect(str(output_path))
         cursor = conn.cursor()
@@ -115,3 +114,18 @@ class Command(BaseCommand):
             f"Seed exported: {output_path} ({size_mb:.1f} MB, "
             f"{cleared} tables cleared, {backfilled} seed_ids backfilled)"
         ))
+
+    def _safe_copy_db(self, source_path, output_path):
+        """Copy a SQLite database safely, even if it's open/locked.
+
+        Uses SQLite's online backup API which handles WAL mode and
+        concurrent readers properly.
+        """
+        if output_path.exists():
+            output_path.unlink()
+
+        src_conn = sqlite3.connect(str(source_path))
+        dst_conn = sqlite3.connect(str(output_path))
+        src_conn.backup(dst_conn)
+        dst_conn.close()
+        src_conn.close()

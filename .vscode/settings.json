@@ -12,5 +12,6 @@
       "args": ["-NoExit", "-Command", "& '${workspaceFolder}/venv/Scripts/Activate.ps1'"]
     }
   },
-  "terminal.integrated.defaultProfile.windows": "PowerShell (venv)"
+  "terminal.integrated.defaultProfile.windows": "PowerShell (venv)",
+  "python-envs.pythonProjects": []
 }

@@ -68,6 +68,20 @@ iscc_out.txt
 
 # Database snapshot backups
 *.bak
+db.sqlite3.bak-*
+db.sqlite3.staging*
+seed.sqlite3.bak-*
+
+# Local diagnostic / one-off scripts (underscore-prefixed)
+_*.py
+_*.txt
+_*.csv
+_*.out
+
+# Local audit / dry-run output
+audit_*.csv
+dry_run_*.txt
+dry_run_*.out
 
 # Cursor project cache (rules are committed separately under .cursor/rules/)
 .cursor/projects/

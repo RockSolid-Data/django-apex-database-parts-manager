@@ -447,7 +447,19 @@ class Command(BaseCommand):
         self.stdout.write("")
 
     def _import_interchanges(self, conn, existing_units):
-        """Import buyers_guide_interchanges into CrossReference records."""
+        """Import buyers_guide_interchanges into CrossReference records.
+
+        Model Number rule (PDF 11 family-coding fix)
+        ---------------------------------------------
+        PDF interchange entries with ``manufacturer == "Model Number"`` (case-
+        insensitive) are *not* real cross-references — they identify the OEM
+        family code (e.g. ``Model Number: 10MT`` means ``family = '10MT'``).
+        For each such entry, write the value into ``Unit.family`` (only when
+        the field is empty so manual edits are preserved) and DO NOT create
+        a CrossReference row.  Multiple Model Number entries on the same
+        unit: the first non-empty value wins; later ones are no-ops because
+        ``unit.family`` is then already populated.
+        """
         try:
             rows = conn.execute(
                 "SELECT manufacturer, their_number, our_number "
@@ -468,6 +480,8 @@ class Command(BaseCommand):
 
         batch = []
         created = 0
+        family_updates = {}   # yt -> family value (collected, applied at end)
+        family_skipped = 0    # Model-Number xrefs we suppressed
         for mfr, their_no, our_no in rows:
             our_no = normalize_space(our_no)
             if our_no not in our_numbers_in_scope:
@@ -476,12 +490,21 @@ class Command(BaseCommand):
             if not unit_pk:
                 continue
 
-            mfr = normalize_space(mfr)[:150]
+            mfr_clean = normalize_space(mfr)
             their_no = normalize_space(their_no)[:100]
             if not their_no:
                 continue
 
-            dedup_key = (unit_pk, their_no, mfr)
+            # Model Number rule — write to Unit.family, skip CrossReference
+            if mfr_clean.lower() == "model number":
+                unit = existing_units[our_no]
+                if not (unit.family or "").strip() and our_no not in family_updates:
+                    family_updates[our_no] = their_no[:100]
+                family_skipped += 1
+                continue
+
+            mfr_clean = mfr_clean[:150]
+            dedup_key = (unit_pk, their_no, mfr_clean)
             if dedup_key in existing_xrefs:
                 continue
             existing_xrefs.add(dedup_key)
@@ -489,7 +512,7 @@ class Command(BaseCommand):
             batch.append(CrossReference(
                 unit_id=unit_pk,
                 cross_ref_number=their_no,
-                interchange_type=mfr,
+                interchange_type=mfr_clean,
             ))
 
             if len(batch) >= 2000:
@@ -500,6 +523,23 @@ class Command(BaseCommand):
         if batch:
             CrossReference.objects.bulk_create(batch, ignore_conflicts=True)
             created += len(batch)
+
+        # Apply Model-Number family assignments
+        family_applied = 0
+        if family_updates:
+            units_to_save = []
+            for our_no, fam in family_updates.items():
+                unit = existing_units[our_no]
+                if not (unit.family or "").strip():
+                    unit.family = fam
+                    units_to_save.append(unit)
+            if units_to_save:
+                Unit.objects.bulk_update(units_to_save, ["family"], batch_size=500)
+                family_applied = len(units_to_save)
+        self.stdout.write(
+            f"    Model Number rule: {family_skipped:,} xrefs suppressed, "
+            f"{family_applied:,} family fields set"
+        )
 
         return created
 
@@ -518,11 +558,15 @@ class Command(BaseCommand):
 
         boms_created = 0
         items_created = 0
+        boms_skipped_empty = 0  # Fix N — units whose BOM would be empty
 
         by_unit = {}
         for yt, part_name, yt_part, jn_part in rows:
             yt = normalize_space(yt)
             if yt not in existing_units:
+                continue
+            # Fix N — only count rows with a non-empty yt_part as real items.
+            if not normalize_space(yt_part):
                 continue
             by_unit.setdefault(yt, []).append((part_name, yt_part, jn_part))
 
@@ -530,6 +574,11 @@ class Command(BaseCommand):
         processed = 0
 
         for yt, items in by_unit.items():
+            # Fix N — defensive: never create a BOM with zero items.
+            if not items:
+                boms_skipped_empty += 1
+                continue
+
             unit = existing_units[yt]
             bom = BOM.objects.filter(name=yt).first()
             if not bom:
@@ -598,6 +647,11 @@ class Command(BaseCommand):
                 )
                 reset_queries()
                 gc.collect()
+
+        if boms_skipped_empty:
+            self.stdout.write(
+                f"    Fix N: {boms_skipped_empty:,} empty BOM(s) skipped (no items)"
+            )
 
         return boms_created, items_created
 

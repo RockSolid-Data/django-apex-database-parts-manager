@@ -130,6 +130,10 @@ def application_list(request):
     """List applications with search, filters (Make, Year, Mfr, Volt, Unit), MAKE, ENGINE, YEAR, etc."""
     applications = Application.objects.filter(is_active=True).order_by("name")
 
+    # Track whether we touched the M2M relationship so we can .distinct() at the end
+    # (joining via application_units can multiply rows).
+    used_m2m = False
+
     # --- Text search ---
     q = request.GET.get("q", "").strip()
     if q:
@@ -146,7 +150,12 @@ def application_list(request):
             | Q(unit_number__icontains=q)
             | Q(options__icontains=q)
             | Q(notes__icontains=q)
+            # Also search by linked Unit.unit_number (the Application.unit_number
+            # text column is a denormalized legacy field that doesn't always carry
+            # the YouTech number for rows imported under a J&N key).
+            | Q(application_units__unit__unit_number__icontains=q)
         )
+        used_m2m = True
 
     # --- Dropdown filters ---
     filter_make = request.GET.get("make", "").strip()
@@ -164,11 +173,20 @@ def application_list(request):
     if filter_volt:
         applications = applications.filter(volt=filter_volt)
     if filter_unit:
-        applications = applications.filter(unit_number__icontains=filter_unit)
+        applications = applications.filter(
+            Q(unit_number__icontains=filter_unit)
+            | Q(application_units__unit__unit_number__icontains=filter_unit)
+        )
+        used_m2m = True
 
     filter_unit_type = request.GET.get("unit_type", "").strip()
     if filter_unit_type:
         applications = applications.filter(unit_type_name=filter_unit_type)
+
+    # When we joined via application_units, the same Application can match through
+    # multiple linked units; .distinct() collapses those duplicate rows.
+    if used_m2m:
+        applications = applications.distinct()
 
     # --- Build distinct value lists for dropdowns (cached 30 min) ---
     make_choices = cache.get_or_set("app_make_choices",

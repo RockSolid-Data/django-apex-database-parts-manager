@@ -2,11 +2,23 @@
 Development settings -- used by manage.py runserver.
 """
 
+import os
+
 from .base import *  # noqa: F403, F401
 
 DEBUG = True
 SECRET_KEY = "django-insecure-dev-only-m4nch3st3r-3l3ctr1c"
 ALLOWED_HOSTS = []
+
+# Allow pointing Django at an alternate SQLite file (e.g. db.sqlite3.staging
+# for the PDF 11 staging import) without editing settings.  The env var is
+# resolved against BASE_DIR if it isn't already an absolute path.
+_db_override = os.environ.get("DJANGO_DB_NAME")
+if _db_override:
+    _p = _db_override
+    if not os.path.isabs(_p):
+        _p = str(BASE_DIR / _p)  # noqa: F405
+    DATABASES["default"]["NAME"] = _p  # noqa: F405
 
 LOG_DIR = BASE_DIR / "logs"  # noqa: F405
 LOG_DIR.mkdir(parents=True, exist_ok=True)
