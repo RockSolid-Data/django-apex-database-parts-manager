@@ -381,13 +381,20 @@ def run_migrations():
             return False
 
 
+CATALOG_SYNC_TIMEOUT_SECONDS = 90
+
+
 def sync_catalog_data():
     """Sync new catalog records from the bundled seed database.
 
     Runs on every upgrade. The sync_catalog command handles:
     - INSERT OR IGNORE for new records (safe against UNIQUE conflicts)
-    - Fill-blank UPDATE for enriched data on existing records
     - Per-table commits so partial progress is saved on failure
+
+    Hardened against the v1.2.2 hang: runs in a worker thread with a hard
+    timeout so a slow/broken sync can NEVER prevent the server from starting.
+    If the timeout fires we just log a warning and move on -- the customer's
+    DB is untouched (per-table commits + INSERT-only default).
     """
     app_dir = get_app_dir()
     internal_dir = app_dir / '_internal' if is_frozen() else app_dir
@@ -397,39 +404,64 @@ def sync_catalog_data():
         print("No seed database found -- skipping catalog sync.")
         return
 
-    try:
-        from django.core.management import call_command
-        from io import StringIO
+    from io import StringIO
 
-        stdout_capture = StringIO()
-        stderr_capture = StringIO()
+    stdout_capture = StringIO()
+    stderr_capture = StringIO()
+    error_holder = {"exc": None}
 
-        print("Syncing catalog data from seed...")
-        call_command(
-            'sync_catalog',
-            seed_db=str(seed_path),
-            verbosity=1,
-            stdout=stdout_capture,
-            stderr=stderr_capture,
+    def _runner():
+        try:
+            from django.core.management import call_command
+            call_command(
+                'sync_catalog',
+                seed_db=str(seed_path),
+                # Inner time budget: a few seconds below the thread timeout so
+                # the SQL itself aborts cleanly instead of being abandoned.
+                max_seconds=max(10, CATALOG_SYNC_TIMEOUT_SECONDS - 10),
+                verbosity=1,
+                stdout=stdout_capture,
+                stderr=stderr_capture,
+            )
+        except Exception as exc:
+            error_holder["exc"] = exc
+
+    print("Syncing catalog data from seed (max "
+          f"{CATALOG_SYNC_TIMEOUT_SECONDS}s)...")
+    worker = threading.Thread(target=_runner, name="catalog-sync", daemon=True)
+    worker.start()
+    worker.join(timeout=CATALOG_SYNC_TIMEOUT_SECONDS)
+
+    if worker.is_alive():
+        print(
+            f"[SYNC TIMEOUT] Catalog sync did not finish within "
+            f"{CATALOG_SYNC_TIMEOUT_SECONDS}s -- continuing startup anyway. "
+            "Your existing data is unchanged. Re-run later with "
+            "'manage.py sync_catalog --seed-db ... --fill-blanks' if you "
+            "want to fill in missing fields."
         )
+        return
 
-        stdout_text = stdout_capture.getvalue()
-        stderr_text = stderr_capture.getvalue()
+    stdout_text = stdout_capture.getvalue()
+    stderr_text = stderr_capture.getvalue()
 
-        if stdout_text.strip():
-            print(stdout_text.rstrip())
-        if stderr_text.strip():
-            print(f"[SYNC WARNINGS]\n{stderr_text.rstrip()}")
+    if stdout_text.strip():
+        print(stdout_text.rstrip())
+    if stderr_text.strip():
+        print(f"[SYNC WARNINGS]\n{stderr_text.rstrip()}")
 
-        print("Catalog sync complete.")
-    except Exception as e:
-        print(f"[SYNC ERROR] Catalog sync failed: {e}")
+    if error_holder["exc"] is not None:
+        exc = error_holder["exc"]
+        print(f"[SYNC ERROR] Catalog sync failed: {exc}")
         import traceback
-        traceback.print_exc()
+        traceback.print_exception(type(exc), exc, exc.__traceback__)
         print(
             "  The application will continue, but some catalog data may be "
             "missing. Check the log file for details."
         )
+        return
+
+    print("Catalog sync complete.")
 
 
 def create_superuser_if_needed():

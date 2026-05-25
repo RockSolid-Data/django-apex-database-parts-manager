@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.2.3",
+    "date": "2026-05-22",
+    "changes": [
+      "Fixed catalog sync hanging the launcher on upgrades (v1.2.2 fill-blanks pass rewrote millions of rows unconditionally)",
+      "Catalog sync default is now insert-only again (1-2s, same as v1.2.1) — your existing data is never touched on update",
+      "Fill-blanks pass is now opt-in (--fill-blanks) and per-column so it only updates rows actually missing data",
+      "Launcher now runs catalog sync with a 90s hard timeout — the server can never be wedged by a slow sync again",
+      "Catalog sync respects --max-seconds budget and aborts gracefully if exceeded"
+    ]
+  },
+  {
     "version": "1.2.2",
     "date": "2026-05-21",
     "changes": [

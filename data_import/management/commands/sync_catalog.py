@@ -1,14 +1,24 @@
 """
 Catalog sync: inserts new records from seed.sqlite3 into the customer
-database AND fills in blank fields on existing records.
+database. Optionally fills in blank fields on existing records.
 
 Uses SQLite ATTACH DATABASE for bulk operations. Per-table commits ensure
 partial progress is saved even if a later table fails.
 
 Modes:
-  - Default: INSERT OR IGNORE new records + fill blank fields on existing
-  - --force-update: overwrite all catalog fields from seed (respects BUSINESS_FIELDS)
-  - --dry-run: preview what would change without writing
+  - Default: INSERT OR IGNORE new records only (fast, additive, ~1-2s).
+  - --fill-blanks: ALSO fill blank fields on existing rows (per-column
+    UPDATE that only touches rows actually missing data; safe but slower).
+  - --force-update: overwrite all catalog fields from seed
+    (still respects BUSINESS_FIELDS). Slowest, opt-in only.
+  - --dry-run: preview what would change without writing.
+  - --max-seconds N: abort the run gracefully after N seconds (default: 60).
+
+History:
+  v1.2.2 ran the fill-blanks pass unconditionally with a single CASE-everything
+  UPDATE per table. On installs with millions of rows the rewrites took 10+
+  minutes and silently wedged the launcher. v1.2.3 makes fill-blanks opt-in,
+  per-column, and time-bounded so upgrades stay fast and safe.
 """
 
 import time
@@ -50,9 +60,15 @@ BUSINESS_FIELDS = {
 # Columns excluded from UPDATE on all tables (auto-managed).
 NEVER_UPDATE_COLUMNS = {"id", "seed_id", "created_at", "updated_at"}
 
+DEFAULT_MAX_SECONDS = 60
+
+
+class TimeBudgetExceeded(Exception):
+    """Raised when the time budget for the sync is exhausted."""
+
 
 class Command(BaseCommand):
-    help = "Sync catalog records from seed.sqlite3 (insert new + fill blanks)."
+    help = "Sync catalog records from seed.sqlite3 (insert new + optional fill-blanks)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -64,31 +80,57 @@ class Command(BaseCommand):
             help="Preview changes without writing to the database",
         )
         parser.add_argument(
+            "--fill-blanks", action="store_true",
+            help="Also fill in blank/NULL columns on existing rows from the seed.",
+        )
+        parser.add_argument(
             "--force-update", action="store_true",
             help="Overwrite all catalog fields from seed (still respects business fields)",
+        )
+        parser.add_argument(
+            "--max-seconds", type=int, default=DEFAULT_MAX_SECONDS,
+            help=(
+                f"Maximum total runtime in seconds before the sync aborts gracefully "
+                f"(default: {DEFAULT_MAX_SECONDS}). The launcher uses this as a safety net."
+            ),
         )
 
     def handle(self, *args, **options):
         seed_path = Path(options["seed_db"])
         dry_run = options["dry_run"]
+        fill_blanks = options["fill_blanks"] or options["force_update"]
         force_update = options["force_update"]
+        max_seconds = max(5, options["max_seconds"])
 
         if not seed_path.exists():
             raise CommandError(f"Seed database not found: {seed_path}")
 
         t0 = time.perf_counter()
+        deadline = t0 + max_seconds
         cursor = connection.cursor()
 
         seed_path_str = str(seed_path).replace("'", "''")
         cursor.execute(f"ATTACH DATABASE '{seed_path_str}' AS seed")
 
-        totals = {"inserted": 0, "updated": 0, "skipped": 0, "conflicts": 0, "errors": []}
+        totals = {
+            "inserted": 0, "updated": 0, "skipped": 0,
+            "conflicts": 0, "errors": [], "aborted": False,
+        }
 
         try:
             for _app, model_name, db_table in SYNC_MODELS:
+                if time.perf_counter() >= deadline:
+                    totals["aborted"] = True
+                    self.stderr.write(self.style.WARNING(
+                        f"  Time budget ({max_seconds}s) reached before {model_name}; "
+                        f"remaining tables skipped."
+                    ))
+                    break
+
                 try:
                     result = self._sync_table(
-                        cursor, model_name, db_table, dry_run, force_update
+                        cursor, model_name, db_table,
+                        dry_run, fill_blanks, force_update, deadline,
                     )
                     totals["inserted"] += result["inserted"]
                     totals["updated"] += result["updated"]
@@ -98,26 +140,47 @@ class Command(BaseCommand):
                     if not dry_run:
                         connection.connection.commit()
 
+                except TimeBudgetExceeded:
+                    totals["aborted"] = True
+                    self.stderr.write(self.style.WARNING(
+                        f"  {model_name}: aborted at time budget ({max_seconds}s)."
+                    ))
+                    if not dry_run:
+                        try:
+                            connection.connection.rollback()
+                        except Exception:
+                            pass
+                    break
+
                 except Exception as exc:
                     totals["errors"].append((model_name, str(exc)))
                     self.stderr.write(self.style.ERROR(
                         f"  {model_name}: FAILED -- {exc}"
                     ))
-                    connection.connection.rollback()
+                    try:
+                        connection.connection.rollback()
+                    except Exception:
+                        pass
 
         finally:
-            cursor.execute("DETACH DATABASE seed")
+            try:
+                cursor.execute("DETACH DATABASE seed")
+            except Exception:
+                pass
 
         elapsed = time.perf_counter() - t0
         prefix = "[DRY RUN] " if dry_run else ""
-
-        self.stdout.write(self.style.SUCCESS(
-            f"\n{prefix}Catalog sync complete: "
+        status_msg = (
+            f"{prefix}Catalog sync complete: "
             f"{totals['inserted']:,} inserted, "
             f"{totals['updated']:,} updated, "
             f"{totals['skipped']:,} unchanged"
             f" ({elapsed:.1f}s)."
-        ))
+        )
+        if totals["aborted"]:
+            self.stdout.write(self.style.WARNING(status_msg + " [PARTIAL - time budget hit]"))
+        else:
+            self.stdout.write(self.style.SUCCESS(status_msg))
 
         if totals["conflicts"]:
             self.stdout.write(self.style.WARNING(
@@ -132,7 +195,8 @@ class Command(BaseCommand):
             for model, err in totals["errors"]:
                 self.stderr.write(f"    - {model}: {err}")
 
-    def _sync_table(self, cursor, model_name, db_table, dry_run, force_update):
+    def _sync_table(self, cursor, model_name, db_table,
+                    dry_run, fill_blanks, force_update, deadline):
         result = {"inserted": 0, "updated": 0, "skipped": 0, "conflicts": 0}
 
         try:
@@ -153,7 +217,6 @@ class Command(BaseCommand):
         main_columns = {row[1] for row in main_columns_info}
         main_col_types = {row[1]: row[2].upper() for row in main_columns_info}
 
-        # Get seed columns — only sync columns that exist in BOTH (schema drift safe)
         cursor.execute(f"PRAGMA seed.table_info([{db_table}])")
         seed_columns = {row[1] for row in cursor.fetchall()}
 
@@ -196,26 +259,28 @@ class Command(BaseCommand):
         result["inserted"] = actual_inserted
         result["conflicts"] = conflicts
 
-        # Log conflict details for developer diagnostics
         if conflicts > 0 and not dry_run:
             self._log_conflicts(cursor, db_table, model_name)
 
-        # --- Phase 2: UPDATE existing records (fill blanks or force) ---
-        biz_fields = BUSINESS_FIELDS.get(db_table, set())
-        update_candidates = sorted(
-            c for c in common_columns
-            if c not in NEVER_UPDATE_COLUMNS and c not in biz_fields
-        )
-
+        # --- Phase 2: UPDATE existing records (opt-in only) ---
+        # By default we do NOT touch existing rows. Customers' DBs may have
+        # millions of catalog rows and a blanket UPDATE was the bug that hung
+        # the v1.2.2 launcher. Run only when --fill-blanks/--force-update is set.
         updated = 0
-        if update_candidates:
-            updated = self._update_existing(
-                cursor, db_table, update_candidates, main_col_types,
-                dry_run, force_update,
+        if fill_blanks:
+            biz_fields = BUSINESS_FIELDS.get(db_table, set())
+            update_candidates = sorted(
+                c for c in common_columns
+                if c not in NEVER_UPDATE_COLUMNS and c not in biz_fields
             )
+            if update_candidates:
+                updated = self._update_existing_per_column(
+                    cursor, db_table, update_candidates, main_col_types,
+                    dry_run, force_update, deadline,
+                )
 
         result["updated"] = updated
-        result["skipped"] = seed_total - to_insert - updated
+        result["skipped"] = max(0, seed_total - to_insert - updated)
 
         if actual_inserted or updated or conflicts:
             line = f"  {model_name}: {actual_inserted:,} inserted, {updated:,} updated"
@@ -245,67 +310,73 @@ class Command(BaseCommand):
         except Exception:
             pass
 
-    def _update_existing(self, cursor, db_table, columns, col_types, dry_run, force_update):
-        """Update existing records: fill blanks (default) or overwrite (force)."""
+    def _update_existing_per_column(self, cursor, db_table, columns, col_types,
+                                    dry_run, force_update, deadline):
+        """Fill blank columns on existing rows.
 
-        if force_update:
-            set_clauses = [f"[{c}] = s.[{c}]" for c in columns]
-        else:
-            set_clauses = []
-            for c in columns:
-                col_type = col_types.get(c, "TEXT")
-                if _is_text_type(col_type):
-                    set_clauses.append(
-                        f"[{c}] = CASE WHEN m.[{c}] IS NULL OR m.[{c}] = '' "
-                        f"THEN s.[{c}] ELSE m.[{c}] END"
+        Runs ONE narrowly scoped UPDATE per column so SQLite only rewrites
+        rows that actually need it. This is dramatically cheaper than the
+        v1.2.2 "CASE everything" approach, which rewrote every row even
+        when nothing changed.
+
+        Honours `deadline`: raises TimeBudgetExceeded if exceeded between
+        columns so the launcher can never get wedged here again.
+        """
+        total_updated = 0
+
+        for col in columns:
+            if time.perf_counter() >= deadline:
+                raise TimeBudgetExceeded()
+
+            col_type = col_types.get(col, "TEXT")
+            is_text = _is_text_type(col_type)
+
+            if force_update:
+                where_filter = "s.[{c}] IS NOT m.[{c}]".format(c=col)
+                set_expr = f"[{col}] = ("
+                set_expr += (
+                    f"SELECT s.[{col}] FROM seed.[{db_table}] s "
+                    f"WHERE s.seed_id = main.[{db_table}].seed_id"
+                )
+                set_expr += ")"
+            else:
+                if is_text:
+                    blank_check = (
+                        f"(main.[{db_table}].[{col}] IS NULL "
+                        f"OR main.[{db_table}].[{col}] = '')"
                     )
+                    seed_has = "s.[{c}] IS NOT NULL AND s.[{c}] != ''".format(c=col)
                 else:
-                    set_clauses.append(
-                        f"[{c}] = CASE WHEN m.[{c}] IS NULL "
-                        f"THEN s.[{c}] ELSE m.[{c}] END"
-                    )
+                    blank_check = f"main.[{db_table}].[{col}] IS NULL"
+                    seed_has = f"s.[{col}] IS NOT NULL"
 
-        if not set_clauses:
-            return 0
+                set_expr = (
+                    f"[{col}] = (SELECT s.[{col}] FROM seed.[{db_table}] s "
+                    f"WHERE s.seed_id = main.[{db_table}].seed_id)"
+                )
+                where_filter = (
+                    f"{blank_check} AND main.[{db_table}].seed_id IS NOT NULL "
+                    f"AND EXISTS (SELECT 1 FROM seed.[{db_table}] s "
+                    f"WHERE s.seed_id = main.[{db_table}].seed_id AND {seed_has})"
+                )
 
-        # Count records that would actually change
-        if not force_update:
-            where_parts = []
-            for c in columns:
-                col_type = col_types.get(c, "TEXT")
-                if _is_text_type(col_type):
-                    where_parts.append(
-                        f"((m.[{c}] IS NULL OR m.[{c}] = '') "
-                        f"AND s.[{c}] IS NOT NULL AND s.[{c}] != '')"
-                    )
-                else:
-                    where_parts.append(
-                        f"(m.[{c}] IS NULL AND s.[{c}] IS NOT NULL)"
-                    )
-            change_condition = " OR ".join(where_parts)
-        else:
-            diff_parts = [f"m.[{c}] IS NOT s.[{c}]" for c in columns]
-            change_condition = " OR ".join(diff_parts)
+            if dry_run:
+                count_sql = (
+                    f"SELECT COUNT(*) FROM main.[{db_table}] "
+                    f"WHERE {where_filter}"
+                )
+                cursor.execute(count_sql)
+                total_updated += cursor.fetchone()[0]
+                continue
 
-        count_sql = (
-            f"SELECT COUNT(*) FROM main.[{db_table}] m "
-            f"INNER JOIN seed.[{db_table}] s ON m.seed_id = s.seed_id "
-            f"WHERE m.seed_id IS NOT NULL AND ({change_condition})"
-        )
-        cursor.execute(count_sql)
-        update_count = cursor.fetchone()[0]
-
-        if update_count > 0 and not dry_run:
-            set_expr = ", ".join(set_clauses)
             update_sql = (
-                f"UPDATE main.[{db_table}] AS m SET {set_expr} "
-                f"FROM seed.[{db_table}] AS s "
-                f"WHERE m.seed_id = s.seed_id "
-                f"AND m.seed_id IS NOT NULL"
+                f"UPDATE main.[{db_table}] SET {set_expr} "
+                f"WHERE {where_filter}"
             )
             cursor.execute(update_sql)
+            total_updated += cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
 
-        return update_count
+        return total_updated
 
 
 def _is_text_type(col_type):
