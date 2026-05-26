@@ -30,7 +30,7 @@ ATTR_FIELD_MAP = {
 }
 
 ALL_MODEL_UPDATE_FIELDS = [
-    "yt_number", "j_and_n", "part_name", "description", "oem", "voltage",
+    "yt_number", "j_and_n", "part_name", "oem", "voltage",
     "specifications",
 ]
 
@@ -287,9 +287,6 @@ class Command(BaseCommand):
                 name_val = normalize_space(row["part_name"])
                 if name_val and not part.part_name:
                     part.part_name = name_val[:255]
-                    changed = True
-                if name_val and not part.description:
-                    part.description = name_val
                     changed = True
 
                 # J&N number

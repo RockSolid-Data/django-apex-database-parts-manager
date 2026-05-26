@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load catalog_tags %}
 
 {% block title %}Reorder — Apex Database{% endblock %}
 {% block main_class %}{% endblock %}
@@ -93,7 +94,7 @@
       <tr data-href="{% url 'catalog:part_detail' part.pk %}">
         <td>{{ part.manufacturer_number|default:"—" }}</td>
         <td>{{ part.yt_number|default:"—" }}</td>
-        <td>{{ part.j_and_n|default:"—" }}</td>
+        <td>{{ part.j_and_n|first_jn|default:"—" }}</td>
         <td>{{ part.oem_number|default:"—" }}</td>
         <td>{{ part.description|truncatewords:12|default:part.part_name|default:"—" }}</td>
         <td>{{ part.primary_vendor|default:"—" }}</td>

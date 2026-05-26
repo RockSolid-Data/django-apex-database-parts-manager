@@ -768,3 +768,15 @@ thead.table-dark th {
   opacity: 0.85;
   transform: scale(1.03);
 }
+
+/* Fixed-layout tables with truncated cells */
+.table-layout-fixed {
+  table-layout: fixed !important;
+  width: 100%;
+}
+.table-layout-fixed td.text-truncate {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 0;
+}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load catalog_tags %}
 
 {% block title %}Parts — Apex Database{% endblock %}
 {% block main_class %}{% endblock %}
@@ -95,7 +96,7 @@
         {% endif %}
         <td>{{ part.part_number|default:"—" }}</td>
         <td>{{ part.yt_number|default:"—" }}</td>
-        <td style="padding-right:22px;">{{ part.j_and_n|default:"—" }}</td>
+        <td style="padding-right:22px;">{{ part.j_and_n|first_jn|default:"—" }}</td>
         <td>{{ part.oem_number|default:"—" }}</td>
         <td>{{ part.notes|truncatewords:12 }}</td>
         <td>{{ part.voltage|default:"" }}</td>

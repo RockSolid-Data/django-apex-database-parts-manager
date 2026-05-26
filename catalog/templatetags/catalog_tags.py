@@ -36,16 +36,23 @@ def get_item(dictionary, key):
 
 @register.filter
 def first_jn(value):
-    """Return the first J&N number from a comma-separated string."""
+    """Return the first J&N number from a pipe- or comma-separated string."""
     if not value:
         return ""
-    items = [p.strip() for p in str(value).split(",") if p.strip()]
+    text = str(value)
+    if "|" in text:
+        items = [p.strip() for p in text.split("|") if p.strip()]
+    else:
+        items = [p.strip() for p in text.split(",") if p.strip()]
     return items[0] if items else ""
 
 
 @register.filter
 def jn_items(value):
-    """Split a comma-separated J&N string into a list of individual numbers."""
+    """Split a pipe- or comma-separated J&N string into a list of individual numbers."""
     if not value:
         return []
-    return [p.strip() for p in str(value).split(",") if p.strip()]
+    text = str(value)
+    if "|" in text:
+        return [p.strip() for p in text.split("|") if p.strip()]
+    return [p.strip() for p in text.split(",") if p.strip()]

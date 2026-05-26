@@ -74,6 +74,7 @@ ATTR_KEY_MAP = {
     "pulley_outside_diameter": "pulley_od",
     "outside_diameter": "pulley_od",
     "decoupled": "decoupled",
+    "decoupled_or_clutch_pulley": "decoupled",
     "stator_type": "stator_type",
     "stator_leads": "stator_type",
     # -- Generator --
@@ -83,6 +84,7 @@ ATTR_KEY_MAP = {
     "starter_rotation": "rotation",
     "design": "design",
     "power_rating": "power_rating",
+    "kw": "power_rating",
     "tooth_quantity": "tooth_quantity",
     "case_grounding": "case_grounding",
     "nose_cone_type": "nose_cone_type",
@@ -131,34 +133,66 @@ def compute_page_midpoint(page) -> float:
     return naive
 
 
+def _classify_block_column(block, mid: float) -> str:
+    """Classify a text block as LEFT or RIGHT using hybrid gutter logic.
+
+    Default: center-based classification ((x0+x1)/2 vs mid).
+    Gutter guard: blocks whose center falls within a narrow band around mid
+    (mid-40 to mid+10) are classified by their *majority side* — if more
+    than half the block's width lies to the right of mid, it goes RIGHT.
+
+    This correctly handles:
+      - Section labels that straddle the gutter (x0~292, x1~351, width=59,
+        majority right of mid~338) → RIGHT
+      - Normal left-column content (x1 well below mid) → LEFT
+      - Normal right-column content (x0 well above mid) → RIGHT
+      - Regression cases from pure right-edge logic → back to LEFT
+    """
+    x0, x1 = block[0], block[2]
+    center = (x0 + x1) / 2.0
+    width = x1 - x0
+
+    # Gutter zone: center is within [mid-40, mid+10]
+    if (mid - 40) < center < (mid + 10) and width > 0:
+        # Use majority-side: how much of the block is right of mid?
+        right_portion = max(0, x1 - mid)
+        if right_portion > width / 2.0:
+            return "R"
+        return "L"
+
+    # Default: center-based
+    if center < mid:
+        return "L"
+    return "R"
+
+
 def _column_lines(page, mid: float):
     """Yield (col_name, [lines]) for left column then right column.
 
-    Fix X — xref leak (PDF 9/11): the buyers-guide PDFs draw the
-    right-column section header labels ("APPLICATIONS", "PRODUCT ATTRIBUTES",
-    etc.) as blocks that start inside the gutter (x0 ~292) but extend into
-    the right column (x1 ~351-382).  Classifying by block CENTER pulled
-    those labels into the LEFT column.  When the left column's INTERCHANGES
-    wrap-around content followed such a misplaced "APPLICATIONS" header in
-    y-sort order, the parser switched current_section to APPLICATIONS and
-    appended interchange text to app_map, producing fake "Application" rows
-    whose model field was a "Brand: number | Brand: number" string.
+    Hybrid gutter-aware classification (Fix X v2):
+    The buyers-guide PDFs draw right-column section header labels
+    ("APPLICATIONS", "PRODUCT ATTRIBUTES", etc.) as blocks that straddle
+    the gutter (x0 ~292, x1 ~351).  Pure center-based classification
+    pulled those labels into LEFT (causing xref-leak into app_map).
+    Pure right-edge classification fixed that but over-corrected on
+    pages where legitimate left-column content has x1 near mid.
 
-    Classify by the block's RIGHT edge (x1) instead: any block whose right
-    edge crosses the computed page midpoint belongs to the RIGHT column.
-    Truly-left-column content (x1 well below mid) and truly-right-column
-    content (x0 >= mid, so x1 >> mid) are unchanged; only gutter-straddling
-    section labels move from left to right where they belong.
+    Solution: classify by center as default, but for blocks in the gutter
+    zone (center within [mid-40, mid+10]), use majority-side logic —
+    blocks with >50% of their width right of mid go RIGHT.
     """
     blocks = page.get_text("blocks") or []
-    left_blocks = sorted(
-        [b for b in blocks if b[2] < mid],
-        key=lambda b: (b[1], b[0]),
-    )
-    right_blocks = sorted(
-        [b for b in blocks if b[2] >= mid],
-        key=lambda b: (b[1], b[0]),
-    )
+    left_blocks = []
+    right_blocks = []
+    for b in blocks:
+        if _classify_block_column(b, mid) == "L":
+            left_blocks.append(b)
+        else:
+            right_blocks.append(b)
+
+    left_blocks.sort(key=lambda b: (b[1], b[0]))
+    right_blocks.sort(key=lambda b: (b[1], b[0]))
+
     for col_name, col_blocks in (("L", left_blocks), ("R", right_blocks)):
         col_lines: list[str] = []
         for block in col_blocks:

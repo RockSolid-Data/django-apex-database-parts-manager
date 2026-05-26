@@ -94,32 +94,32 @@
 <p class="text-muted mb-0 me-sticky-count">{{ total_count }} application{{ total_count|pluralize }} found{% if page_obj.has_other_pages %} — page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</p>
 
 <div class="table-responsive">
-  <table class="table table-striped table-hover align-middle">
+  <table class="table table-striped table-hover align-middle table-layout-fixed">
     <thead class="table-dark">
       <tr>
-        <th>Make</th>
-        <th>Model</th>
-        <th>Engine</th>
-        <th class="text-center" style="min-width:80px;">Year</th>
-        <th style="min-width:120px;">Unit Type</th>
-        <th>Options</th>
-        <th class="text-center">Amp</th>
-        <th class="text-center">Volt</th>
-        <th class="text-end">Unit #</th>
+        <th style="width:7%;">Make</th>
+        <th style="width:10%;">Model</th>
+        <th style="width:11%;">Engine</th>
+        <th class="text-center" style="width:10%;">Year</th>
+        <th style="width:15%;">Unit Type</th>
+        <th style="width:20%;">Options</th>
+        <th class="text-center" style="width:5%;">Amp</th>
+        <th class="text-center" style="width:5%;">Volt</th>
+        <th class="text-end" style="width:7%;">Unit #</th>
       </tr>
     </thead>
     <tbody>
       {% for app in applications %}
       <tr data-href="{% url 'catalog:application_detail' app.pk %}">
-        <td>{{ app.make|default:"—" }}</td>
-        <td>{{ app.model|default:"—" }}</td>
-        <td>{{ app.engine|default:"—" }}</td>
-        <td class="text-center">{{ app.year|default:"—" }}</td>
-        <td>{{ app.unit_type_name|default:"—" }}</td>
-        <td>{{ app.options|truncatewords:8|default:"—" }}</td>
+        <td class="text-truncate" title="{{ app.make }}">{{ app.make|default:"—" }}</td>
+        <td class="text-truncate" title="{{ app.model }}">{{ app.model|default:"—" }}</td>
+        <td class="text-truncate" title="{{ app.engine }}">{{ app.engine|default:"—" }}</td>
+        <td class="text-center text-nowrap">{{ app.year|default:"—" }}</td>
+        <td class="text-truncate" title="{{ app.unit_type_name }}">{{ app.unit_type_name|default:"—" }}</td>
+        <td class="text-truncate" title="{{ app.options }}">{{ app.options|default:"—" }}</td>
         <td class="text-center">{{ app.amp|default:"—" }}</td>
         <td class="text-center">{{ app.volt|default:"—" }}</td>
-        <td class="text-end">{{ app.unit_number|default:"—" }}</td>
+        <td class="text-end text-nowrap">{{ app.unit_number|default:"—" }}</td>
       </tr>
       {% empty %}
       <tr>

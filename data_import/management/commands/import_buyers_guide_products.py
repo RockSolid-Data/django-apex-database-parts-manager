@@ -748,6 +748,31 @@ class Command(BaseCommand):
     # Application text parsing
     # ------------------------------------------------------------------
     _YEAR_RANGE_RE = re.compile(r'\d{4}-\d{4}')
+    # Line-level xref-leak filter: a single line that is clearly
+    # pipe-delimited interchange text ("Brand: number | Brand: number")
+    _XREF_LINE_RE = re.compile(
+        r'^[A-Z][\w\s&.]*:\s*[\w-]+.*\|'
+    )
+    # Continuation of interchange text (starts with number/text, has
+    # multiple pipes, no year ranges or semicolons)
+    _XREF_CONTINUATION_RE = re.compile(r'.*\|.*\|')
+    # Substitute-leak filter: "YouTech : NNNNNN" patterns from POSSIBLE
+    # SUBSTITUTIONS section that leaked into APPLICATION
+    _SUB_LEAK_RE = re.compile(r'YouTech\s*:\s*\d{5,}')
+
+    def _is_xref_leak_line(self, line):
+        """Return True if line looks like leaked interchange text."""
+        if self._YEAR_RANGE_RE.search(line):
+            return False
+        if ';' in line:
+            return False
+        # Primary: starts with "Brand: number ... |"
+        if self._XREF_LINE_RE.match(line):
+            return True
+        # Continuation: has 2+ pipes and colon-number patterns
+        if self._XREF_CONTINUATION_RE.match(line) and ':' in line:
+            return True
+        return False
 
     def _parse_application_text(self, raw_text):
         """
@@ -759,15 +784,38 @@ class Command(BaseCommand):
             Model1 EngineSpec Year; Model2 EngineSpec Year
             AnotherMake
             Model3 EngineSpec Year
-        """
-        results = []
-        current_make = ""
-        model_buffer = ""
 
+        Safety net: filters out individual lines that match pipe-delimited
+        interchange patterns or substitutes patterns (xref-leak residue
+        from parser column misclassification).
+        """
+        # Block-level skip: pure substitutes leak (no year ranges at all)
+        has_year_ranges = bool(self._YEAR_RANGE_RE.search(raw_text))
+        if not has_year_ranges and self._SUB_LEAK_RE.search(raw_text):
+            return []
+
+        # Line-level filtering: remove individual interchange lines
+        filtered_lines = []
         for raw_line in raw_text.split("\n"):
             line = raw_line.strip()
             if not line:
                 continue
+            # Skip lines that look like pipe-delimited interchange entries
+            if self._is_xref_leak_line(line):
+                continue
+            # Skip substitutes lines
+            if self._SUB_LEAK_RE.match(line):
+                continue
+            filtered_lines.append(line)
+
+        if not filtered_lines:
+            return []
+
+        results = []
+        current_make = ""
+        model_buffer = ""
+
+        for line in filtered_lines:
 
             # A make line: starts with a letter, contains no semicolons,
             # no year ranges, and is relatively short
@@ -783,6 +831,25 @@ class Command(BaseCommand):
             if current_make and re.match(r'^\(.+\)$', line) and not model_buffer:
                 current_make = f"{current_make} {line}".title()
                 continue
+
+            # Make-continuation: when we have a make but no model data yet,
+            # short non-model lines are wrapped parts of the make name
+            # (e.g. "OMC Engine\n- Inboard &\nV-Drive" or "Mercruiser\nStern Drive")
+            if current_make and not model_buffer:
+                is_make_continuation = (
+                    line.startswith("-")
+                    or line.startswith("&")
+                    or line.startswith("/")
+                    or (
+                        not self._YEAR_RANGE_RE.search(line)
+                        and ";" not in line
+                        and not re.search(r'\d', line)
+                        and len(line) < 40
+                    )
+                )
+                if is_make_continuation:
+                    current_make = f"{current_make} {line}".strip()
+                    continue
 
             if is_make_line:
                 # Flush any pending model buffer
@@ -910,6 +977,7 @@ class Command(BaseCommand):
                     app = Application.objects.create(
                         name=name[:255], make=make, model=model,
                         engine=engine, year=year,
+                        unit_number=yt[:100],
                     )
                     app_pk = app.pk
                     app_cache[cache_key] = app_pk

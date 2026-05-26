@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load catalog_tags %}
 
 {% block title %}Part {{ part_display_number }} — Apex Database{% endblock %}
 
@@ -44,7 +45,7 @@
             <tr><th class="ps-3">Category</th><td>{{ part.category|default:"—" }}</td></tr>
             <tr><th class="ps-3">Manufacturer Number</th><td>{{ part.manufacturer_number|default:"—" }}</td></tr>
             <tr><th class="ps-3">YT Number</th><td>{{ part.yt_number|default:"—" }}</td></tr>
-            <tr><th class="ps-3">J&N</th><td>{{ part.j_and_n|default:"—" }}</td></tr>
+            <tr><th class="ps-3">J&N</th><td>{{ part.j_and_n|first_jn|default:"—" }}</td></tr>
             <tr><th class="ps-3">OEM #</th><td>{{ part.oem_number|default:"—" }}</td></tr>
             <tr><th class="ps-3">Voltage</th><td>{{ part.voltage|default:"—" }}</td></tr>
             <tr><th class="ps-3">Type</th><td>{{ part.type|default:"—" }}</td></tr>

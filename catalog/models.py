@@ -684,6 +684,12 @@ class PartInterchange(models.Model):
 
     class Meta:
         unique_together = [("part", "interchange_part")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["part", "interchange_number", "source_name"],
+                name="unique_part_xref_number_source",
+            ),
+        ]
         indexes = [
             models.Index(fields=["interchange_number"]),
         ]

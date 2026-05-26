@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load catalog_tags %}
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -34,7 +35,7 @@
     <tr>
       <td>{{ part.part_number|default:"—" }}</td>
       <td>{{ part.yt_number|default:"—" }}</td>
-      <td>{{ part.j_and_n|default:"—" }}</td>
+      <td>{{ part.j_and_n|first_jn|default:"—" }}</td>
       <td>{{ part.oem_number|default:"—" }}</td>
       <td>{{ part.description|truncatewords:12 }}</td>
       <td>{{ part.voltage|default:"" }}</td>

@@ -116,6 +116,9 @@ def _parse_pdf(pdf_path: Path):
     return notes_map, apps_map
 
 
+_BARE_YEAR_RE = re.compile(r"^\d{4}$")
+
+
 def _parse_app_lines(lines):
     """
     Parse a list of raw application section lines into
@@ -128,23 +131,36 @@ def _parse_app_lines(lines):
       - A standalone "Various" line (common standalone model word)
 
     Lines before the terminal accumulate as the make name.
+    When model text wraps across multiple PDF lines, consecutive terminal
+    lines with no intervening make are joined to the previous entry.
     """
     entries = []
     make_parts = []
 
     for line in lines:
+        stripped = line.strip()
         is_terminal = (
-            YEAR_RE.search(line)
-            or line == "All Models"
-            or (line.count(";") >= 1 and len(line) > 8)
-            or line.strip() in ("Various", "Salt Spreader", "All")
+            YEAR_RE.search(stripped)
+            or stripped == "All Models"
+            or (stripped.count(";") >= 1 and len(stripped) > 8)
+            or stripped in ("Various", "Salt Spreader", "All")
         )
         if is_terminal:
             make = " ".join(make_parts).strip()
-            entries.append((make, line.strip()))
+            if not make and entries:
+                prev_make, prev_model = entries[-1]
+                sep = "" if prev_model.endswith("-") else " "
+                entries[-1] = (prev_make, f"{prev_model}{sep}{stripped}")
+            else:
+                entries.append((make, stripped))
             make_parts = []
         else:
-            make_parts.append(line.strip())
+            if not make_parts and entries and _BARE_YEAR_RE.match(stripped):
+                prev_make, prev_model = entries[-1]
+                sep = "" if prev_model.endswith("-") else " "
+                entries[-1] = (prev_make, f"{prev_model}{sep}{stripped}")
+            else:
+                make_parts.append(stripped)
 
     # Flush any remaining make parts that had no terminal line
     if make_parts:
