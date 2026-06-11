@@ -34,6 +34,28 @@ from catalog.models import Application, ApplicationUnit, Unit
 BATCH_SIZE = 2000
 
 
+def normalize_year(year_str):
+    """Convert 2-digit year ranges to 4-digit (e.g. '81-91' → '1981-1991')."""
+    if not year_str:
+        return year_str
+
+    def expand(y):
+        if len(y) == 2 and y.isdigit():
+            val = int(y)
+            return f"20{y}" if val <= 30 else f"19{y}"
+        return y
+
+    parts = year_str.split(" | ")
+    normalized = []
+    for part in parts:
+        if "-" in part:
+            segments = part.split("-")
+            normalized.append("-".join(expand(s) for s in segments))
+        else:
+            normalized.append(expand(part))
+    return " | ".join(normalized)
+
+
 class Command(BaseCommand):
     help = "Import application staging DBs into the catalog."
 
@@ -298,6 +320,48 @@ class Command(BaseCommand):
                 if opts not in options_map[key]:
                     options_map[key].append(opts)
 
+        # Pre-collect distinct other_numbers per app key
+        other_number_map = {}
+        if split:
+            self.stdout.write("  Collecting other_numbers per application...")
+            for make, model, engine, other_no in conn.execute(
+                "SELECT make, model, engine, other_number FROM applications "
+                "WHERE other_number != '' GROUP BY make, model, engine, other_number"
+            ):
+                key = (make, model, engine)
+                other_number_map.setdefault(key, [])
+                if other_no not in other_number_map[key]:
+                    other_number_map[key].append(other_no)
+        else:
+            for make, model, other_no in conn.execute(
+                "SELECT make, model, other_number FROM applications "
+                "WHERE other_number != '' GROUP BY make, model, other_number"
+            ):
+                key = (make, model)
+                other_number_map.setdefault(key, [])
+                if other_no not in other_number_map[key]:
+                    other_number_map[key].append(other_no)
+
+        # Pre-collect first mfr per app key
+        mfr_map = {}
+        if split:
+            self.stdout.write("  Collecting mfr per application...")
+            for make, model, engine, mfr_val in conn.execute(
+                "SELECT make, model, engine, mfr FROM applications "
+                "WHERE mfr != '' GROUP BY make, model, engine"
+            ):
+                key = (make, model, engine)
+                if key not in mfr_map:
+                    mfr_map[key] = mfr_val
+        else:
+            for make, model, mfr_val in conn.execute(
+                "SELECT make, model, mfr FROM applications "
+                "WHERE mfr != '' GROUP BY make, model"
+            ):
+                key = (make, model)
+                if key not in mfr_map:
+                    mfr_map[key] = mfr_val
+
         if split:
             cursor = conn.execute(
                 "SELECT unit_type, make, model, engine, options, mfr, amp, volt, "
@@ -353,10 +417,10 @@ class Command(BaseCommand):
 
             if app_key not in app_cache:
                 app_name = " ".join(filter(None, [make, model, engine])).strip() or f"Unknown {unit_type}"
-                combined_year = " | ".join(year_map.get(app_key, []))
+                combined_year = normalize_year(" | ".join(year_map.get(app_key, [])))
                 combined_options = " | ".join(options_map.get(app_key, []))
-                # Populate volt/unit_number from the first unit encountered.
-                # amp goes in Application.amp for alternators; kw goes in Application.kw for generators.
+                combined_other = ", ".join(other_number_map.get(app_key, []))
+                app_mfr = mfr_map.get(app_key, "")
                 app = Application(
                     name=app_name,
                     make=make[:150],
@@ -365,10 +429,12 @@ class Command(BaseCommand):
                     year=combined_year[:50],
                     options=combined_options,
                     unit_type_name=unit_type[:100],
+                    mfr=app_mfr[:150],
                     amp="" if is_generator else (amp[:50] if amp else ""),
                     kw=amp[:50] if (is_generator and amp) else "",
                     volt=volt[:50] if volt else "",
                     unit_number=part_no[:100] if part_no else "",
+                    other_number=combined_other[:100],
                 )
                 app_batch.append(app)
                 app_cache[app_key] = app

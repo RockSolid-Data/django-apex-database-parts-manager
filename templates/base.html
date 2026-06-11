@@ -181,6 +181,7 @@
       document.querySelectorAll(".js-searchable-select").forEach(function (el) {
         var opts = {
           allowEmptyOption: true,
+          maxOptions: null,
           controlInput: '<input>',
           render: {
             option: function (data, escape) {

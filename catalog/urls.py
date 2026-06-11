@@ -94,5 +94,6 @@ urlpatterns = [
     path("api/parts/autocomplete/", views.part_autocomplete, name="part_autocomplete"),
     path("api/parts/<int:pk>/detail/", views.part_detail_api, name="part_detail_api"),
     path("api/applications/autocomplete/", views.application_autocomplete, name="application_autocomplete"),
+    path("api/applications/model-filter/", views.application_model_filter_autocomplete, name="application_model_filter_autocomplete"),
 
 ]

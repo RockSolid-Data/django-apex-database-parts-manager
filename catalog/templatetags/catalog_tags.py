@@ -56,3 +56,47 @@ def jn_items(value):
     if "|" in text:
         return [p.strip() for p in text.split("|") if p.strip()]
     return [p.strip() for p in text.split(",") if p.strip()]
+
+
+@register.filter
+def first_year_range(value):
+    """Return only the first year range from a pipe-separated string like '1981-1991 | 1976-1980'."""
+    if not value:
+        return ""
+    text = str(value)
+    if " | " in text:
+        return text.split(" | ")[0].strip()
+    return text
+
+
+@register.inclusion_tag("includes/_page_window.html")
+def page_window(page_obj, window_size=3):
+    """
+    Build a sliding window of page numbers for pagination display.
+    Returns: list of ints and None (None = ellipsis gap).
+    Example for page 6 of 100, window_size=3:
+        [1, None, 3, 4, 5, 6, 7, 8, 9, None, 100]
+    """
+    num_pages = page_obj.paginator.num_pages
+    current = page_obj.number
+
+    if num_pages <= (2 * window_size + 5):
+        pages = list(range(1, num_pages + 1))
+    else:
+        pages = []
+        left = max(current - window_size, 1)
+        right = min(current + window_size, num_pages)
+
+        if left > 1:
+            pages.append(1)
+        if left > 2:
+            pages.append(None)
+
+        pages.extend(range(left, right + 1))
+
+        if right < num_pages - 1:
+            pages.append(None)
+        if right < num_pages:
+            pages.append(num_pages)
+
+    return {"pages": pages, "current_page": current}

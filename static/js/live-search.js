@@ -21,7 +21,9 @@
   'use strict';
 
   const STORAGE_PREFIX = 'meLiveSearch:';
+  const PER_PAGE_KEY = 'mePerPage';
   let _perPage = 0;
+  let _fetchController = null;
 
   function debounce(fn, delay) {
     let timer;
@@ -58,12 +60,26 @@
     } catch (e) { /* ignore */ }
   }
 
+  function getSavedPerPage() {
+    try {
+      const v = parseInt(localStorage.getItem(PER_PAGE_KEY), 10);
+      if ([25, 50, 100, 250, 500].includes(v)) return v;
+    } catch (e) { /* ignore */ }
+    return 0;
+  }
+
+  function savePerPage(v) {
+    try { localStorage.setItem(PER_PAGE_KEY, String(v)); } catch (e) { /* ignore */ }
+  }
+
   function initPerPage() {
     try {
       const u = new URL(window.location);
       const pp = u.searchParams.get('per_page');
-      if (pp) { _perPage = parseInt(pp, 10) || 50; return; }
+      if (pp) { _perPage = parseInt(pp, 10) || 50; savePerPage(_perPage); return; }
     } catch (e) { /* ignore */ }
+    const saved = getSavedPerPage();
+    if (saved) { _perPage = saved; return; }
     const sel = document.querySelector('.js-per-page-select');
     if (sel) { _perPage = parseInt(sel.value, 10) || 50; return; }
     _perPage = 50;
@@ -160,7 +176,15 @@
 
     setLoading(form, true);
 
-    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    if (_fetchController) {
+      _fetchController.abort();
+    }
+    _fetchController = new AbortController();
+
+    fetch(url, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      signal: _fetchController.signal,
+    })
       .then(resp => resp.text())
       .then(html => {
         const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -177,7 +201,8 @@
         if (history.replaceState) history.replaceState(null, '', url);
         persistLiveSearch(form, url);
       })
-      .catch(() => {
+      .catch(err => {
+        if (err && err.name === 'AbortError') return;
         form.submit();
       })
       .finally(() => {
@@ -263,6 +288,7 @@
       const link = e.target.closest('.js-page-link');
       if (!link) return;
       e.preventDefault();
+      if (link.closest('.disabled') || link.closest('.page-item.disabled')) return;
       const form = document.querySelector('.js-live-search-form');
       if (!form) return;
       const page = parseInt(link.getAttribute('data-page'), 10) || 1;
@@ -273,7 +299,36 @@
       if (!e.target.classList.contains('js-per-page-select')) return;
       const form = document.querySelector('.js-live-search-form');
       if (!form) return;
-      doLiveSearch(form, { perPage: parseInt(e.target.value, 10) || 50 });
+      const pp = parseInt(e.target.value, 10) || 50;
+      savePerPage(pp);
+      doLiveSearch(form, { perPage: pp });
+    });
+
+    // "Go to page" form handler
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.js-goto-page-btn')) return;
+      e.preventDefault();
+      var wrapper = e.target.closest('.js-goto-page-form');
+      var input = wrapper && wrapper.querySelector('.js-goto-page-input');
+      if (!input) return;
+      var page = parseInt(input.value, 10);
+      if (!page || page < 1) return;
+      var max = parseInt(input.getAttribute('max'), 10);
+      if (max && page > max) page = max;
+      var form = document.querySelector('.js-live-search-form');
+      if (!form) return;
+      doLiveSearch(form, { page: page });
+      input.value = '';
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      var input = e.target.closest('.js-goto-page-input');
+      if (!input) return;
+      e.preventDefault();
+      var wrapper = input.closest('.js-goto-page-form');
+      var btn = wrapper && wrapper.querySelector('.js-goto-page-btn');
+      if (btn) btn.click();
     });
 
     document.addEventListener('click', function (e) {
@@ -315,6 +370,19 @@
     });
 
     initPerPage();
+
+    const sel = document.querySelector('.js-per-page-select');
+    const urlHasPerPage = new URL(window.location).searchParams.has('per_page');
+    if (sel && _perPage && !urlHasPerPage) {
+      const serverValue = parseInt(sel.value, 10) || 50;
+      if (_perPage !== serverValue) {
+        sel.value = String(_perPage);
+        const form = document.querySelector('.js-live-search-form');
+        if (form && !restoredForms.includes(form)) {
+          restoredForms.push(form);
+        }
+      }
+    }
 
     bindFormHandlers();
     bindDelegatedHandlers();

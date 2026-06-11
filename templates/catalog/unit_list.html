@@ -35,7 +35,7 @@
     <a class="nav-link me-type-pill {% if selected_type == cat %}active{% endif %} js-live-search-clear-persisted"
        style="--pill-color: {{ category_color_map|get_item:cat }}"
        data-live-search-key="catalog:unit_list"
-       href="{% url 'catalog:unit_list' %}?type={{ cat }}">{{ cat }}s</a>
+       href="{% url 'catalog:unit_list' %}?type={{ cat }}">{{ cat }}{% if not cat|slice:"-1:" == ")" %}s{% endif %}</a>
   </li>
   {% endfor %}
 </ul>
@@ -57,7 +57,7 @@
           </div>
         </div>
 
-        {# Family dropdown #}
+        {# Unit Type dropdown #}
         <div class="col-md-2">
           <label class="form-label small mb-0">Family</label>
           <select name="family" class="form-select form-select-sm js-searchable-select">
@@ -68,7 +68,7 @@
           </select>
         </div>
 
-        {# OEM dropdown #}
+        {# Manufacturer dropdown #}
         <div class="col-md-2">
           <label class="form-label small mb-0">OEM</label>
           <select name="oem" class="form-select form-select-sm js-searchable-select">
@@ -83,7 +83,7 @@
         <div class="col-md-2">
           <label class="form-label small mb-0">Voltage</label>
           <select name="voltage" class="form-select form-select-sm js-searchable-select">
-            <option value="">All Voltages</option>
+            <option value="">All</option>
             {% for val in voltage_choices %}
             <option value="{{ val }}" {% if filter_voltage == val %}selected{% endif %}>{{ val }}</option>
             {% endfor %}

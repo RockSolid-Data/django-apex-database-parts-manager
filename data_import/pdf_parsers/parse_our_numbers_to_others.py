@@ -39,6 +39,7 @@ def parse_page(page, page_num, state):
     description = state.get("description", "")
     manufacturer = state.get("manufacturer", "")
     prev_was_mfr_regular = state.get("prev_was_mfr_regular", False)
+    pending_record = state.get("pending_record", None)
 
     for block in d["blocks"]:
         if "lines" not in block:
@@ -70,6 +71,9 @@ def parse_page(page, page_num, state):
             if bold_text:
                 m = YOUTECH_RE.match(bold_text)
                 if m:
+                    if pending_record:
+                        records.append(pending_record)
+                        pending_record = None
                     our_no = m.group(1)
                     rest = bold_text[len(m.group(1)):].strip()
                     description = rest
@@ -87,24 +91,46 @@ def parse_page(page, page_num, state):
             if regular_text and our_no:
                 if regular_text == "I":
                     continue
+
+                if pending_record:
+                    if has_digit(regular_text) or len(regular_text) <= 3:
+                        p_mfr, p_num, p_our, p_desc, p_page = pending_record
+                        records.append((p_mfr, p_num + regular_text, p_our, p_desc, p_page))
+                        pending_record = None
+                        prev_was_mfr_regular = False
+                        continue
+                    else:
+                        records.append(pending_record)
+                        pending_record = None
+
                 if has_digit(regular_text):
-                    # Part number(s) - may have multiple space-separated on one line
                     if manufacturer:
-                        records.append((manufacturer, regular_text, our_no, description, page_num))
+                        if regular_text.endswith("-"):
+                            pending_record = (manufacturer, regular_text, our_no, description, page_num)
+                        else:
+                            records.append((manufacturer, regular_text, our_no, description, page_num))
                     prev_was_mfr_regular = False
                 else:
-                    # Manufacturer name
-                    if prev_was_mfr_regular:
-                        manufacturer += " " + regular_text
+                    if len(regular_text) == 1 and regular_text.isalpha():
+                        if records:
+                            last = records[-1]
+                            records[-1] = (last[0], last[1] + regular_text, last[2], last[3], last[4])
+                        elif pending_record:
+                            p_mfr, p_num, p_our, p_desc, p_page = pending_record
+                            pending_record = (p_mfr, p_num + regular_text, p_our, p_desc, p_page)
                     else:
-                        manufacturer = regular_text
-                    prev_was_mfr_regular = True
+                        if prev_was_mfr_regular:
+                            manufacturer += " " + regular_text
+                        else:
+                            manufacturer = regular_text
+                        prev_was_mfr_regular = True
 
     state = {
         "our_no": our_no,
         "description": description,
         "manufacturer": manufacturer,
         "prev_was_mfr_regular": prev_was_mfr_regular,
+        "pending_record": pending_record,
     }
     return records, state
 
@@ -190,6 +216,9 @@ def main():
                 f"records so far: {total_records + len(batch):>10,}  |  "
                 f"{rate:.0f} pages/sec"
             )
+
+    if state.get("pending_record"):
+        batch.append(state["pending_record"])
 
     if batch:
         conn.executemany(

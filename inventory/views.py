@@ -78,7 +78,7 @@ def inventory_list(request):
 
     total_count = parts.count()
     try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
         per_page = 50
     paginator = Paginator(parts, per_page)
@@ -156,7 +156,7 @@ def reorder_list(request):
 
     total_count = parts.count()
     try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
         per_page = 50
     paginator = Paginator(parts, per_page)
@@ -201,7 +201,7 @@ def vendor_list(request):
 
     total_count = vendors.count()
     try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
         per_page = 50
     paginator = Paginator(vendors, per_page)

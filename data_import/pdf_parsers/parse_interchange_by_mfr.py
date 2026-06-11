@@ -35,10 +35,11 @@ def has_digit(s: str) -> bool:
     return any(c.isdigit() for c in s)
 
 
-def parse_page(page, page_num: int, current_manufacturer: str):
+def parse_page(page, page_num: int, current_manufacturer: str,
+               prev_was_mfr: bool = False):
     """Parse a single page and yield (manufacturer, their_no, our_no, page_num) tuples.
 
-    Returns the manufacturer name active at the end of the page.
+    Returns (records, current_manufacturer, prev_was_mfr).
     """
     text = page.get_text()
     lines = text.split("\n")
@@ -57,11 +58,20 @@ def parse_page(page, page_num: int, current_manufacturer: str):
             continue
 
         if not has_digit(line):
-            # No digits -> manufacturer name
-            current_manufacturer = line
+            # No digits -> manufacturer name (or continuation of one)
+            if prev_was_mfr:
+                current_manufacturer += " " + line
+            else:
+                current_manufacturer = line
+            prev_was_mfr = True
             continue
 
         # Line contains digits -> part number
+        prev_was_mfr = False
+        if pending_their_no is not None and pending_their_no.endswith("-"):
+            # OEM number continued on the next line (e.g. F78Z-10346- + AA)
+            pending_their_no += line
+            continue
         if pending_their_no is None:
             pending_their_no = line
         else:
@@ -71,7 +81,7 @@ def parse_page(page, page_num: int, current_manufacturer: str):
     if pending_their_no is not None:
         print(f"  WARNING: Unpaired their_no '{pending_their_no}' on page {page_num}")
 
-    return records, current_manufacturer
+    return records, current_manufacturer, prev_was_mfr
 
 
 def create_staging_db(db_path: str):
@@ -128,6 +138,7 @@ def main():
 
     conn = create_staging_db(db_path)
     current_manufacturer = ""
+    prev_was_mfr = False
     total_records = 0
     batch = []
     batch_size = 5000
@@ -135,7 +146,9 @@ def main():
 
     for page_idx in range(total_pages):
         page = doc[page_idx]
-        records, current_manufacturer = parse_page(page, page_idx + 1, current_manufacturer)
+        records, current_manufacturer, prev_was_mfr = parse_page(
+            page, page_idx + 1, current_manufacturer, prev_was_mfr
+        )
         batch.extend(records)
 
         if len(batch) >= batch_size:

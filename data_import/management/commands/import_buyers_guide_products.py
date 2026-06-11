@@ -423,7 +423,7 @@ class Command(BaseCommand):
         app_created = link_created = 0
         if should_run(7):
             self.stdout.write("Step 7: Importing applications...")
-            app_created, link_created = self._import_applications(conn, existing_units)
+            app_created, link_created = self._import_applications(conn, existing_units, unit_type)
             self.stdout.write(f"  {app_created:,} applications created, {link_created:,} unit links")
         else:
             self.stdout.write("Step 7: SKIPPED")
@@ -560,6 +560,7 @@ class Command(BaseCommand):
         items_created = 0
         boms_skipped_empty = 0  # Fix N — units whose BOM would be empty
 
+        skipped_xref_leak = 0
         by_unit = {}
         for yt, part_name, yt_part, jn_part in rows:
             yt = normalize_space(yt)
@@ -567,6 +568,11 @@ class Command(BaseCommand):
                 continue
             # Fix N — only count rows with a non-empty yt_part as real items.
             if not normalize_space(yt_part):
+                continue
+            # Skip entries where yt_part_number contains pipe-delimited
+            # interchange data leaked from an adjacent PDF section.
+            if "|" in yt_part:
+                skipped_xref_leak += 1
                 continue
             by_unit.setdefault(yt, []).append((part_name, yt_part, jn_part))
 
@@ -651,6 +657,11 @@ class Command(BaseCommand):
         if boms_skipped_empty:
             self.stdout.write(
                 f"    Fix N: {boms_skipped_empty:,} empty BOM(s) skipped (no items)"
+            )
+        if skipped_xref_leak:
+            self.stdout.write(
+                f"    Xref-leak filter: {skipped_xref_leak:,} BOM row(s) skipped "
+                f"(pipe-delimited interchange data in yt_part_number)"
             )
 
         return boms_created, items_created
@@ -748,6 +759,15 @@ class Command(BaseCommand):
     # Application text parsing
     # ------------------------------------------------------------------
     _YEAR_RANGE_RE = re.compile(r'\d{4}-\d{4}')
+    _ENGINE_SPEC_RE = re.compile(
+        r'\b(?:'
+        r'[LVH]\d\s+\d+\.\d+L\b'
+        r'|\d+\.\d+L\b'
+        r'|Diesel\b'
+        r'|Turbo\b'
+        r'|Gas\b'
+        r')'
+    )
     # Line-level xref-leak filter: a single line that is clearly
     # pipe-delimited interchange text ("Brand: number | Brand: number")
     _XREF_LINE_RE = re.compile(
@@ -759,6 +779,21 @@ class Command(BaseCommand):
     # Substitute-leak filter: "YouTech : NNNNNN" patterns from POSSIBLE
     # SUBSTITUTIONS section that leaked into APPLICATION
     _SUB_LEAK_RE = re.compile(r'YouTech\s*:\s*\d{5,}')
+    _ATTR_KEY_NAMES = frozenset({
+        "manufacture", "oe_manufacturer", "family", "voltage", "mounting_type",
+        "series", "amperage_rating", "fan_type", "regulator_type",
+        "rotation_direction", "ground_type", "ground_polarity",
+        "mounting_ear_quantity", "plug_type", "plug_clock_rear_view",
+        "plug_clock_rear_view_main_mounting_ear_at", "pulley_belt_type",
+        "pulley_groove_quantity", "pulley_class", "pulley_outside_diameter",
+        "outside_diameter", "decoupled", "decoupled_or_clutch_pulley",
+        "stator_type", "stator_leads", "circuit_type", "generator_rotation",
+        "starter_rotation", "design", "power_rating", "kw", "tooth_quantity",
+        "case_grounding", "nose_cone_type", "over-crank_protection",
+        "solenoid_attached", "re-clockable_flange", "spline_quantity",
+        "starter_drive_housing_position", "mounting_bolt_hole_quantity",
+        "mounting_hardware_included", "mounting_shims_included",
+    })
 
     def _is_xref_leak_line(self, line):
         """Return True if line looks like leaked interchange text."""
@@ -796,6 +831,7 @@ class Command(BaseCommand):
 
         # Line-level filtering: remove individual interchange lines
         filtered_lines = []
+        skip_next_as_attr_value = False
         for raw_line in raw_text.split("\n"):
             line = raw_line.strip()
             if not line:
@@ -805,6 +841,14 @@ class Command(BaseCommand):
                 continue
             # Skip substitutes lines
             if self._SUB_LEAK_RE.match(line):
+                continue
+            # Skip leaked attribute key names (e.g. "Fan Type", "Voltage")
+            # and the value line that immediately follows them
+            if line.lower().replace(" ", "_").replace("-", "_") in self._ATTR_KEY_NAMES:
+                skip_next_as_attr_value = True
+                continue
+            if skip_next_as_attr_value:
+                skip_next_as_attr_value = False
                 continue
             filtered_lines.append(line)
 
@@ -884,29 +928,23 @@ class Command(BaseCommand):
             year = ""
             engine = ""
 
-            # Extract year range (e.g. "1993-1999" or "1968-1982")
-            year_match = self._YEAR_RANGE_RE.search(entry)
-            if year_match:
+            # Extract year range — take the rightmost match so that
+            # displacement-like numbers (e.g. "7277CC") are never confused
+            year_matches = list(self._YEAR_RANGE_RE.finditer(entry))
+            if year_matches:
+                year_match = year_matches[-1]
                 year = year_match.group(0)
                 entry = entry[:year_match.start()].strip()
 
-            # Split remaining into model + engine info
-            # Engine patterns: V4/V6/V8/L4/L6/H6 followed by displacement
-            engine_match = re.search(
-                r'\b([VLH]\d)\s+(.+)', entry
-            )
+            # Extract engine spec with tightened pattern:
+            #   [LVH]\d + displacement  |  bare displacement  |  Diesel/Turbo/Gas
+            engine_match = self._ENGINE_SPEC_RE.search(entry)
             if engine_match:
                 model = entry[:engine_match.start()].strip()
-                engine = engine_match.group(0).strip()
+                engine = entry[engine_match.start():].strip()
             else:
-                # Check for standalone displacement like "2.0L" or "3.4L"
-                disp_match = re.search(r'\b(\d+\.\d+L\b.*)', entry)
-                if disp_match:
-                    model = entry[:disp_match.start()].strip()
-                    engine = disp_match.group(0).strip()
-                else:
-                    model = entry
-                    engine = ""
+                model = entry
+                engine = ""
 
             model = model.strip().rstrip(",")
             if model:
@@ -918,7 +956,7 @@ class Command(BaseCommand):
                 })
         return results
 
-    def _import_applications(self, conn, existing_units):
+    def _import_applications(self, conn, existing_units, unit_type=""):
         """Import buyers_guide_applications into Application + ApplicationUnit."""
         import gc
         from django.db import connection as django_conn, reset_queries
@@ -977,6 +1015,11 @@ class Command(BaseCommand):
                     app = Application.objects.create(
                         name=name[:255], make=make, model=model,
                         engine=engine, year=year,
+                        unit_type_name=unit_type[:100],
+                        mfr=(unit.manufacturer or "")[:150],
+                        volt=(unit.voltage or "")[:50],
+                        amp=(unit.amp_rating or "")[:50],
+                        kw=(unit.power_rating or "")[:50],
                         unit_number=yt[:100],
                     )
                     app_pk = app.pk

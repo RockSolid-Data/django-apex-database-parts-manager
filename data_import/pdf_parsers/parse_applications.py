@@ -24,7 +24,7 @@ import fitz  # PyMuPDF
 
 YEAR_RE = re.compile(r"^\d{2,4}(?:-\d{2,4})?$")
 ENGINE_SPEC_RE = re.compile(
-    r"^[LVH]\d|^\d+\.\d+L|^Diesel|^Turbo|^Gas",
+    r"^[LVH]\d\s+\d+\.\d+L|^\d+\.\d+L|^Diesel|^Turbo|^Gas",
     re.IGNORECASE,
 )
 HEADER_KEYS = {"Engine", "Year", "Options", "Mfr", "Amp", "KW", "Volt", "Part", "Other"}
@@ -123,7 +123,7 @@ def parse_page(page, page_num, state):
             if fx < cols["mfr_min"]:
                 if fbold and fsize > 12:
                     is_make_row = True
-                    make = ftext
+                    make = ftext.title()
                     model = ""
                     engine = ""
                     pending_other = ""
@@ -203,6 +203,13 @@ def parse_page(page, page_num, state):
         volt_text = " ".join(volt_parts)
         part_text = " ".join(part_parts)
         other_text = " ".join(other_parts)
+
+        if " " in part_text:
+            pn_parts = part_text.split(" ", 1)
+            if re.match(r"\d", pn_parts[1]):
+                part_text = pn_parts[0]
+                extra = pn_parts[1].rstrip(",")
+                other_text = (extra + ", " + other_text) if other_text else extra
 
         # Handle continuation lines: if row only has Other# data (no part#)
         if other_text and not part_text and not year and not mfr_text:

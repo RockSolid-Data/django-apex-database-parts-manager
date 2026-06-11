@@ -12,6 +12,7 @@ from django.core.paginator import Paginator
 from django.db.models import Case, Exists, F, Max, OuterRef, Q, Value, When
 from django.db.models.functions import NullIf
 from django.http import HttpResponseNotAllowed, JsonResponse
+from django.utils.functional import cached_property
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -102,6 +103,103 @@ def _get_unit_type_field_defs():
     return result
 
 
+_APP_LIST_FIELDS = (
+    "pk", "name", "make", "model", "engine", "year", "mfr", "volt", "amp",
+    "unit_type_name", "options", "unit_number", "is_active",
+)
+
+_XREF_PK_LIMIT = 2000
+
+
+class _CachedCountPaginator(Paginator):
+    """Paginator that skips queryset.count() when a cached total is available."""
+
+    def __init__(self, object_list, per_page, *, count=None, **kwargs):
+        super().__init__(object_list, per_page, **kwargs)
+        self._count_override = count
+
+    @cached_property
+    def count(self):
+        if self._count_override is not None:
+            return self._count_override
+        c = getattr(self.object_list, "count", None)
+        if callable(c) and not isinstance(self.object_list, (list, tuple)):
+            return c()
+        return len(self.object_list)
+
+
+def _application_ids_for_unit_number_search(term: str):
+    """Subquery of application PKs linked to units matching unit_number (avoids M2M join dupes)."""
+    if not term:
+        return ApplicationUnit.objects.none().values("application_id")
+    return ApplicationUnit.objects.filter(
+        unit__unit_number__icontains=term,
+    ).values("application_id")
+
+
+def _absorb_unit_pair_pks(pks: set[int], pairs_qs, limit: int) -> None:
+    """Add unit/cross_ref_unit PKs from a values_list queryset until limit reached."""
+    for unit_id, other_id in pairs_qs:
+        if unit_id:
+            pks.add(unit_id)
+        if other_id:
+            pks.add(other_id)
+        if len(pks) >= limit:
+            return
+
+
+def _collect_cross_ref_unit_pks(q: str, limit: int = _XREF_PK_LIMIT) -> set[int]:
+    """
+    Collect unit PKs from CrossReference rows matching q.
+    Uses prefix (index-friendly) lookups first; substring scan only if still under limit.
+    """
+    pks: set[int] = set()
+    base = CrossReference.objects.all()
+    _absorb_unit_pair_pks(
+        pks,
+        base.filter(cross_ref_number__istartswith=q).values_list("unit_id", "cross_ref_unit_id"),
+        limit,
+    )
+    if len(pks) < limit:
+        _absorb_unit_pair_pks(
+            pks,
+            base.filter(interchange_type__istartswith=q).values_list("unit_id", "cross_ref_unit_id"),
+            limit,
+        )
+    if len(pks) < limit:
+        remaining = limit - len(pks)
+        _absorb_unit_pair_pks(
+            pks,
+            base.filter(
+                Q(cross_ref_number__icontains=q) & ~Q(cross_ref_number__istartswith=q)
+                | Q(interchange_type__icontains=q) & ~Q(interchange_type__istartswith=q)
+            ).values_list("unit_id", "cross_ref_unit_id")[: remaining * 3],
+            limit,
+        )
+    return pks
+
+
+def _collect_substitute_unit_pks(q: str, limit: int = _XREF_PK_LIMIT) -> set[int]:
+    """Collect unit PKs from Substitute rows matching q (prefix first, then substring)."""
+    pks: set[int] = set()
+    base = Substitute.objects.all()
+    _absorb_unit_pair_pks(
+        pks,
+        base.filter(substitute_number__istartswith=q).values_list("unit_id", "substitute_unit_id"),
+        limit,
+    )
+    if len(pks) < limit:
+        remaining = limit - len(pks)
+        _absorb_unit_pair_pks(
+            pks,
+            base.filter(substitute_number__icontains=q)
+            .exclude(substitute_number__istartswith=q)
+            .values_list("unit_id", "substitute_unit_id")[: remaining * 3],
+            limit,
+        )
+    return pks
+
+
 def home(request):
     """Landing page for Apex Database."""
     backup_configured = False
@@ -128,11 +226,11 @@ def image_viewer(request):
 
 def application_list(request):
     """List applications with search, filters (Make, Year, Mfr, Volt, Unit), MAKE, ENGINE, YEAR, etc."""
-    applications = Application.objects.filter(is_active=True).order_by("name")
-
-    # Track whether we touched the M2M relationship so we can .distinct() at the end
-    # (joining via application_units can multiply rows).
-    used_m2m = False
+    applications = (
+        Application.objects.filter(is_active=True)
+        .only(*_APP_LIST_FIELDS)
+        .order_by("name")
+    )
 
     # --- Text search ---
     q = request.GET.get("q", "").strip()
@@ -150,15 +248,14 @@ def application_list(request):
             | Q(unit_number__icontains=q)
             | Q(options__icontains=q)
             | Q(notes__icontains=q)
-            # Also search by linked Unit.unit_number (the Application.unit_number
-            # text column is a denormalized legacy field that doesn't always carry
-            # the YouTech number for rows imported under a J&N key).
-            | Q(application_units__unit__unit_number__icontains=q)
+            # Linked Unit.unit_number via subquery — avoids M2M join row duplication
+            # and expensive DISTINCT/COUNT on 166K+ application rows.
+            | Q(pk__in=_application_ids_for_unit_number_search(q))
         )
-        used_m2m = True
 
     # --- Dropdown filters ---
     filter_make = request.GET.get("make", "").strip()
+    filter_model = request.GET.get("model", "").strip()
     filter_year = request.GET.get("year", "").strip()
     filter_mfr = request.GET.get("mfr", "").strip()
     filter_volt = request.GET.get("volt", "").strip()
@@ -166,6 +263,8 @@ def application_list(request):
 
     if filter_make:
         applications = applications.filter(make=filter_make)
+    if filter_model:
+        applications = applications.filter(model=filter_model)
     if filter_year:
         applications = applications.filter(year__icontains=filter_year)
     if filter_mfr:
@@ -175,18 +274,12 @@ def application_list(request):
     if filter_unit:
         applications = applications.filter(
             Q(unit_number__icontains=filter_unit)
-            | Q(application_units__unit__unit_number__icontains=filter_unit)
+            | Q(pk__in=_application_ids_for_unit_number_search(filter_unit))
         )
-        used_m2m = True
 
     filter_unit_type = request.GET.get("unit_type", "").strip()
     if filter_unit_type:
         applications = applications.filter(unit_type_name=filter_unit_type)
-
-    # When we joined via application_units, the same Application can match through
-    # multiple linked units; .distinct() collapses those duplicate rows.
-    if used_m2m:
-        applications = applications.distinct()
 
     # --- Build distinct value lists for dropdowns (cached 30 min) ---
     make_choices = cache.get_or_set("app_make_choices",
@@ -202,19 +295,25 @@ def application_list(request):
         lambda: list(Application.objects.filter(is_active=True).exclude(unit_type_name="").values_list("unit_type_name", flat=True).distinct().order_by("unit_type_name")),
         1800)
 
-    try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
-    except (ValueError, TypeError):
-        per_page = 50
-    paginator = Paginator(applications, per_page)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
-
-    # Use cached count for unfiltered queries to avoid expensive COUNT on 300k+ rows
-    if not q and not any([filter_make, filter_year, filter_mfr, filter_volt, filter_unit, filter_unit_type]):
+    unfiltered = not q and not any([
+        filter_make, filter_model, filter_year, filter_mfr,
+        filter_volt, filter_unit, filter_unit_type,
+    ])
+    if unfiltered:
         total_count = cache.get_or_set("app_total_count",
             lambda: Application.objects.filter(is_active=True).count(), 1800)
     else:
+        total_count = None
+
+    try:
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
+    except (ValueError, TypeError):
+        per_page = 50
+    paginator = _CachedCountPaginator(applications, per_page, count=total_count)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    if total_count is None:
         total_count = paginator.count
 
     context = {
@@ -224,6 +323,7 @@ def application_list(request):
         "per_page": per_page,
         "q": q,
         "filter_make": filter_make,
+        "filter_model": filter_model,
         "filter_year": filter_year,
         "filter_mfr": filter_mfr,
         "filter_volt": filter_volt,
@@ -234,6 +334,8 @@ def application_list(request):
         "volt_choices": volt_choices,
         "unit_type_choices": unit_type_choices,
     }
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render(request, "catalog/application_list_ajax.html", context)
     return render(request, "catalog/application_list.html", context)
 
 
@@ -499,7 +601,7 @@ def bom_list(request):
 
     total_count = boms.count()
     try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
         per_page = 50
     paginator = Paginator(boms, per_page)
@@ -875,24 +977,32 @@ def part_list(request):
     else:
         parts = base_qs
 
-    # --- Build category choices for dropdown (cached 5 min) ---
+    # --- Build category choices for dropdown (cached 30 min) ---
     category_choices = cache.get_or_set("part_category_choices",
         lambda: list(Part.objects.filter(is_active=True).exclude(category="").values_list("category", flat=True).distinct().order_by("category")),
-        300)
+        1800)
 
-    # --- Build voltage choices for dropdown (cached 5 min) ---
+    # --- Build voltage choices for dropdown (cached 30 min) ---
     voltage_choices = cache.get_or_set("part_voltage_choices",
         lambda: list(Part.objects.filter(is_active=True).exclude(voltage="").values_list("voltage", flat=True).distinct().order_by("voltage")),
-        300)
+        1800)
 
     try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
         per_page = 50
     paginator = Paginator(parts, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-    total_count = paginator.count
+
+    if not q and not filter_category and not filter_voltage:
+        total_count = cache.get_or_set(
+            "part_total_count",
+            lambda: Part.objects.filter(is_active=True).count(),
+            1800,
+        )
+    else:
+        total_count = paginator.count
 
     # Build (part, match_label) pairs — label shown for deep-only matches
     parts_with_match: list[tuple] = []
@@ -1808,14 +1918,26 @@ def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
         return len(hits) >= limit
 
     # 1. Cross-references (most relevant for "cross ref" search)
-    for cr in CrossReference.objects.filter(
-        Q(cross_ref_number__icontains=q)
-        | Q(interchange_type__icontains=q)
-    ).select_related("unit", "unit__unit_type").only(
+    cr_qs = CrossReference.objects.select_related("unit", "unit__unit_type").only(
         "id", "cross_ref_number", "interchange_type",
         "unit__id", "unit__unit_number", "unit__yt_number", "unit__oem",
         "unit__unit_type__id", "unit__unit_type__name",
-    )[:per_q]:
+    )
+    cr_rows = list(cr_qs.filter(cross_ref_number__istartswith=q)[:per_q])
+    if len(cr_rows) < per_q:
+        cr_rows.extend(
+            cr_qs.filter(interchange_type__istartswith=q).exclude(
+                cross_ref_number__istartswith=q
+            )[: per_q - len(cr_rows)]
+        )
+    if len(cr_rows) < per_q:
+        cr_rows.extend(
+            cr_qs.filter(
+                Q(cross_ref_number__icontains=q) & ~Q(cross_ref_number__istartswith=q)
+                | Q(interchange_type__icontains=q) & ~Q(interchange_type__istartswith=q)
+            )[: per_q - len(cr_rows)]
+        )
+    for cr in cr_rows:
         u = cr.unit
         add("xref", cr.pk, {
             "hit_type": "Unit cross-reference",
@@ -2139,7 +2261,7 @@ def unit_list(request):
     """List units with type tabs, search, and dropdown filters."""
     _LIST_FIELDS = (
         "pk", "unit_number", "yt_number", "oem", "manufacturer",
-        "model_cat_number", "voltage", "family", "unit_type_category",
+        "model_cat_number", "voltage", "family", "design", "unit_type_category",
         "is_active",
     )
     units = Unit.objects.filter(is_active=True).only(*_LIST_FIELDS).annotate(
@@ -2151,8 +2273,10 @@ def unit_list(request):
     )
 
     # --- Unit-type category tabs (from the Add New Unit dropdown) ---
-    unit_type_cats = list(
-        UnitTypeCategory.objects.values_list("name", "color")
+    unit_type_cats = cache.get_or_set(
+        "unit_type_category_tabs",
+        lambda: list(UnitTypeCategory.objects.values_list("name", "color")),
+        1800,
     )
     unit_type_categories = [name for name, _color in unit_type_cats]
     category_color_map = {name: color for name, color in unit_type_cats}
@@ -2194,17 +2318,8 @@ def unit_list(request):
             )
         else:
             deep_search_used = True
-            _deep_pks: set[int] = set()
-
-            cr_pairs = CrossReference.objects.filter(
-                Q(cross_ref_number__icontains=q) | Q(interchange_type__icontains=q)
-            ).values_list("unit_id", "cross_ref_unit_id")
-            _deep_pks.update(pk for pair in cr_pairs for pk in pair if pk)
-
-            sub_pairs = Substitute.objects.filter(
-                substitute_number__icontains=q
-            ).values_list("unit_id", "substitute_unit_id")
-            _deep_pks.update(pk for pair in sub_pairs for pk in pair if pk)
+            _deep_pks = _collect_cross_ref_unit_pks(q)
+            _deep_pks.update(_collect_substitute_unit_pks(q))
 
             deep_q = (
                 Q(design__icontains=q)
@@ -2222,35 +2337,28 @@ def unit_list(request):
             ).order_by("_is_deep", F("_sort_yt").asc(nulls_last=True), F("_sort_un").asc(nulls_last=True))
 
     # --- Dropdown filters ---
+    filter_family = request.GET.get("family", "").strip()
     filter_oem = request.GET.get("oem", "").strip()
     filter_voltage = request.GET.get("voltage", "").strip()
-    filter_family = request.GET.get("family", "").strip()
 
+    if filter_family:
+        units = units.filter(family=filter_family)
     if filter_oem:
         units = units.filter(oem=filter_oem)
     if filter_voltage:
         units = units.filter(voltage=filter_voltage)
-    if filter_family:
-        units = units.filter(family__icontains=filter_family)
 
-    # --- Build distinct value lists for dropdowns (cached 5 min) ---
+    # --- Build distinct value lists for dropdowns (cached 30 min) ---
     active_units = Unit.objects.filter(is_active=True)
+    family_choices = cache.get_or_set("unit_family_choices",
+        lambda: list(active_units.exclude(family="").values_list("family", flat=True).distinct().order_by("family")),
+        1800)
     oem_choices = cache.get_or_set("unit_oem_choices",
         lambda: list(active_units.exclude(oem="").values_list("oem", flat=True).distinct().order_by("oem")),
-        300)
+        1800)
     voltage_choices = cache.get_or_set("unit_voltage_choices",
         lambda: list(active_units.exclude(voltage="").values_list("voltage", flat=True).distinct().order_by("voltage")),
-        300)
-    def _build_family_choices():
-        raw = active_units.exclude(family="").values_list("family", flat=True).distinct()
-        parts = set()
-        for fam in raw:
-            for segment in fam.split("|"):
-                segment = segment.strip()
-                if segment:
-                    parts.add(segment)
-        return sorted(parts, key=str.lower)
-    family_choices = cache.get_or_set("unit_family_choices", _build_family_choices, 300)
+        1800)
 
     # Resolve selected unit type name for section heading
     if selected_type == "__blank__":
@@ -2259,13 +2367,18 @@ def unit_list(request):
         selected_unit_type_name = selected_type if selected_type in unit_type_categories else None
 
     try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
         per_page = 50
     paginator = Paginator(units, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-    total_count = paginator.count
+
+    if not q and not any([selected_type, filter_family, filter_oem, filter_voltage]):
+        total_count = cache.get_or_set("unit_total_count",
+            lambda: Unit.objects.filter(is_active=True).count(), 1800)
+    else:
+        total_count = paginator.count
 
     # Build (unit, match_label) pairs — label shown for deep matches only
     units_with_match: list[tuple] = []
@@ -2324,12 +2437,12 @@ def unit_list(request):
         "selected_unit_type_name": selected_unit_type_name,
         "q": q,
         "deep_search_used": deep_search_used,
+        "filter_family": filter_family,
         "filter_oem": filter_oem,
         "filter_voltage": filter_voltage,
-        "filter_family": filter_family,
+        "family_choices": family_choices,
         "oem_choices": oem_choices,
         "voltage_choices": voltage_choices,
-        "family_choices": family_choices,
     }
     return render(request, "catalog/unit_list.html", context)
 
@@ -3376,6 +3489,19 @@ def application_autocomplete(request):
     if q:
         qs = qs.filter(name__icontains=q)
     return _autocomplete_response(qs, lambda a: a.name)
+
+
+def application_model_filter_autocomplete(request):
+    """Distinct model values for the application list filter dropdown (AJAX Tom Select)."""
+    q = request.GET.get("q", "").strip()
+    make = request.GET.get("make", "").strip()
+    qs = Application.objects.filter(is_active=True).exclude(model="")
+    if make:
+        qs = qs.filter(make=make)
+    if q:
+        qs = qs.filter(model__icontains=q)
+    models = qs.values_list("model", flat=True).distinct().order_by("model")[:30]
+    return JsonResponse({"results": [{"value": m, "text": m} for m in models]})
 
 
 def part_detail_api(request, pk):

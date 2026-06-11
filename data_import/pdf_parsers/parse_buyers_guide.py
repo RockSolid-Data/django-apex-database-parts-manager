@@ -114,22 +114,55 @@ def _clean_interchange_number(num):
 def compute_page_midpoint(page) -> float:
     """Pick a column-split x using block geometry; fall back to page_width/2.
 
-    Buyers Guide pages are two-column.  The geometric midpoint between the
-    right edge of the left column and the left edge of the right column is
-    more reliable than naive page_width/2 (which can split blocks that
-    overlap the geometric center).
+    Buyers Guide pages are two-column.  Some pages have shifted margins
+    (left column at x0~27 instead of ~87), which moves the gutter left.
+
+    Two-pass approach:
+      1. Find the column gap via the largest horizontal gap between block
+         x0 values (ignoring full-width header blocks).
+      2. Refine using the right edges of left-column blocks and left edges
+         of right-column blocks for a precise gutter midpoint.
     """
     width = page.rect.width
     naive = width / 2.0
     blocks = page.get_text("blocks") or []
     if not blocks:
         return naive
-    left_x1s = [b[2] for b in blocks if b[0] < naive and b[2] < naive + 10]
-    right_x0s = [b[0] for b in blocks if b[0] >= naive - 10]
+
+    # Exclude full-width blocks (page headers) and page-number blocks
+    # ("Pg. NNN") whose far-right x0 creates false column gaps.
+    narrow = [b for b in blocks
+              if (b[2] - b[0]) < width * 0.6
+              and not re.match(r"Pg\.\s*\d", (b[4] or "").strip())]
+    if len(narrow) < 2:
+        return naive
+
+    # Pass 1: find the largest gap between sorted x0 values
+    x0s = sorted(b[0] for b in narrow)
+    max_gap = 0
+    gap_idx = 0
+    for i in range(len(x0s) - 1):
+        gap = x0s[i + 1] - x0s[i]
+        if gap > max_gap:
+            max_gap = gap
+            gap_idx = i
+
+    if max_gap < 40:
+        return naive
+
+    rough_mid = (x0s[gap_idx] + x0s[gap_idx + 1]) / 2.0
+
+    # Pass 2: refine using column edges
+    left_x1s = [b[2] for b in narrow if b[0] < rough_mid]
+    right_x0s = [b[0] for b in narrow if b[0] >= rough_mid]
     if left_x1s and right_x0s:
-        mid = (max(left_x1s) + min(right_x0s)) / 2.0
-        if abs(mid - naive) <= 60:
-            return mid
+        refined = (max(left_x1s) + min(right_x0s)) / 2.0
+        if width * 0.2 < refined < width * 0.8:
+            return refined
+
+    if width * 0.2 < rough_mid < width * 0.8:
+        return rough_mid
+
     return naive
 
 
@@ -864,45 +897,6 @@ def main():
 
     start_time = time.time()
 
-    # Process in chunks to manage memory with very large PDFs
-    CHUNK = 500
-    products_all, interchanges_all = [], []
-    bom_all, subs_all, apps_all = [], [], []
-    image_map_all = {}
-
-    for chunk_start in range(0, total_pages, CHUNK):
-        chunk_end = min(chunk_start + CHUNK, total_pages)
-        chunk_limit = chunk_end  # parse_document uses 0-based page index up to limit
-        print(f"\n--- Processing pages {chunk_start + 1}-{chunk_end} ---", flush=True)
-
-        if chunk_start > 0:
-            doc.close()
-            import gc; gc.collect()
-            doc = fitz.open(args.pdf_path)
-
-        result = parse_document(
-            doc, limit=chunk_end, image_db_conn=conn,
-            start_page=chunk_start,
-        )
-        products, interchanges, bom_items, substitutes, image_map, applications = result
-        products_all.extend(products)
-        interchanges_all.extend(interchanges)
-        bom_all.extend(bom_items)
-        subs_all.extend(substitutes)
-        apps_all.extend(applications)
-        image_map_all.update(image_map)
-
-    doc.close()
-    import gc; gc.collect()
-
-    # Reassign for the DB write section below
-    products = products_all
-    interchanges = interchanges_all
-    bom_items = bom_all
-    substitutes = subs_all
-    image_map = image_map_all
-    applications = apps_all
-
     _PRODUCT_COLS = (
         "youtech_number", "jn_number", "manufacture", "oe_manufacturer",
         "family", "voltage", "rotation", "product_notes", "amperage_rating",
@@ -915,49 +909,68 @@ def main():
         "bolt_holes", "with_hardware", "with_mounting_shims",
     )
     _placeholders = ", ".join("?" * len(_PRODUCT_COLS))
-    conn.executemany(
-        f"INSERT INTO buyers_guide_products ({', '.join(_PRODUCT_COLS)}) "
-        f"VALUES ({_placeholders})",
-        [tuple(p[c] for c in _PRODUCT_COLS) for p in products],
-    )
 
-    if interchanges:
-        conn.executemany(
-            "INSERT INTO buyers_guide_interchanges (manufacturer, their_number, our_number) "
-            "VALUES (?, ?, ?)",
-            interchanges,
-        )
-
-    if bom_items:
-        conn.executemany(
-            "INSERT INTO buyers_guide_bom (youtech_number, part_name, yt_part_number, jn_part_number) "
-            "VALUES (?, ?, ?, ?)",
-            bom_items,
-        )
-
-    if substitutes:
-        conn.executemany(
-            "INSERT INTO buyers_guide_substitutes (youtech_number, substitute_yt, substitute_jn) "
-            "VALUES (?, ?, ?)",
-            substitutes,
-        )
-
-    if image_map:
-        for yt, (img_bytes, img_ext) in image_map.items():
-            conn.execute(
-                "INSERT OR REPLACE INTO buyers_guide_images (youtech_number, image_data, image_ext) "
-                "VALUES (?, ?, ?)",
-                (yt, img_bytes, img_ext),
+    def _flush_chunk_to_db(products, interchanges, bom_items, substitutes, image_map, applications):
+        """Write one chunk's parsed data to the staging DB immediately."""
+        if products:
+            conn.executemany(
+                f"INSERT INTO buyers_guide_products ({', '.join(_PRODUCT_COLS)}) "
+                f"VALUES ({_placeholders})",
+                [tuple(p[c] for c in _PRODUCT_COLS) for p in products],
             )
+        if interchanges:
+            conn.executemany(
+                "INSERT INTO buyers_guide_interchanges (manufacturer, their_number, our_number) "
+                "VALUES (?, ?, ?)",
+                interchanges,
+            )
+        if bom_items:
+            conn.executemany(
+                "INSERT INTO buyers_guide_bom (youtech_number, part_name, yt_part_number, jn_part_number) "
+                "VALUES (?, ?, ?, ?)",
+                bom_items,
+            )
+        if substitutes:
+            conn.executemany(
+                "INSERT INTO buyers_guide_substitutes (youtech_number, substitute_yt, substitute_jn) "
+                "VALUES (?, ?, ?)",
+                substitutes,
+            )
+        if image_map:
+            for yt, (img_bytes, img_ext) in image_map.items():
+                conn.execute(
+                    "INSERT OR REPLACE INTO buyers_guide_images (youtech_number, image_data, image_ext) "
+                    "VALUES (?, ?, ?)",
+                    (yt, img_bytes, img_ext),
+                )
+        if applications:
+            conn.executemany(
+                "INSERT INTO buyers_guide_applications (youtech_number, application_text) "
+                "VALUES (?, ?)",
+                applications,
+            )
+        conn.commit()
 
-    if applications:
-        conn.executemany(
-            "INSERT INTO buyers_guide_applications (youtech_number, application_text) "
-            "VALUES (?, ?)",
-            applications,
+    CHUNK = 500
+    for chunk_start in range(0, total_pages, CHUNK):
+        chunk_end = min(chunk_start + CHUNK, total_pages)
+        print(f"\n--- Processing pages {chunk_start + 1}-{chunk_end} ---", flush=True)
+
+        if chunk_start > 0:
+            doc.close()
+            import gc; gc.collect()
+            doc = fitz.open(args.pdf_path)
+
+        result = parse_document(
+            doc, limit=chunk_end, image_db_conn=conn,
+            start_page=chunk_start,
         )
+        products, interchanges, bom_items, substitutes, image_map, applications = result
+        _flush_chunk_to_db(products, interchanges, bom_items, substitutes, image_map, applications)
+        del products, interchanges, bom_items, substitutes, image_map, applications, result
 
-    conn.commit()
+    doc.close()
+    import gc; gc.collect()
 
     elapsed = time.time() - start_time
 

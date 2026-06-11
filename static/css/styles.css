@@ -711,9 +711,15 @@ thead.table-dark th {
 }
 .ts-wrapper.form-select-sm .ts-dropdown {
   font-size: 0.875rem;
+  min-width: 100%;
+  width: max-content;
+  max-width: 400px;
 }
 .ts-wrapper.form-select-sm .ts-dropdown .option {
   padding: 0.25rem 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---- Scrollable table sections (caps height ~10 rows, sticky header) ---- */

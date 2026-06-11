@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load catalog_tags %}
 
 {% block title %}Applications — Apex Database{% endblock %}
 {% block main_class %}{% endblock %}
@@ -21,7 +22,7 @@
     <form method="get" action="{% url 'catalog:application_list' %}" class="js-live-search-form"
           data-live-search-key="catalog:application_list">
       <div class="row g-2 align-items-end mb-2">
-        <div class="col-12 col-md-6">
+        <div class="col-12 col-md-5">
           <label class="form-label small mb-0">Search</label>
           <div class="search-input-wrapper js-search-with-clear">
             <input type="text" name="q" class="form-control form-control-sm"
@@ -29,7 +30,7 @@
             <button type="button" class="search-clear-btn" aria-label="Clear search"><i class="bi bi-x"></i></button>
           </div>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-2">
           <label class="form-label small mb-0">Unit Type</label>
           <select name="unit_type" class="form-select form-select-sm js-searchable-select">
             <option value="">All Unit Types</option>
@@ -43,6 +44,13 @@
           <input type="text" name="unit" class="form-control form-control-sm"
                  placeholder="Unit number..." value="{{ filter_unit }}">
         </div>
+        <div class="col-6 col-md-2 d-flex align-items-end">
+          <a href="{% url 'catalog:application_list' %}"
+             class="btn btn-outline-secondary btn-sm js-live-search-clear-persisted js-clear-all-filters"
+             data-live-search-key="catalog:application_list">
+            <i class="bi bi-x-lg"></i> Clear
+          </a>
+        </div>
       </div>
       <div class="row g-2 align-items-end">
         <div class="col-6 col-md-3">
@@ -55,11 +63,22 @@
           </select>
         </div>
         <div class="col-6 col-md-3">
+          <label class="form-label small mb-0">Model</label>
+          <select name="model" class="form-select form-select-sm js-ajax-select"
+                  data-url="{% url 'catalog:application_model_filter_autocomplete' %}"
+                  data-placeholder="All Models">
+            <option value="">All Models</option>
+            {% if filter_model %}
+            <option value="{{ filter_model }}" selected>{{ filter_model }}</option>
+            {% endif %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
           <label class="form-label small mb-0">Year</label>
           <input type="text" name="year" class="form-control form-control-sm"
                  placeholder="e.g. 2020, 22-24..." value="{{ filter_year }}">
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-2">
           <label class="form-label small mb-0">Mfr</label>
           <select name="mfr" class="form-select form-select-sm js-searchable-select">
             <option value="">All Mfrs</option>
@@ -77,13 +96,6 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-6 col-md-1 d-flex align-items-end">
-          <a href="{% url 'catalog:application_list' %}"
-             class="btn btn-outline-secondary btn-sm js-live-search-clear-persisted js-clear-all-filters"
-             data-live-search-key="catalog:application_list">
-            <i class="bi bi-x-lg"></i> Clear
-          </a>
-        </div>
       </div>
     </form>
   </div>
@@ -91,47 +103,6 @@
 </div>{# /.me-sticky-toolbar #}
 
 <div id="live-search-results">
-<p class="text-muted mb-0 me-sticky-count">{{ total_count }} application{{ total_count|pluralize }} found{% if page_obj.has_other_pages %} — page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</p>
-
-<div class="table-responsive">
-  <table class="table table-striped table-hover align-middle table-layout-fixed">
-    <thead class="table-dark">
-      <tr>
-        <th style="width:7%;">Make</th>
-        <th style="width:10%;">Model</th>
-        <th style="width:11%;">Engine</th>
-        <th class="text-center" style="width:10%;">Year</th>
-        <th style="width:15%;">Unit Type</th>
-        <th style="width:20%;">Options</th>
-        <th class="text-center" style="width:5%;">Amp</th>
-        <th class="text-center" style="width:5%;">Volt</th>
-        <th class="text-end" style="width:7%;">Unit #</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for app in applications %}
-      <tr data-href="{% url 'catalog:application_detail' app.pk %}">
-        <td class="text-truncate" title="{{ app.make }}">{{ app.make|default:"—" }}</td>
-        <td class="text-truncate" title="{{ app.model }}">{{ app.model|default:"—" }}</td>
-        <td class="text-truncate" title="{{ app.engine }}">{{ app.engine|default:"—" }}</td>
-        <td class="text-center text-nowrap">{{ app.year|default:"—" }}</td>
-        <td class="text-truncate" title="{{ app.unit_type_name }}">{{ app.unit_type_name|default:"—" }}</td>
-        <td class="text-truncate" title="{{ app.options }}">{{ app.options|default:"—" }}</td>
-        <td class="text-center">{{ app.amp|default:"—" }}</td>
-        <td class="text-center">{{ app.volt|default:"—" }}</td>
-        <td class="text-end text-nowrap">{{ app.unit_number|default:"—" }}</td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="9" class="text-center text-muted py-4">
-          <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-          No applications found.
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% include "includes/pagination.html" %}
+{% include "catalog/_application_list_results.html" %}
 </div>
 {% endblock %}

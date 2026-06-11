@@ -37,10 +37,8 @@ LOGGING = {
             "formatter": "standard",
         },
         "file": {
-            "class": "logging.handlers.TimedRotatingFileHandler",
+            "class": "logging.FileHandler",
             "filename": str(LOG_DIR / "app.log"),
-            "when": "midnight",
-            "backupCount": 14,
             "formatter": "standard",
             "encoding": "utf-8",
         },

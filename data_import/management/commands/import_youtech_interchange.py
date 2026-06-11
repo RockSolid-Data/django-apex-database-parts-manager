@@ -5,11 +5,11 @@ Staging DBs are produced by the PDF parsers in data_import/pdf_parsers/.
 Each staging DB has a table `interchange_by_mfr` with columns:
     manufacturer, their_number, our_number, page_number
 
-This command:
-  1. Creates Unit records for each unique our_number (YouTech number)
-     that doesn't already exist.
-  2. Creates CrossReference records linking each Unit to the
-     manufacturer's part number (their_number).
+For each our_number the command resolves the target in priority order:
+  1. Unit.unit_number  -> CrossReference on that Unit
+  2. Part.yt_number    -> PartInterchange on that Part
+  3. Unit.yt_number    -> CrossReference on the matching Unit
+  4. (not found)       -> creates a new bare Unit, then CrossReference
 
 Usage:
     python manage.py import_youtech_interchange --file "data_import/staging_dbs/1-Interchange by Mfr.db"
@@ -17,8 +17,6 @@ Usage:
     python manage.py import_youtech_interchange --file "..." --report-only
 """
 
-import glob
-import os
 import sqlite3
 import time
 from pathlib import Path
@@ -26,10 +24,42 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from catalog.models import CrossReference, Unit
+from catalog.models import CrossReference, Part, PartInterchange, Unit
 
 
 BATCH_SIZE = 5000
+
+BOGUS_MANUFACTURERS = {
+    "Model Number",
+}
+
+# PDF parsers sometimes split multi-word manufacturer names across lines.
+# Map known fragments to their correct full name.
+MFR_NORMALIZE = {
+    "United":           "United Technologies",
+    "Technologies":     "United Technologies",
+    "Products":         "Remy Power Products",
+    "Service":          "Electric Motor Service",
+    "Supplies":         "Wood Auto Supplies",
+    "CARGO":            "HC CARGO",
+    "CARG":             "HC CARGO",
+    "Hc Cargo":         "HC CARGO",
+    "America":          "Daimler Truck North America",
+    "North America":    "Daimler Truck North America",
+    "Agriculture":      "New Holland Agriculture",
+    "Construction":     "New Holland Construction",
+    "Solutions":        "NAPA Heavy Duty Solutions",
+    "Remy Power":       "Remy Power Products",
+    "Electric Motor":   "Electric Motor Service",
+    "Electric":         "Romaine Electric",
+    "Manufacturing":    "Wells Manufacturing",
+    "Delco- Remy":      "Delco-Remy",
+    "Leece- Neville":   "Leece-Neville",
+    "Thermo- King":     "Thermo-King",
+    "Atlas- Copco":     "Atlas-Copco",
+    "All- Tek":         "All-Tek",
+    "Tecumseh/Laus on": "Tecumseh/Lauson",
+}
 
 KNOWN_TABLES = (
     "interchange_by_mfr",
@@ -133,8 +163,19 @@ class Command(BaseCommand):
             r[0] for r in conn.execute(f"SELECT DISTINCT our_number FROM [{table}]")
         )
         existing_set = set(Unit.objects.values_list("unit_number", flat=True))
+        part_yt_set = set(
+            Part.objects.exclude(yt_number="").values_list("yt_number", flat=True)
+        )
+        unit_yt_set = set(
+            Unit.objects.exclude(yt_number="").values_list("yt_number", flat=True)
+        )
+        remaining = our_numbers - existing_set
         existing_units = len(our_numbers & existing_set)
-        new_units = len(our_numbers) - existing_units
+        routed_to_parts = len(remaining & part_yt_set)
+        remaining -= part_yt_set
+        matched_unit_yt = len(remaining & unit_yt_set)
+        remaining -= unit_yt_set
+        new_units = len(remaining)
 
         conn.close()
 
@@ -146,6 +187,8 @@ class Command(BaseCommand):
         self.stdout.write(f"  Unique 'their' numbers:      {unique_their:>10,}")
         self.stdout.write(f"  Unique YouTech numbers:      {unique_our:>10,}")
         self.stdout.write(f"  Units already in system:     {existing_units:>10,}")
+        self.stdout.write(f"  Routed to Parts:             {routed_to_parts:>10,}")
+        self.stdout.write(f"  Matched Unit (by YT#):       {matched_unit_yt:>10,}")
         self.stdout.write(f"  New units to create:         {new_units:>10,}")
         self.stdout.write("")
 
@@ -162,8 +205,8 @@ class Command(BaseCommand):
             conn.close()
             return
 
-        # --- Step 1: Create Unit records for new YouTech numbers ---
-        self.stdout.write("Step 1: Creating Unit records for new YouTech numbers...")
+        # --- Step 1: Resolve our_numbers to Units or Parts ---
+        self.stdout.write("Step 1: Resolving our_numbers to Units / Parts...")
         t1 = time.time()
 
         our_numbers = [
@@ -171,27 +214,36 @@ class Command(BaseCommand):
         ]
 
         existing_unit_numbers = set(Unit.objects.values_list("unit_number", flat=True))
+        part_yt_map = dict(
+            Part.objects.exclude(yt_number="").values_list("yt_number", "pk")
+        )
+        unit_yt_map = dict(
+            Unit.objects.exclude(yt_number="").values_list("yt_number", "pk")
+        )
 
-        new_units = [num for num in our_numbers if num not in existing_unit_numbers]
-
-        if new_units:
-            batch = []
-            for num in new_units:
-                batch.append(Unit(unit_number=num))
-                if len(batch) >= BATCH_SIZE:
-                    Unit.objects.bulk_create(batch, ignore_conflicts=True)
-                    batch = []
-            if batch:
-                Unit.objects.bulk_create(batch, ignore_conflicts=True)
+        unmatched = []
+        routed_to_part = []
+        routed_to_unit_yt = []
+        for num in our_numbers:
+            if num in existing_unit_numbers:
+                continue
+            if num in part_yt_map:
+                routed_to_part.append(num)
+            elif num in unit_yt_map:
+                routed_to_unit_yt.append(num)
+            else:
+                unmatched.append(num)
 
         self.stdout.write(
-            f"  {len(new_units):,} new units created, "
-            f"{len(existing_unit_numbers):,} already existed  "
+            f"  Already a Unit:     {len(existing_unit_numbers & set(our_numbers)):,}\n"
+            f"  Routed to Part:     {len(routed_to_part):,}\n"
+            f"  Matched Unit (YT):  {len(routed_to_unit_yt):,}\n"
+            f"  Unmatched (skip):   {len(unmatched):,}  "
             f"({time.time() - t1:.1f}s)"
         )
 
         # --- Build unit_number -> pk lookup ---
-        self.stdout.write("  Building unit lookup...")
+        self.stdout.write("  Building lookups...")
         unit_map = dict(Unit.objects.values_list("unit_number", "pk"))
 
         # --- Step 1b: Update descriptions if available ---
@@ -219,8 +271,8 @@ class Command(BaseCommand):
                     desc_updated += updated
             self.stdout.write(f"  {desc_updated:,} unit descriptions updated")
 
-        # --- Step 2: Create CrossReference records ---
-        self.stdout.write("Step 2: Creating CrossReference records...")
+        # --- Step 2: Create CrossReference + PartInterchange records ---
+        self.stdout.write("Step 2: Creating interchange records...")
         t2 = time.time()
 
         total_rows = conn.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]
@@ -228,51 +280,108 @@ class Command(BaseCommand):
             f"SELECT manufacturer, their_number, our_number FROM [{table}]"
         )
 
+        # Dedup sets for CrossReference and PartInterchange
         xref_batch = []
-        seen = set()
-        created = 0
+        xref_seen = set(
+            CrossReference.objects.values_list(
+                "unit_id", "cross_ref_number", "interchange_type"
+            )
+        )
+
+        pi_batch = []
+        pi_seen = set(
+            PartInterchange.objects.values_list(
+                "part_id", "interchange_number", "source_name"
+            )
+        )
+
+        part_route_set = set(routed_to_part)
+        unit_yt_route_set = set(routed_to_unit_yt)
+
+        self.stdout.write(
+            f"  Pre-loaded {len(xref_seen):,} existing xrefs, "
+            f"{len(pi_seen):,} existing part-interchanges"
+        )
+        xref_created = 0
+        pi_created = 0
         skipped_dup = 0
-        skipped_no_unit = 0
+        skipped_no_target = 0
+        skipped_bogus_mfr = 0
         processed = 0
 
         for mfr, their_no, our_no in cursor:
             processed += 1
-            unit_pk = unit_map.get(our_no)
-            if not unit_pk:
-                skipped_no_unit += 1
+            mfr = MFR_NORMALIZE.get(mfr, mfr)
+
+            if mfr in BOGUS_MANUFACTURERS:
+                skipped_bogus_mfr += 1
                 continue
 
-            dedup_key = (unit_pk, their_no[:100], mfr[:150])
-            if dedup_key in seen:
-                skipped_dup += 1
-                continue
-            seen.add(dedup_key)
+            if our_no in part_route_set:
+                # Route to PartInterchange
+                part_pk = part_yt_map[our_no]
+                key = (part_pk, their_no[:100], mfr[:150])
+                if key in pi_seen:
+                    skipped_dup += 1
+                    continue
+                pi_seen.add(key)
+                pi_batch.append(
+                    PartInterchange(
+                        part_id=part_pk,
+                        interchange_number=their_no[:100],
+                        source_name=mfr[:150],
+                    )
+                )
+                if len(pi_batch) >= BATCH_SIZE:
+                    PartInterchange.objects.bulk_create(
+                        pi_batch, ignore_conflicts=True
+                    )
+                    pi_created += len(pi_batch)
+                    pi_batch = []
+            else:
+                # Route to CrossReference on the Unit (by unit_number or yt_number)
+                unit_pk = unit_map.get(our_no)
+                if not unit_pk and our_no in unit_yt_route_set:
+                    unit_pk = unit_yt_map.get(our_no)
+                if not unit_pk:
+                    skipped_no_target += 1
+                    continue
 
-            other_unit_pk = unit_map.get(their_no)
-            xref = CrossReference(
-                unit_id=unit_pk,
-                cross_ref_number=their_no[:100],
-                interchange_type=mfr[:150],
-            )
-            if other_unit_pk and other_unit_pk != unit_pk:
-                xref.cross_ref_unit_id = other_unit_pk
+                key = (unit_pk, their_no[:100], mfr[:150])
+                if key in xref_seen:
+                    skipped_dup += 1
+                    continue
+                xref_seen.add(key)
 
-            xref_batch.append(xref)
+                other_unit_pk = unit_map.get(their_no)
+                xref = CrossReference(
+                    unit_id=unit_pk,
+                    cross_ref_number=their_no[:100],
+                    interchange_type=mfr[:150],
+                )
+                if other_unit_pk and other_unit_pk != unit_pk:
+                    xref.cross_ref_unit_id = other_unit_pk
 
-            if len(xref_batch) >= BATCH_SIZE:
-                CrossReference.objects.bulk_create(xref_batch, ignore_conflicts=True)
-                created += len(xref_batch)
-                xref_batch = []
+                xref_batch.append(xref)
+                if len(xref_batch) >= BATCH_SIZE:
+                    CrossReference.objects.bulk_create(
+                        xref_batch, ignore_conflicts=True
+                    )
+                    xref_created += len(xref_batch)
+                    xref_batch = []
 
             if processed % 200000 == 0:
                 self.stdout.write(
                     f"  Progress: {processed:,}/{total_rows:,} rows  |  "
-                    f"{created:,} xrefs created"
+                    f"xrefs {xref_created:,}  |  part-ix {pi_created:,}"
                 )
 
         if xref_batch:
             CrossReference.objects.bulk_create(xref_batch, ignore_conflicts=True)
-            created += len(xref_batch)
+            xref_created += len(xref_batch)
+        if pi_batch:
+            PartInterchange.objects.bulk_create(pi_batch, ignore_conflicts=True)
+            pi_created += len(pi_batch)
 
         conn.close()
         elapsed = time.time() - t0
@@ -280,13 +389,20 @@ class Command(BaseCommand):
         self.stdout.write(f"\n{'=' * 60}")
         self.stdout.write(f"IMPORT COMPLETE: {db_path.name}")
         self.stdout.write(f"{'=' * 60}")
-        self.stdout.write(f"  Cross-references created:    {created:>10,}")
+        self.stdout.write(f"  CrossReferences created:     {xref_created:>10,}")
+        self.stdout.write(f"  PartInterchanges created:    {pi_created:>10,}")
         self.stdout.write(f"  Duplicates skipped:          {skipped_dup:>10,}")
-        self.stdout.write(f"  No unit found (skipped):     {skipped_no_unit:>10,}")
+        self.stdout.write(f"  Bogus manufacturer skipped:  {skipped_bogus_mfr:>10,}")
+        self.stdout.write(f"  No target found (skipped):   {skipped_no_target:>10,}")
         self.stdout.write(f"  Total time:                  {elapsed:>10.1f}s")
         self.stdout.write("")
 
         db_unit_count = Unit.objects.count()
         db_xref_count = CrossReference.objects.count()
-        self.stdout.write(f"  Database totals: {db_unit_count:,} units, {db_xref_count:,} cross-references")
+        db_pi_count = PartInterchange.objects.count()
+        self.stdout.write(
+            f"  Database totals: {db_unit_count:,} units, "
+            f"{db_xref_count:,} cross-refs, "
+            f"{db_pi_count:,} part-interchanges"
+        )
         self.stdout.write("")

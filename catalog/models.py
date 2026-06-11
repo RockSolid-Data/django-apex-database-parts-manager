@@ -69,6 +69,11 @@ class Application(models.Model):
             models.Index(fields=["model"]),
             models.Index(fields=["part_number"]),
             models.Index(fields=["unit_type_name"]),
+            models.Index(fields=["is_active", "make"], name="catalog_app_active_make_idx"),
+            models.Index(fields=["is_active", "model"], name="catalog_app_active_model_idx"),
+            models.Index(fields=["is_active", "mfr"], name="catalog_app_active_mfr_idx"),
+            models.Index(fields=["is_active", "volt"], name="catalog_app_active_volt_idx"),
+            models.Index(fields=["is_active", "unit_type_name"], name="catalog_app_active_utype_idx"),
         ]
 
     def __str__(self):
@@ -242,6 +247,11 @@ class Unit(models.Model):
             models.Index(fields=["model_cat_number"]),
             models.Index(fields=["is_active"]),
             models.Index(fields=["unit_type_category"]),
+            models.Index(fields=["is_active", "manufacturer"], name="catalog_uni_active_mfr_idx"),
+            models.Index(fields=["is_active", "voltage"], name="catalog_uni_active_volt_idx"),
+            models.Index(fields=["is_active", "unit_type_category"], name="catalog_uni_active_utype_idx"),
+            models.Index(fields=["is_active", "yt_number"], name="catalog_uni_active_yt_idx"),
+            models.Index(fields=["is_active", "unit_number"], name="catalog_uni_active_unum_idx"),
         ]
 
     def __str__(self):

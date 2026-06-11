@@ -249,10 +249,12 @@ class Command(BaseCommand):
                 if yt in existing_parts:
                     continue
                 name_val = normalize_space(row["part_name"])
+                if "|" in name_val:
+                    name_val = ""
                 part = Part(
                     yt_number=yt[:100],
                     part_name=name_val[:255],
-                    description=name_val,
+                    notes=name_val,
                 )
                 created_parts.append(part)
 
@@ -285,7 +287,7 @@ class Command(BaseCommand):
 
                 # Part name + description
                 name_val = normalize_space(row["part_name"])
-                if name_val and not part.part_name:
+                if name_val and "|" not in name_val and not part.part_name:
                     part.part_name = name_val[:255]
                     changed = True
 

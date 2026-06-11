@@ -80,7 +80,7 @@ def invoice_list(request):
     due_soon_end = today + timedelta(days=7)
     total_count = invoices.count()
     try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
         per_page = 50
     paginator = Paginator(invoices, per_page)
@@ -518,7 +518,7 @@ def customer_list(request):
 
     total_count = customers.count()
     try:
-        per_page = min(int(request.GET.get("per_page", 50)), 100)
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
         per_page = 50
     paginator = Paginator(customers, per_page)
