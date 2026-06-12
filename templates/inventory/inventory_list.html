@@ -39,7 +39,7 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label small mb-0">Supplier</label>
-          <select name="supplier" class="form-select form-select-sm">
+          <select name="supplier" class="form-select form-select-sm js-searchable-select">
             <option value="">All Suppliers</option>
             {% for val in supplier_choices %}
             <option value="{{ val }}" {% if filter_supplier == val %}selected{% endif %}>{{ val }}</option>

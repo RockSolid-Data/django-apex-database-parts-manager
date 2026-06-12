@@ -377,10 +377,16 @@
           <span>Created</span>
           <span>{{ unit.created_at|date:"N j, Y" }}</span>
         </div>
-        <div class="d-flex justify-content-between">
+        <div class="d-flex justify-content-between mb-1">
           <span>Updated</span>
           <span>{{ unit.updated_at|date:"N j, Y" }}</span>
         </div>
+        {% if unit.source_pdf %}
+        <div class="d-flex justify-content-between">
+          <span>Imported from PDF</span>
+          <span>{{ unit.source_pdf }}</span>
+        </div>
+        {% endif %}
       </div>
     </div>
 

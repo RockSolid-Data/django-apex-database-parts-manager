@@ -255,6 +255,7 @@ class Command(BaseCommand):
                     yt_number=yt[:100],
                     part_name=name_val[:255],
                     notes=name_val,
+                    source_pdf="PDF 14 - Components",
                 )
                 created_parts.append(part)
 

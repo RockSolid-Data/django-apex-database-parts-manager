@@ -198,6 +198,8 @@
           bindFormHandlers();
         }
 
+        if (window.meSyncStickyVars) window.meSyncStickyVars();
+
         if (history.replaceState) history.replaceState(null, '', url);
         persistLiveSearch(form, url);
       })

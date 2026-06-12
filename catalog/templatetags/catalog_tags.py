@@ -60,12 +60,16 @@ def jn_items(value):
 
 @register.filter
 def first_year_range(value):
-    """Return only the first year range from a pipe-separated string like '1981-1991 | 1976-1980'."""
+    """Return only the first year range from a pipe-separated string.
+
+    Single group  → shown as-is, e.g. "1978-1982"
+    Multiple groups → first group + "....", e.g. "1978-1982...."
+    """
     if not value:
         return ""
     text = str(value)
     if " | " in text:
-        return text.split(" | ")[0].strip()
+        return text.split(" | ")[0].strip() + "...."
     return text
 
 

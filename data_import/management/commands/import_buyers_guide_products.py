@@ -74,7 +74,7 @@ ALL_MODEL_UPDATE_FIELDS = [
     "yt_number", "j_and_n_number", "manufacturer", "oem", "family",
     "voltage", "rotation", "amp_rating", "fan_type", "regulator_type",
     "grounding", "mount_type", "notes", "unit_type_category",
-    "specifications",
+    "specifications", "source_pdf",
     # Generator-specific
     "circuit_type",
     # Starter-specific
@@ -82,6 +82,16 @@ ALL_MODEL_UPDATE_FIELDS = [
     "over_crank_protection", "solenoid_attached", "reclockable_flange",
     "bolt_holes", "with_hardware", "with_mounting_shims",
 ]
+
+UNIT_SOURCE_PDF = {
+    "Alternator": "PDF 9 - Buyers Guide Alternators",
+    "Starter": "PDF 10 - Buyers Guide Starters",
+    "Generator": "PDF 11 - Buyers Guide Generators",
+    "Motor": "PDF 12 - Buyers Guide Motors",
+    "DC Motor": "PDF 12 - Buyers Guide Motors",
+    "Pump": "PDF 13 - Buyers Guide Pumps",
+    "Mild Hybrid (MGU)": "PDF 13 - Buyers Guide Pumps",
+}
 
 
 class Command(BaseCommand):
@@ -301,6 +311,7 @@ class Command(BaseCommand):
                     unit_number=yt[:100],
                     yt_number=yt[:100],
                     unit_type_category=unit_type,
+                    source_pdf=UNIT_SOURCE_PDF.get(unit_type, ""),
                 )
                 created_units.append(unit)
 
@@ -329,6 +340,10 @@ class Command(BaseCommand):
 
                 if not unit.unit_type_category:
                     unit.unit_type_category = unit_type
+                    changed = True
+
+                if not unit.source_pdf:
+                    unit.source_pdf = UNIT_SOURCE_PDF.get(unit_type, "")
                     changed = True
 
                 # Ensure yt_number is set

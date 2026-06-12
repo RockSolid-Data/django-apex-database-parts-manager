@@ -107,11 +107,7 @@
 
 {# ===== Section heading and table (only this section replaced on live search; form stays to preserve focus) ===== #}
 <div id="live-search-results">
-{% if selected_unit_type_name %}
-<h5 class="mb-2">{{ selected_unit_type_name }} — Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ total_count }} unit{{ total_count|pluralize }}</h5>
-{% else %}
-<h5 class="mb-2">Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ total_count }} unit{{ total_count|pluralize }}</h5>
-{% endif %}
+<p class="text-muted mb-0 me-sticky-count">{% if selected_unit_type_name %}{{ selected_unit_type_name }} — {% endif %}{{ total_count }} unit{{ total_count|pluralize }} found{% if page_obj.has_other_pages %} — page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</p>
 
 <div class="table-responsive">
   <table class="table table-striped table-hover align-middle">

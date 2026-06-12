@@ -66,6 +66,7 @@
           <label class="form-label small mb-0">Model</label>
           <select name="model" class="form-select form-select-sm js-ajax-select"
                   data-url="{% url 'catalog:application_model_filter_autocomplete' %}"
+                  data-load-all="true"
                   data-placeholder="All Models">
             <option value="">All Models</option>
             {% if filter_model %}

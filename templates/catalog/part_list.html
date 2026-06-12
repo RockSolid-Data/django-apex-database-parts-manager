@@ -40,7 +40,7 @@
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label small mb-0">Category</label>
-          <select name="category" class="form-select form-select-sm">
+          <select name="category" class="form-select form-select-sm js-searchable-select">
             <option value="">All Categories</option>
             {% for val in category_choices %}
             <option value="{{ val }}" {% if filter_category == val %}selected{% endif %}>{{ val }}</option>
@@ -49,7 +49,7 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label small mb-0">Voltage</label>
-          <select name="voltage" class="form-select form-select-sm">
+          <select name="voltage" class="form-select form-select-sm js-searchable-select">
             <option value="">All Voltages</option>
             {% for val in voltage_choices %}
             <option value="{{ val }}" {% if filter_voltage == val %}selected{% endif %}>{{ val }}</option>

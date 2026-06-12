@@ -232,7 +232,7 @@ def add_to_invoice(request):
     # GET: show choose page
     invoices = Invoice.objects.filter(
         status__in=[Invoice.Status.DRAFT, Invoice.Status.SENT]
-    ).select_related("customer").order_by("-date")[:50]
+    ).select_related("customer").order_by("-date")
 
     create_new_url = reverse("invoicing:invoice_create")
     if unit_pk:
@@ -644,7 +644,7 @@ def api_parts_search(request):
             | Q(category__icontains=q)
             | Q(description__icontains=q)
         )
-        .values("id", "part_number", "part_name", "category", "price")[:50]
+        .values("id", "part_number", "part_name", "category", "price")[:200]
     )
     results = []
     for p in parts:
@@ -685,7 +685,7 @@ def api_units_search(request):
             | Q(voltage__icontains=q)
             | Q(description__icontains=q)
         )
-        .select_related("unit_type")[:50]
+        .select_related("unit_type")[:200]
     )
     results = []
     for u in units:

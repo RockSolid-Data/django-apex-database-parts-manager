@@ -35,7 +35,7 @@
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label small mb-0">Unit Type</label>
-          <select name="unit_type" class="form-select form-select-sm">
+          <select name="unit_type" class="form-select form-select-sm js-searchable-select">
             <option value="">All Unit Types</option>
             {% for ut in unit_type_choices %}
             <option value="{{ ut }}" {% if filter_unit_type == ut %}selected{% endif %}>{{ ut }}</option>

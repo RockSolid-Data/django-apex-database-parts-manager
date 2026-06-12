@@ -50,6 +50,8 @@ class Application(models.Model):
     application_type_category = models.CharField(max_length=100, blank=True, default="")
     type_specifications = models.JSONField(default=dict, blank=True)
 
+    source_pdf = models.CharField("Imported from PDF", max_length=100, blank=True, default="")
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -228,6 +230,9 @@ class Unit(models.Model):
     # -- Unit type category (user-managed dynamic fields) --
     unit_type_category = models.CharField(max_length=100, blank=True, default="")
     specifications = models.JSONField(default=dict, blank=True)
+
+    # -- Import tracking --
+    source_pdf = models.CharField("Imported from PDF", max_length=100, blank=True, default="")
 
     # -- Metadata --
     is_active = models.BooleanField(default=True)
@@ -599,6 +604,9 @@ class Part(models.Model):
         blank=True,
         related_name="linked_parts",
     )
+
+    # -- Import tracking --
+    source_pdf = models.CharField("Imported from PDF", max_length=100, blank=True, default="")
 
     # -- Metadata --
     is_active = models.BooleanField(default=True)

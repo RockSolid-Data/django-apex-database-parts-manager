@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import logging
+import re
 
 
 from django.contrib import messages
@@ -9,8 +10,8 @@ from django.contrib import messages
 logger = logging.getLogger(__name__)
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Case, Exists, F, Max, OuterRef, Q, Value, When
-from django.db.models.functions import NullIf
+from django.db.models import Case, Exists, F, Max, OuterRef, Prefetch, Q, Value, When
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import HttpResponseNotAllowed, JsonResponse
 from django.utils.functional import cached_property
 from django.shortcuts import get_object_or_404, redirect, render
@@ -103,12 +104,55 @@ def _get_unit_type_field_defs():
     return result
 
 
+def _expand_short_year(yy: str) -> str:
+    """Convert a 2-digit year string to 4 digits (00-29→2000s, 30-99→1900s)."""
+    n = int(yy)
+    return str(2000 + n) if n <= 29 else str(1900 + n)
+
+
+def _year_filter_q(raw: str) -> Q:
+    """Build a Q filter for the year field, expanding 2-digit inputs.
+
+    Handles:
+      - Plain 2-digit  ("01" → search for "2001")
+      - Plain 4-digit  ("2001" → search for "2001")
+      - Range 2-digit  ("01-03" → search for "2001", "2002", "2003")
+      - Range 4-digit  ("2001-2003" → icontains as-is)
+      - Anything else   → plain icontains fallback
+    """
+    val = raw.strip()
+    if not val:
+        return Q()
+
+    range_match = re.match(r'^(\d{2,4})\s*[-–]\s*(\d{2,4})$', val)
+    if range_match:
+        lo_raw, hi_raw = range_match.group(1), range_match.group(2)
+        if len(lo_raw) == 2 and len(hi_raw) == 2:
+            lo = int(_expand_short_year(lo_raw))
+            hi = int(_expand_short_year(hi_raw))
+            if lo > hi:
+                lo, hi = hi, lo
+            q = Q()
+            for yr in range(lo, hi + 1):
+                q |= Q(year__icontains=str(yr))
+            return q
+        return Q(year__icontains=val)
+
+    if re.match(r'^\d{2}$', val):
+        return Q(year__icontains=_expand_short_year(val))
+
+    return Q(year__icontains=val)
+
+
 _APP_LIST_FIELDS = (
     "pk", "name", "make", "model", "engine", "year", "mfr", "volt", "amp",
     "unit_type_name", "options", "unit_number", "is_active",
 )
 
-_XREF_PK_LIMIT = 2000
+# Performance guard: max unit PKs collected from CrossReference/Substitute
+# tables during deep search.  Raised from 2000 → 10000 so virtually all
+# real-world searches return the full result set.
+_XREF_PK_LIMIT = 10000
 
 
 class _CachedCountPaginator(Paginator):
@@ -266,7 +310,7 @@ def application_list(request):
     if filter_model:
         applications = applications.filter(model=filter_model)
     if filter_year:
-        applications = applications.filter(year__icontains=filter_year)
+        applications = applications.filter(_year_filter_q(filter_year))
     if filter_mfr:
         applications = applications.filter(mfr=filter_mfr)
     if filter_volt:
@@ -625,7 +669,16 @@ def bom_list(request):
 def bom_detail(request, pk):
     """Show BOM name, created date, description. Buttons: Print All, Print Selected, Add Part, Edit, Back, Edit BOM, Delete BOM."""
     bom = get_object_or_404(
-        BOM.objects.select_related("unit", "application").prefetch_related("items__part"),
+        BOM.objects.select_related("unit", "application").prefetch_related(
+            Prefetch(
+                "items",
+                queryset=BOMItem.objects.select_related("part").annotate(
+                    effective_desc=Coalesce(
+                        NullIf("description", Value("")), "part__part_name"
+                    )
+                ).order_by(Lower("effective_desc")),
+            )
+        ),
         pk=pk,
     )
     return render(request, "catalog/bom_detail.html", {"bom": bom})
@@ -1106,10 +1159,32 @@ def part_detail(request, pk):
     linked_units = part.units.all().order_by("unit_number")
     linked_unit_count = linked_units.count()
 
+    # Show only the first J&N interchange number; append .... if more exist
+    jn_entries = [
+        i["ref"].interchange_number
+        for i in part_interchanges
+        if i["ref"].source_name and i["ref"].source_name.upper().startswith("J&N")
+        and i["ref"].interchange_number
+    ]
+    if jn_entries:
+        jn_display = jn_entries[0] + ("...." if len(jn_entries) > 1 else "")
+    else:
+        jn_display = part.j_and_n or ""
+
+    # Truncate manufacturer_number the same way (pipe-separated values)
+    mfr_raw = (part.manufacturer_number or "").strip()
+    if mfr_raw:
+        mfr_parts = [v.strip() for v in mfr_raw.split("|") if v.strip()]
+        mfr_display = mfr_parts[0] + ("...." if len(mfr_parts) > 1 else "") if mfr_parts else ""
+    else:
+        mfr_display = ""
+
     return render(request, "catalog/part_detail.html", {
         "part": part,
         "part_display_number": _part_display_number(part),
         "spec_display": spec_display,
+        "jn_display": jn_display,
+        "mfr_display": mfr_display,
         "part_substitutes": part_substitutes,
         "part_interchanges": part_interchanges,
         "part_supersedings": part_supersedings,
@@ -1892,12 +1967,14 @@ def _part_related_number_q(val: str) -> Q:
     )
 
 
-def _global_reference_search_hits(q_raw: str, limit: int = 200) -> list[dict]:
+def _global_reference_search_hits(q_raw: str, limit: int = 10000) -> list[dict]:
     """
     Search every major catalog number field: units, parts (incl. interchange/supersede/sub/BOM),
     applications, unit cross-refs, substitutes, gear reductions, application specs.
 
-    Queries are ordered by relevance and short-circuit once the limit is reached.
+    Results are collected in memory then paginated, so *limit* caps total rows
+    to prevent runaway memory usage.  Set high enough that normal searches
+    return all matches.
     """
     q = (q_raw or "").strip()
     if not q:
@@ -2124,6 +2201,12 @@ def unit_search(request):
     tab = request.GET.get("tab", "crossref")
     results: list = []
     results_count = 0
+    page_obj = None
+
+    try:
+        per_page = min(int(request.GET.get("per_page", 50)), 500)
+    except (ValueError, TypeError):
+        per_page = 50
 
     has_search_params = any(k.startswith("q_") for k in request.GET)
     if request.method == "GET" and has_search_params:
@@ -2145,8 +2228,10 @@ def unit_search(request):
                 if key.startswith("q_spec_") and val.strip():
                     spec_name = key[7:]
                     qs = qs.filter(**{f"specifications__{spec_name}__icontains": val.strip()})
-            results = list(qs[:100])
-            results_count = len(results)
+            results_count = qs.count()
+            paginator = Paginator(qs, per_page)
+            page_obj = paginator.get_page(request.GET.get("page"))
+            results = page_obj
         elif tab == "applications":
             qs = Application.objects.filter(is_active=True)
             # Application type category filter
@@ -2166,8 +2251,10 @@ def unit_search(request):
                 if key.startswith("q_spec_") and val.strip():
                     spec_name = key[7:]
                     qs = qs.filter(**{f"type_specifications__{spec_name}__icontains": val.strip()})
-            results = list(qs[:100])
-            results_count = len(results)
+            results_count = qs.count()
+            paginator = Paginator(qs, per_page)
+            page_obj = paginator.get_page(request.GET.get("page"))
+            results = page_obj
         elif tab == "parts":
             qs = Part.objects.select_related("unit").filter(is_active=True)
             for field in [
@@ -2201,13 +2288,18 @@ def unit_search(request):
                 if key.startswith("q_spec_") and val.strip():
                     spec_name = key[7:]
                     qs = qs.filter(**{f"specifications__{spec_name}__icontains": val.strip()})
-            results = list(qs[:100])
-            results_count = len(results)
+            results_count = qs.count()
+            paginator = Paginator(qs, per_page)
+            page_obj = paginator.get_page(request.GET.get("page"))
+            results = page_obj
         elif tab == "crossref":
             xref_val = request.GET.get("q_cross_ref", "").strip()
             if xref_val:
-                results = _global_reference_search_hits(xref_val, limit=200)
-                results_count = len(results)
+                all_hits = _global_reference_search_hits(xref_val)
+                results_count = len(all_hits)
+                paginator = Paginator(all_hits, per_page)
+                page_obj = paginator.get_page(request.GET.get("page"))
+                results = page_obj
 
     # Build category choices for Parts tab
     part_category_choices = []
@@ -2247,6 +2339,8 @@ def unit_search(request):
         "tab": tab,
         "results": results or [],
         "results_count": results_count,
+        "page_obj": page_obj,
+        "per_page": per_page,
         "get_params": request.GET,
         "part_category_choices": part_category_choices,
         "unit_type_category_choices": unit_type_category_choices,
@@ -2460,12 +2554,17 @@ def unit_detail(request, pk):
         if unit.unit_number and unit.unit_number != unit.yt_number
         else ""
     )
+    # Show only the first J&N number in Identification; append .... if more exist
+    jn_raw = unit.j_and_n_number or ""
+    jn_parts = [p.strip() for p in jn_raw.split("|") if p.strip()]
+    jn_display = jn_parts[0] + "...." if len(jn_parts) > 1 else jn_raw
+
     spec_sections = [
         ("Identification", [
             ("Unit Number", unit_number_display),
             ("YT Number", unit.yt_number),
             ("OEM", unit.oem),
-            ("J&N Number", unit.j_and_n_number),
+            ("J&N Number", jn_display),
             ("Manufacturer", unit.manufacturer),
         ]),
     ]
@@ -3433,7 +3532,7 @@ def unit_download_csv_template(request):
 
 # ── Autocomplete JSON endpoints (used by Tom Select AJAX) ──────────────
 
-def _autocomplete_response(qs, label_fn, limit=30):
+def _autocomplete_response(qs, label_fn, limit=200):
     from django.http import JsonResponse
     results = [{"value": str(obj.pk), "text": label_fn(obj)} for obj in qs[:limit]]
     return JsonResponse({"results": results})
@@ -3493,14 +3592,22 @@ def application_autocomplete(request):
 
 def application_model_filter_autocomplete(request):
     """Distinct model values for the application list filter dropdown (AJAX Tom Select)."""
-    q = request.GET.get("q", "").strip()
     make = request.GET.get("make", "").strip()
-    qs = Application.objects.filter(is_active=True).exclude(model="")
-    if make:
-        qs = qs.filter(make=make)
+    cache_key = f"app_model_choices:{make}" if make else "app_model_choices"
+
+    def _fetch_models():
+        qs = Application.objects.filter(is_active=True).exclude(model="")
+        if make:
+            qs = qs.filter(make=make)
+        return list(qs.values_list("model", flat=True).distinct().order_by("model"))
+
+    all_models = cache.get_or_set(cache_key, _fetch_models, 1800)
+    q = request.GET.get("q", "").strip()
     if q:
-        qs = qs.filter(model__icontains=q)
-    models = qs.values_list("model", flat=True).distinct().order_by("model")[:30]
+        q_lower = q.lower()
+        models = [m for m in all_models if q_lower in m.lower()]
+    else:
+        models = all_models
     return JsonResponse({"results": [{"value": m, "text": m} for m in models]})
 
 

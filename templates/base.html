@@ -178,11 +178,27 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", function () {
+      try {
       document.querySelectorAll(".js-searchable-select").forEach(function (el) {
+        var placeholder = 'Select\u2026';
+        var currentValue = el.value;
+        var firstOpt = el.querySelector('option[value=""]');
+        if (firstOpt) {
+          if (firstOpt.textContent.trim()) {
+            placeholder = firstOpt.textContent.trim();
+          }
+          firstOpt.remove();
+        }
+
+        var items = currentValue ? [currentValue] : [];
+
         var opts = {
           allowEmptyOption: true,
           maxOptions: null,
+          openOnFocus: true,
           controlInput: '<input>',
+          placeholder: placeholder,
+          items: items,
           render: {
             option: function (data, escape) {
               return '<div>' + escape(data.text) + '</div>';
@@ -195,7 +211,72 @@
         new TomSelect(el, opts);
       });
 
-      document.querySelectorAll(".js-ajax-select").forEach(function (el) {
+      document.querySelectorAll(".js-ajax-select[data-load-all]").forEach(function (el) {
+        var url = el.getAttribute("data-url");
+
+        var preload = [];
+        Array.prototype.forEach.call(el.options, function (opt) {
+          if (opt.value) {
+            preload.push({ value: opt.value, text: opt.text });
+          }
+        });
+
+        var allLoaded = false;
+        var loading = false;
+
+        var opts = {
+          valueField: "value",
+          labelField: "text",
+          searchField: "text",
+          placeholder: el.getAttribute("data-placeholder") || "Search...",
+          allowEmptyOption: true,
+          openOnFocus: true,
+          maxOptions: null,
+          preload: "focus",
+          options: preload,
+          items: preload.filter(function (o) {
+            return el.querySelector('option[value="' + o.value + '"][selected]') !== null;
+          }).map(function (o) { return o.value; }),
+          shouldLoad: function () {
+            return !allLoaded;
+          },
+          load: function (query, callback) {
+            if (allLoaded) {
+              callback();
+              return;
+            }
+            if (loading) {
+              return;
+            }
+            loading = true;
+            fetch(url)
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                allLoaded = true;
+                loading = false;
+                callback(data.results);
+              })
+              .catch(function () {
+                loading = false;
+                callback();
+              });
+          },
+          render: {
+            option: function (data, escape) {
+              return '<div>' + escape(data.text) + '</div>';
+            },
+            no_results: function () {
+              return '<div class="no-results p-2 text-muted">No results found</div>';
+            }
+          }
+        };
+        if (el.multiple) {
+          opts.plugins = ['remove_button'];
+        }
+        new TomSelect(el, opts);
+      });
+
+      document.querySelectorAll(".js-ajax-select:not([data-load-all])").forEach(function (el) {
         var url = el.getAttribute("data-url");
         var excludeBom = el.getAttribute("data-exclude-bom") || "";
         var excludeApp = el.getAttribute("data-exclude-app") || "";
@@ -243,13 +324,40 @@
         }
         new TomSelect(el, opts);
       });
+      } catch (e) { console.error('TomSelect init error:', e); }
+
+      var _stickyCountObserver = null;
+
+      window.meSyncStickyVars = function () {
+        var main       = document.getElementById('main-content');
+        if (!main) return;
+        var toolbar    = document.querySelector('.me-sticky-toolbar');
+        var countEl    = document.querySelector('.me-sticky-count');
+        var breadcrumb = main.querySelector(':scope > nav[aria-label="breadcrumb"]');
+
+        if (breadcrumb) {
+          main.style.setProperty('--me-breadcrumb-h', breadcrumb.offsetHeight + 'px');
+        }
+        if (toolbar) {
+          main.style.setProperty('--me-toolbar-h', toolbar.offsetHeight + 'px');
+        }
+        if (countEl) {
+          main.style.setProperty('--me-count-h', countEl.offsetHeight + 'px');
+        }
+
+        if (_stickyCountObserver) { _stickyCountObserver.disconnect(); }
+        if (countEl && window.ResizeObserver) {
+          _stickyCountObserver = new ResizeObserver(function () {
+            main.style.setProperty('--me-count-h', countEl.offsetHeight + 'px');
+          });
+          _stickyCountObserver.observe(countEl);
+        }
+      };
 
       var toolbar    = document.querySelector('.me-sticky-toolbar');
-      var countEl    = document.querySelector('.me-sticky-count');
       var main       = document.getElementById('main-content');
       var breadcrumb = main ? main.querySelector(':scope > nav[aria-label="breadcrumb"]') : null;
 
-      /* Sync breadcrumb height first (toolbar top depends on it) */
       if (breadcrumb && toolbar) {
         function syncBreadcrumbH() {
           main.style.setProperty('--me-breadcrumb-h', breadcrumb.offsetHeight + 'px');
@@ -262,7 +370,7 @@
         }
       }
 
-      if (toolbar) {
+      if (toolbar && main) {
         function syncToolbarH() {
           main.style.setProperty('--me-toolbar-h', toolbar.offsetHeight + 'px');
         }
@@ -273,17 +381,8 @@
           window.addEventListener('resize', syncToolbarH);
         }
       }
-      if (countEl) {
-        function syncCountH() {
-          main.style.setProperty('--me-count-h', countEl.offsetHeight + 'px');
-        }
-        syncCountH();
-        if (window.ResizeObserver) {
-          new ResizeObserver(syncCountH).observe(countEl);
-        } else {
-          window.addEventListener('resize', syncCountH);
-        }
-      }
+
+      window.meSyncStickyVars();
     });
   </script>
 
@@ -363,6 +462,24 @@
     okBtn.addEventListener('click', function() {
       if (pendingForm) pendingForm.submit();
       pendingForm = null;
+    });
+  })();
+  </script>
+
+  <!-- Back to Top button -->
+  <button id="back-to-top" class="me-back-to-top" aria-label="Back to top" title="Back to top">
+    <i class="bi bi-arrow-up"></i>
+  </button>
+  <script>
+  (function() {
+    var btn = document.getElementById('back-to-top');
+    var main = document.getElementById('main-content');
+    if (!btn || !main) return;
+    main.addEventListener('scroll', function() {
+      btn.classList.toggle('visible', main.scrollTop > 200);
+    });
+    btn.addEventListener('click', function() {
+      main.scrollTo({ top: 0, behavior: 'smooth' });
     });
   })();
   </script>

@@ -43,9 +43,9 @@
             <tr><th class="ps-3" style="width: 30%;">Part Number</th><td>{{ part.part_number|default:"—" }}</td></tr>
             <tr><th class="ps-3">Part Name</th><td>{{ part.part_name|default:"—" }}</td></tr>
             <tr><th class="ps-3">Category</th><td>{{ part.category|default:"—" }}</td></tr>
-            <tr><th class="ps-3">Manufacturer Number</th><td>{{ part.manufacturer_number|default:"—" }}</td></tr>
+            <tr><th class="ps-3">Manufacturer Number</th><td>{{ mfr_display|default:"—" }}</td></tr>
             <tr><th class="ps-3">YT Number</th><td>{{ part.yt_number|default:"—" }}</td></tr>
-            <tr><th class="ps-3">J&N</th><td>{{ part.j_and_n|first_jn|default:"—" }}</td></tr>
+            <tr><th class="ps-3">J&N</th><td>{{ jn_display|default:"—" }}</td></tr>
             <tr><th class="ps-3">OEM #</th><td>{{ part.oem_number|default:"—" }}</td></tr>
             <tr><th class="ps-3">Voltage</th><td>{{ part.voltage|default:"—" }}</td></tr>
             <tr><th class="ps-3">Type</th><td>{{ part.type|default:"—" }}</td></tr>
@@ -367,10 +367,16 @@
           <span>Created</span>
           <span>{{ part.created_at|date:"N j, Y" }}</span>
         </div>
-        <div class="d-flex justify-content-between">
+        <div class="d-flex justify-content-between mb-1">
           <span>Updated</span>
           <span>{{ part.updated_at|date:"N j, Y" }}</span>
         </div>
+        {% if part.source_pdf %}
+        <div class="d-flex justify-content-between">
+          <span>Imported from PDF</span>
+          <span>{{ part.source_pdf }}</span>
+        </div>
+        {% endif %}
       </div>
     </div>
 

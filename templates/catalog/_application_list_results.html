@@ -9,8 +9,8 @@
         <th style="width:10%;">Model</th>
         <th style="width:11%;">Engine</th>
         <th class="text-center" style="width:10%;">Year</th>
-        <th style="width:15%;">Unit Type</th>
         <th style="width:20%;">Options</th>
+        <th style="width:15%;">Unit Type</th>
         <th class="text-center" style="width:5%;">Amp</th>
         <th class="text-center" style="width:5%;">Volt</th>
         <th class="text-end" style="width:7%;">Unit #</th>
@@ -23,8 +23,8 @@
         <td class="text-truncate" title="{{ app.model }}">{{ app.model|default:"—" }}</td>
         <td class="text-truncate" title="{{ app.engine }}">{{ app.engine|default:"—" }}</td>
         <td class="text-center text-nowrap">{{ app.year|first_year_range|default:"—" }}</td>
-        <td class="text-truncate" title="{{ app.unit_type_name }}">{{ app.unit_type_name|default:"—" }}</td>
         <td class="text-truncate" title="{{ app.options }}">{{ app.options|default:"—" }}</td>
+        <td class="text-truncate" title="{{ app.unit_type_name }}">{{ app.unit_type_name|default:"—" }}</td>
         <td class="text-center">{{ app.amp|default:"—" }}</td>
         <td class="text-center">{{ app.volt|default:"—" }}</td>
         <td class="text-end text-nowrap">{{ app.unit_number|default:"—" }}</td>

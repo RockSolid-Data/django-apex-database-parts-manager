@@ -102,6 +102,8 @@ def parse_page(page, page_num, state):
     model = state.get("model", "")
     engine = state.get("engine", "")
     pending_other = state.get("pending_other", "")
+    last_year = state.get("last_year", "")
+    last_mfr = state.get("last_mfr", "")
 
     data_words = [w for w in words if w[1] > 88 and w[1] < 750]
     if not data_words:
@@ -127,6 +129,8 @@ def parse_page(page, page_num, state):
                     model = ""
                     engine = ""
                     pending_other = ""
+                    last_year = ""
+                    last_mfr = ""
                     break
                 elif fsize > 8.5 and not fbold:
                     is_model_row = True
@@ -142,9 +146,13 @@ def parse_page(page, page_num, state):
             if model_text:
                 if ENGINE_SPEC_RE.search(model_text):
                     engine = model_text
+                    last_year = ""
+                    last_mfr = ""
                 else:
                     model = model_text
                     engine = ""
+                    last_year = ""
+                    last_mfr = ""
 
             # There might also be data fields on this same row (Year, Mfr, etc.)
             has_data = any(w[0] >= cols["mfr_min"] for w in row_words)
@@ -187,6 +195,8 @@ def parse_page(page, page_num, state):
         model_col_text = " ".join(model_col_parts)
         if model_col_text and ENGINE_SPEC_RE.search(model_col_text):
             engine = model_col_text
+            last_year = ""
+            last_mfr = ""
 
         # Parse year from year_engine_parts
         year = ""
@@ -199,6 +209,17 @@ def parse_page(page, page_num, state):
         options_text = " ".join(options_parts)
 
         mfr_text = " ".join(mfr_parts)
+
+        # Inherit year/mfr from previous row if blank (PDF blank = same as above)
+        if year:
+            last_year = year
+        else:
+            year = last_year
+
+        if mfr_text:
+            last_mfr = mfr_text
+        else:
+            mfr_text = last_mfr
         amp_text = " ".join(amp_parts)
         volt_text = " ".join(volt_parts)
         part_text = " ".join(part_parts)
@@ -249,6 +270,8 @@ def parse_page(page, page_num, state):
         "model": model,
         "engine": engine,
         "pending_other": pending_other,
+        "last_year": last_year,
+        "last_mfr": last_mfr,
     }
     return records, state
 

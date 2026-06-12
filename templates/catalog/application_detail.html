@@ -89,6 +89,9 @@
         {% for spec in custom_spec_display %}
         <tr><th class="ps-3">{{ spec.label }}</th><td>{{ spec.value }}</td></tr>
         {% endfor %}
+        {% if application.source_pdf %}
+        <tr><th class="ps-3">Imported from PDF</th><td>{{ application.source_pdf }}</td></tr>
+        {% endif %}
       </tbody>
     </table>
   </div>
