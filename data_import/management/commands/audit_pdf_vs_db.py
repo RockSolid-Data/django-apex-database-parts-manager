@@ -27,7 +27,6 @@ import sqlite3
 import sys
 import time
 from collections import Counter, defaultdict
-from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -35,7 +34,6 @@ from django.core.management.base import BaseCommand
 import fitz  # PyMuPDF
 
 from catalog.models import (
-    Application,
     ApplicationUnit,
     BOM,
     BOMItem,
@@ -507,7 +505,7 @@ def fetch_db_unit(yt: str):
             .values("id", "substitute_number", "substitute_unit_id")
         )
         return unit, xrefs, apps, bom_items, subs
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return None, [], [], [], []
 
 

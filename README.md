@@ -51,6 +51,8 @@ python manage.py sync_catalog --seed-db seed.sqlite3   # additive sync
 python manage.py sync_catalog --seed-db seed.sqlite3 --dry-run  # preview
 ```
 
+- Run `export_seed_data` only when cutting a release; if seed was exported accidentally, use `git restore seed.sqlite3` before committing.
+
 ## Project Structure
 
 ```

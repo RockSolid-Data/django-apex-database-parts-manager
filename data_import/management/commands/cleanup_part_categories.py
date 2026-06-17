@@ -251,14 +251,14 @@ class Command(BaseCommand):
             name_counts = {}
             for _, name in unclassified:
                 name_counts[name] = name_counts.get(name, 0) + 1
-            self.stdout.write(f"\n  Unclassifiable part names:")
+            self.stdout.write("\n  Unclassifiable part names:")
             for name, cnt in sorted(name_counts.items(), key=lambda x: -x[1]):
                 display = name if name else "(blank)"
                 self.stdout.write(f"    [{cnt:>4}] {display}")
 
         # ----- Apply -----
         if dry_run:
-            self.stdout.write(f"\n  DRY RUN -- no changes saved.")
+            self.stdout.write("\n  DRY RUN -- no changes saved.")
         else:
             updated = 0
             for cat, pks in assignments.items():
@@ -281,16 +281,16 @@ class Command(BaseCommand):
                     for c in created_cats:
                         self.stdout.write(f"    + {c}")
                 else:
-                    self.stdout.write(f"  All PartCategory entries already exist.")
+                    self.stdout.write("  All PartCategory entries already exist.")
 
         # ----- After-state -----
         if not dry_run:
             after_blank = Part.objects.filter(category="").count()
             after_filled = Part.objects.exclude(category="").count()
-            self.stdout.write(f"\n  After:")
+            self.stdout.write("\n  After:")
             self.stdout.write(f"    Categorized:         {after_filled:>10,}")
             self.stdout.write(f"    Still blank:         {after_blank:>10,}")
-            self.stdout.write(f"\n  Category distribution:")
+            self.stdout.write("\n  Category distribution:")
             dist = (
                 Part.objects.exclude(category="")
                 .values("category")

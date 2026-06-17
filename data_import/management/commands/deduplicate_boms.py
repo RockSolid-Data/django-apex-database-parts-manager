@@ -11,9 +11,9 @@ Usage:
 """
 
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef
 
-from catalog.models import BOM, BOMItem, Part
+from catalog.models import BOM, BOMItem
 
 
 class Command(BaseCommand):

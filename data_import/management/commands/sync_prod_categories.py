@@ -9,7 +9,7 @@ Steps:
   5. Rename UnitTypeCategory "Motor" → "AC Motor" and sync all UnitTypeCategoryFields
 
 Usage:
-  $env:DJANGO_DB_NAME="db.sqlite3.staging"
+  $env:DJANGO_DB_NAME="data/staging/db.sqlite3.staging"
   python manage.py sync_prod_categories --dry-run
   python manage.py sync_prod_categories
 """
@@ -18,7 +18,6 @@ import sqlite3
 from collections import defaultdict
 
 from django.core.management.base import BaseCommand
-from django.db import connection
 
 from catalog.models import (
     Part,

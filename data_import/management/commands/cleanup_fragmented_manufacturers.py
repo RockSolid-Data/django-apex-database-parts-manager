@@ -6,10 +6,8 @@ creating separate entries like "United" and "Technologies" instead of
 "United Technologies".  This command detects and merges those fragments.
 """
 
-import sys
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import Q
 
 from catalog.models import CrossReference, PartInterchange
 

@@ -16,7 +16,6 @@ Usage:
     python manage.py import_tilt_trim_motors --report-only
 """
 
-import os
 import sqlite3
 import time
 from pathlib import Path

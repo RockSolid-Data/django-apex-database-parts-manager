@@ -269,6 +269,7 @@ class Unit(models.Model):
 class UnitImage(models.Model):
     """Multiple images per unit."""
 
+    seed_id = models.IntegerField(null=True, blank=True, db_index=True)
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="images")
     image = models.ImageField(upload_to="units/")
     caption = models.CharField(max_length=200, blank=True, default="")
@@ -638,6 +639,7 @@ class Part(models.Model):
 class PartImage(models.Model):
     """Multiple images per part."""
 
+    seed_id = models.IntegerField(null=True, blank=True, db_index=True)
     part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name="images")
     image = models.ImageField(upload_to="parts/")
     uploaded_at = models.DateTimeField(auto_now_add=True)

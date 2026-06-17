@@ -67,6 +67,8 @@ PACKAGES = [
     "whitenoise", "whitenoise.middleware", "whitenoise.storage",
     "asgiref", "sqlparse",
 
+    "config.middleware", "config.context_processors",
+
     "PIL",
     "pdfplumber", "pdfminer", "pdfminer.high_level",
     "charset_normalizer", "charset_normalizer.md",
@@ -98,6 +100,7 @@ INCLUDE_FILES = [
     (str(BASE_DIR / "VERSION"), f"{INT}/VERSION"),
     (str(BASE_DIR / "version.py"), f"{INT}/version.py"),
     (str(BASE_DIR / "loading.html"), f"{INT}/loading.html"),
+    (str(BASE_DIR / "python312._pth"), "python312._pth"),
 ]
 
 if (BASE_DIR / "changelog.json").exists():

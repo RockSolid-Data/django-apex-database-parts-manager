@@ -201,7 +201,6 @@ class Command(BaseCommand):
 
         planned = []
         for unit in qs.iterator(chunk_size=500):
-            clean_un = _clean_unit_number(unit.unit_number)
             yt = _derive_yt_number(unit)
             if yt:
                 planned.append((unit.pk, yt))

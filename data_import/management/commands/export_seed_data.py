@@ -14,9 +14,11 @@ from django.core.management.base import BaseCommand
 SEED_ID_TABLES = [
     "catalog_unittype", "catalog_application",
     "catalog_applicationspecification", "catalog_unit",
+    "catalog_unitimage",
     "catalog_applicationunit", "catalog_crossreference",
     "catalog_substitute", "catalog_gearreductionsubstitution",
-    "catalog_part", "catalog_partsubstitute",
+    "catalog_part", "catalog_partimage",
+    "catalog_partsubstitute",
     "catalog_partinterchange", "catalog_partsuperseding",
     "catalog_bom", "catalog_bomitem",
 ]

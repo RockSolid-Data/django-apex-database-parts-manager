@@ -5,7 +5,6 @@ writing to both model fields and specifications JSON (matching how the
 Edit Unit form saves data).
 """
 
-import os
 import re
 import sqlite3
 import time
@@ -225,7 +224,7 @@ class Command(BaseCommand):
         }
 
         self.stdout.write(f"\n{'=' * 60}")
-        self.stdout.write(f"PREVIEW (no changes saved)")
+        self.stdout.write("PREVIEW (no changes saved)")
         self.stdout.write(f"{'=' * 60}")
         self.stdout.write(f"  Total unique YouTech numbers: {len(seen):,}")
         if limit:
@@ -974,7 +973,7 @@ class Command(BaseCommand):
     def _import_applications(self, conn, existing_units, unit_type=""):
         """Import buyers_guide_applications into Application + ApplicationUnit."""
         import gc
-        from django.db import connection as django_conn, reset_queries
+        from django.db import reset_queries
 
         try:
             rows = conn.execute(

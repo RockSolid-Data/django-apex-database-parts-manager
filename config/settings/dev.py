@@ -10,7 +10,7 @@ DEBUG = True
 SECRET_KEY = "django-insecure-dev-only-m4nch3st3r-3l3ctr1c"
 ALLOWED_HOSTS = []
 
-# Allow pointing Django at an alternate SQLite file (e.g. db.sqlite3.staging
+# Allow pointing Django at an alternate SQLite file (e.g. data/staging/db.sqlite3.staging
 # for the PDF 11 staging import) without editing settings.  The env var is
 # resolved against BASE_DIR if it isn't already an absolute path.
 _db_override = os.environ.get("DJANGO_DB_NAME")

@@ -24,7 +24,6 @@ Usage:
     python manage.py import_applications --file "..." --report-only
 """
 
-import os
 import sqlite3
 import time
 from pathlib import Path

@@ -89,7 +89,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         base_dir = Path(settings.BASE_DIR)
         path = options.get("path")
-        db_path = Path(path) if path else base_dir / "LesterCD_Decrypted.db"
+        db_path = Path(path) if path else base_dir / "data" / "external" / "LesterCD_Decrypted.db"
 
         if not db_path.exists():
             self.stdout.write(self.style.ERROR(f"Database not found: {db_path}"))

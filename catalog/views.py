@@ -4,13 +4,10 @@ import json
 import logging
 import re
 
-
 from django.contrib import messages
-
-logger = logging.getLogger(__name__)
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Case, Exists, F, Max, OuterRef, Prefetch, Q, Value, When
+from django.db.models import Case, F, Max, Prefetch, Q, Value, When
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import HttpResponseNotAllowed, JsonResponse
 from django.utils.functional import cached_property
@@ -19,6 +16,8 @@ from django.urls import reverse
 
 from .forms import ApplicationForm, ApplicationSpecificationForm, ApplicationUnitLinkForm, BOMForm, BOMItemForm, CrossReferenceForm, GearReductionForm, PartForm, PartInterchangeForm, PartSubstituteForm, PartSupersedingForm, SubstituteForm, UnitForm
 from .models import Application, ApplicationSpecification, ApplicationType, ApplicationTypeField, ApplicationUnit, BOM, BOMItem, CrossReference, GearReductionSubstitution, Part, PartCategory, PartCategoryField, PartInterchange, PartSubstitute, PartSuperseding, Substitute, Unit, UnitType, UnitTypeCategory, UnitTypeCategoryField
+
+logger = logging.getLogger(__name__)
 
 PART_DEFAULT_FIELDS = [
     ("part_number", "Part Number"),
@@ -815,7 +814,7 @@ def bom_item_edit(request, pk, item_pk):
         if form.is_valid():
             form.save()
             logger.info("[BOM] Updated item in %s", bom.name)
-            messages.success(request, f"BOM item updated.")
+            messages.success(request, "BOM item updated.")
             return redirect("catalog:bom_edit", pk=bom.pk)
     else:
         form = BOMItemForm(instance=item, bom=bom)
@@ -938,9 +937,16 @@ def _get_deep_match_label(part, q_lower: str, ic_map: dict, sup_map: dict) -> st
     return q
 
 
+_PART_LIST_FIELDS = (
+    "pk", "part_number", "yt_number", "j_and_n", "oem_number",
+    "manufacturer_number", "notes", "voltage", "stock_quantity",
+    "category", "is_active",
+)
+
+
 def part_list(request):
     """List parts with search, category filter, Part Number, YT Number, J&N, OEM #, Description, In Stock."""
-    base_qs = Part.objects.filter(is_active=True).annotate(
+    base_qs = Part.objects.filter(is_active=True).only(*_PART_LIST_FIELDS).annotate(
         _sort_yt=NullIf("yt_number", Value("")),
         _sort_pn=NullIf("part_number", Value("")),
     ).order_by(
@@ -963,7 +969,6 @@ def part_list(request):
     # Deep: part name, notes, voltage, linked units, interchange & superseding numbers.
     #   Uses separate PK lookups to avoid expensive multi-table JOINs.
     q = request.GET.get("q", "").strip()
-    match_map: dict[int, str] = {}
 
     deep_search_used = False
 
@@ -1570,8 +1575,6 @@ def part_category_edit(request, pk):
     existing_fields = list(
         cat.fields.order_by("display_order").values("field_name", "field_label")
     )
-    existing_names = {f["field_name"] for f in existing_fields}
-
     # Build merged list: defaults first (locked), then any extra custom fields.
     # If a default was previously saved with a customised label, use that label.
     db_by_name = {f["field_name"]: f for f in existing_fields}

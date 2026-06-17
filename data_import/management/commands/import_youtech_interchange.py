@@ -273,8 +273,6 @@ class Command(BaseCommand):
 
         # --- Step 2: Create CrossReference + PartInterchange records ---
         self.stdout.write("Step 2: Creating interchange records...")
-        t2 = time.time()
-
         total_rows = conn.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]
         cursor = conn.execute(
             f"SELECT manufacturer, their_number, our_number FROM [{table}]"

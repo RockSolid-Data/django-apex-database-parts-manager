@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from typing import List, Tuple
+from typing import List
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction

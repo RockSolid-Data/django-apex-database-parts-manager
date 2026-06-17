@@ -13,10 +13,19 @@ env/
 *.log
 db.sqlite3
 db.sqlite3-journal
+db.sqlite3-shm
+db.sqlite3-wal
 /media/
+
+# Django file-based cache
+.cache/
 
 # External data files
 LesterCD_Decrypted.db
+data/external/
+data/staging/
+data/backups/
+data/output/
 *.secret_key
 .secret_key
 
@@ -25,6 +34,7 @@ LesterCD_Decrypted.db
 
 # IDE
 .idea/
+.vscode/
 *.swp
 *.swo
 
@@ -40,6 +50,7 @@ db_backup_*.sqlite3
 
 # Dev archive (one-off scripts and intermediate data)
 _dev_archive/
+scripts/
 
 # One-off reimport / diagnostic scripts and their output
 reimport_log.txt

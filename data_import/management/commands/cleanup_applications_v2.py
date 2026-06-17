@@ -53,7 +53,6 @@ from typing import Dict, List, Tuple
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import Count
 
 from catalog.models import Application, ApplicationUnit
 

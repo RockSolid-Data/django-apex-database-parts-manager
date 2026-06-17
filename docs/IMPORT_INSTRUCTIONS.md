@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. Place `LesterCD_Decrypted.db` in the project root.
+1. Place `LesterCD_Decrypted.db` in `data/external/`.
 2. **Close any process using db.sqlite3** (e.g. Django `runserver`, SQLite browsers, Cursor DB tools) before running the import. SQLite allows only one writer at a time.
 
 ## Commands

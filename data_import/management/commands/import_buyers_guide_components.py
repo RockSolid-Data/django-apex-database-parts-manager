@@ -162,7 +162,7 @@ class Command(BaseCommand):
         }
 
         self.stdout.write(f"\n{'=' * 60}")
-        self.stdout.write(f"PREVIEW (no changes saved)")
+        self.stdout.write("PREVIEW (no changes saved)")
         self.stdout.write(f"{'=' * 60}")
         self.stdout.write(f"  Total unique YT numbers: {len(seen):,}")
         if limit:
@@ -474,7 +474,6 @@ class Command(BaseCommand):
 
         created = 0
         # Group by component to use bulk through-model creation
-        from django.db import connection as django_conn
         through_model = Part.units.through
         batch = []
 

@@ -21,7 +21,7 @@ Usage:
 import time
 
 from django.core.management.base import BaseCommand
-from django.db import connection, transaction
+from django.db import transaction
 from django.db.models import Q
 
 from catalog.models import CrossReference, Part, PartInterchange, Unit

@@ -61,6 +61,14 @@ else:
 
 MEDIA_ROOT = DATA_DIR / "media"
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": str(DATA_DIR / "cache"),
+        "TIMEOUT": 1800,
+    }
+}
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",

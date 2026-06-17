@@ -25,7 +25,6 @@ Usage:
     python manage.py import_jn_bom --file ... --clear-boms
 """
 
-import os
 import sqlite3
 import time
 from pathlib import Path

@@ -1,7 +1,6 @@
 """
 Lester CD schema constants and field mappings for import.
 """
-from pathlib import Path
 
 # Lester table -> Manchester Electric model mapping
 LESTER_TO_ME = {

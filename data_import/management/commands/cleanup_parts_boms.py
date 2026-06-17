@@ -396,7 +396,6 @@ class Command(BaseCommand):
         # we can skip the full 54k-row iteration entirely.  The Round-3
         # scan confirmed all four patterns are currently empty, but we
         # re-check at runtime in case the DB has changed.
-        precheck_filter = None
         # Build "any field matches any anomaly" filter dynamically.
         from django.db.models import Q
         anomaly_q = Q()
@@ -720,16 +719,9 @@ class Command(BaseCommand):
         self.stdout.flush()
 
         if commit and losers_to_delete:
-            # Note: re-pointing already happened inside the helper.
-            # All that remains is to delete loser Parts whose FKs are
-            # now harmless.  Only delete ids registered in *this* step
-            # to avoid double-deletion if step 3 also marks the same id.
-            this_step_losers = [
-                lid for lid in losers_to_delete
-                if part_renames.get(lid) is not None
-            ]
-            # The deletion happens once per command run in step 3's
-            # tail, so we delegate to a shared helper.
+            # Re-pointing already happened inside the helper.
+            # Deletion happens once per command run in step 3's tail.
+            pass
 
         return {
             "groups": len(merge_clusters),
@@ -888,7 +880,7 @@ class Command(BaseCommand):
             f"  Duplicate BOMItem groups: "
             f"{sum(size_dist.values()):,}"
         )
-        self.stdout.write(f"  Group-size distribution:")
+        self.stdout.write("  Group-size distribution:")
         for n in sorted(size_dist):
             self.stdout.write(
                 f"    n={n}: {size_dist[n]:,} groups  "

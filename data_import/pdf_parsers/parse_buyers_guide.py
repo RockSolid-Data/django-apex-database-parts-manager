@@ -436,7 +436,6 @@ def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
     bom_pending_name = ""
     bom_pending_yt = ""
     bom_pending_jn = ""
-    bom_in_header = False  # True while we're on the BOM/YOUTECH/J&N header row
 
     def flush_bom_pending():
         nonlocal bom_pending_name, bom_pending_yt, bom_pending_jn
@@ -538,7 +537,6 @@ def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
                 current_jn = m.group(2) or ""
                 current_section = ""
                 current_attrs = {}
-                bom_in_header = False
                 notes_pending = False
 
                 # Track J&N numbers for this YouTech number
@@ -561,7 +559,6 @@ def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
                 flush_bom_pending()
                 notes_pending = False
                 current_section = clean
-                bom_in_header = (clean == "BILL OF MATERIALS")
                 continue
 
             if not current_yt:
@@ -615,7 +612,6 @@ def parse_document(doc, limit=None, image_db_conn=None, start_page=0):
                 # part names.
                 if line in ("BOM", "YOUTECH", "J&N"):
                     continue
-                bom_in_header = False
 
                 # Skip page numbers
                 if re.match(r'^Pg\.\s*\d+', line):
@@ -958,7 +954,8 @@ def main():
 
         if chunk_start > 0:
             doc.close()
-            import gc; gc.collect()
+            import gc
+            gc.collect()
             doc = fitz.open(args.pdf_path)
 
         result = parse_document(
@@ -970,7 +967,8 @@ def main():
         del products, interchanges, bom_items, substitutes, image_map, applications, result
 
     doc.close()
-    import gc; gc.collect()
+    import gc
+    gc.collect()
 
     elapsed = time.time() - start_time
 
