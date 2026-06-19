@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 
 from django.conf import settings
-from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
 from catalog.models import (
@@ -25,6 +24,7 @@ from catalog.models import (
     Unit,
 )
 from data_import.import_utils import append_text, normalize_space
+from config.media_utils import write_media_file
 
 
 # Staging DB column -> (model field name, specs JSON key)
@@ -759,7 +759,9 @@ class Command(BaseCommand):
             if ext == "jpeg":
                 ext = "jpg"
             filename = f"{yt}.{ext}"
-            unit.unit_image.save(filename, ContentFile(image_data), save=True)
+            rel_path = write_media_file(f"units/{filename}", image_data)
+            unit.unit_image.name = rel_path
+            unit.save(update_fields=["unit_image"])
             saved += 1
 
             if saved % 200 == 0:

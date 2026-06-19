@@ -66,3 +66,44 @@ Filename: "{app}\{#AppName}.exe"; Description: "Launch {#AppDisplayName}"; Flags
 Filename: "taskkill"; Parameters: "/F /IM {#AppName}.exe"; Flags: runhidden; RunOnceId: "KillApp"
 Filename: "taskkill"; Parameters: "/F /IM {#AppName}_Debug.exe"; Flags: runhidden; RunOnceId: "KillDebug"
 
+[Code]
+function InitializeSetup(): Boolean;
+var
+  MarkerPath, MarkerContent, ExistingName: String;
+  MarkerAnsi: AnsiString;
+  NameStart, NameEnd: Integer;
+begin
+  Result := True;
+  MarkerPath := ExpandConstant('{localappdata}\{#AppName}\.app_identity');
+  if FileExists(MarkerPath) then
+  begin
+    if LoadStringFromFile(MarkerPath, MarkerAnsi) then
+    begin
+      MarkerContent := String(MarkerAnsi);
+      // Extract app_name from JSON (simple parse)
+      NameStart := Pos('"app_name"', MarkerContent);
+      if NameStart > 0 then
+      begin
+        NameStart := Pos(':', Copy(MarkerContent, NameStart, Length(MarkerContent))) + NameStart;
+        NameStart := Pos('"', Copy(MarkerContent, NameStart, Length(MarkerContent))) + NameStart;
+        NameEnd := Pos('"', Copy(MarkerContent, NameStart, Length(MarkerContent))) + NameStart - 1;
+        ExistingName := Copy(MarkerContent, NameStart, NameEnd - NameStart);
+        if (ExistingName <> '') and (ExistingName <> '{#AppName}') then
+        begin
+          if MsgBox('The install directory already belongs to "' + ExistingName + '".' + #13#10 +
+                    'Installing {#AppDisplayName} here will overwrite it.' + #13#10#13#10 +
+                    'Continue anyway?', mbConfirmation, MB_YESNO) = IDNO then
+            Result := False;
+        end;
+      end;
+    end;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    SaveStringToFile(ExpandConstant('{app}\.app_identity'),
+      '{"app_name": "{#AppName}", "display_name": "{#AppDisplayName}"}', False);
+end;
+

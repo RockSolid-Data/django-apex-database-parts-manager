@@ -226,6 +226,25 @@ class Command(BaseCommand):
         insert_columns = sorted(c for c in common_columns if c not in SKIP_COLUMNS)
         col_list = ", ".join(f"[{c}]" for c in insert_columns)
 
+        # --- Phase 0: BACKFILL seed_id on existing records ---
+        # Records from a pre-seed_id install have seed_id=NULL but their id
+        # matches a seed_id in the seed (because export_seed_data sets
+        # seed_id=id). Without this backfill the INSERT phase would re-insert
+        # every record from the seed, creating duplicates.
+        if "seed_id" in common_columns and not dry_run:
+            backfill_sql = (
+                f"UPDATE main.[{db_table}] SET seed_id = id "
+                f"WHERE seed_id IS NULL "
+                f"AND id IN (SELECT s.seed_id FROM seed.[{db_table}] s "
+                f"           WHERE s.seed_id IS NOT NULL)"
+            )
+            cursor.execute(backfill_sql)
+            backfilled = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
+            if backfilled:
+                self.stdout.write(
+                    f"  {model_name}: backfilled seed_id on {backfilled:,} existing records"
+                )
+
         # --- Phase 1: INSERT new records ---
         cursor.execute(
             f"SELECT COUNT(*) FROM seed.[{db_table}] s "

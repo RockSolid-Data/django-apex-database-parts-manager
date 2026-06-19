@@ -21,7 +21,6 @@ import time
 from pathlib import Path
 
 from django.conf import settings
-from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
 from catalog.models import (
@@ -34,6 +33,7 @@ from catalog.models import (
     UnitType,
 )
 from data_import.import_utils import normalize_space
+from config.media_utils import write_media_file
 
 
 # ---------------------------------------------------------------------------
@@ -276,11 +276,9 @@ class Command(BaseCommand):
                 continue  # already has an image
             ext = row["image_ext"] or "jpeg"
             filename = f"{yt}.{ext}"
-            unit.unit_image.save(
-                filename,
-                ContentFile(bytes(row["image_data"])),
-                save=True,
-            )
+            rel_path = write_media_file(f"units/{filename}", bytes(row["image_data"]))
+            unit.unit_image.name = rel_path
+            unit.save(update_fields=["unit_image"])
             imgs_saved += 1
         self.stdout.write(f"     saved: {imgs_saved:,}")
 

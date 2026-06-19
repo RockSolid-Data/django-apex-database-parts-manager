@@ -30,7 +30,7 @@ build_installer.bat clean       # remove build artifacts
 **Prerequisites:** [Inno Setup 6](https://jrsoftware.org/isinfo.php) must be installed.
 
 The installer is output to `dist\`. It installs per-user to
-`%LOCALAPPDATA%\ManchesterElectric` with desktop and Start Menu shortcuts.
+`%LOCALAPPDATA%\ApexDatabase` with desktop and Start Menu shortcuts.
 
 ## Database & Upgrade Strategy
 

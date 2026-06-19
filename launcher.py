@@ -3,6 +3,7 @@ Apex Database - Desktop App Launcher
 Entry point for the frozen application.
 """
 
+import json
 import os
 import signal
 import sys
@@ -40,7 +41,13 @@ def get_app_exe_name():
         if name.endswith('_Debug'):
             name = name[:-6]
         return name
-    return "ApexDatabase"
+    identity_file = Path(__file__).parent / ".app_identity"
+    if identity_file.exists():
+        try:
+            return json.loads(identity_file.read_text(encoding="utf-8"))["app_name"]
+        except Exception:
+            pass
+    return Path(__file__).parent.name
 
 
 def get_app_dir():
@@ -185,7 +192,29 @@ def ensure_database():
 
 MEDIA_ZIP_NAME = "ApexDatabase_Media.zip"
 MEDIA_VERSION_FILE = ".media_version"
+MEDIA_STATUS_FILE = ".media_status.json"
 MEDIA_MIN_FILES = 10
+
+
+def _write_media_status(extracting=True, current=0, total=0, message=""):
+    """Write media extraction progress to a JSON file for the Django status endpoint."""
+    try:
+        status_path = get_data_dir() / MEDIA_STATUS_FILE
+        payload = json.dumps({
+            "extracting": extracting,
+            "current": current,
+            "total": total,
+            "message": message,
+        })
+        tmp = status_path.with_suffix(".tmp")
+        tmp.write_text(payload, encoding="utf-8")
+        tmp.replace(status_path)
+    except Exception:
+        pass
+
+
+def _clear_media_status():
+    _write_media_status(extracting=False)
 
 
 def _count_files(directory):
@@ -304,11 +333,13 @@ def ensure_media():
         with zipfile.ZipFile(zip_path, "r") as zf:
             members = zf.namelist()
             total = len(members)
+            _write_media_status(True, 0, total, "Extracting media files\u2026")
             for i, member in enumerate(members, 1):
                 zf.extract(member, data_dir)
                 if i % 500 == 0 or i == total:
                     pct = i * 100 // total
                     print(f"  Extracting... {i:,}/{total:,} ({pct}%)")
+                    _write_media_status(True, i, total, "Extracting media files\u2026")
 
         print(f"  Media extraction complete ({total:,} files).")
     except Exception as e:
@@ -333,13 +364,16 @@ def _incremental_media_sync(zip_path, data_dir, media_dir):
             if not missing:
                 print("  Media is up to date (no new files).")
             else:
-                print(f"  Adding {len(missing):,} new media files...")
+                total_missing = len(missing)
+                print(f"  Adding {total_missing:,} new media files...")
+                _write_media_status(True, 0, total_missing, "Syncing new media files\u2026")
                 for i, member in enumerate(missing, 1):
                     zf.extract(member, data_dir)
-                    if i % 200 == 0 or i == len(missing):
-                        pct = i * 100 // len(missing)
-                        print(f"  Syncing... {i:,}/{len(missing):,} ({pct}%)")
-                print(f"  Media sync complete ({len(missing):,} new files added).")
+                    if i % 200 == 0 or i == total_missing:
+                        pct = i * 100 // total_missing
+                        print(f"  Syncing... {i:,}/{total_missing:,} ({pct}%)")
+                        _write_media_status(True, i, total_missing, "Syncing new media files\u2026")
+                print(f"  Media sync complete ({total_missing:,} new files added).")
 
         # Update the installed version marker
         bundled_version = _get_bundled_media_version()
@@ -695,10 +729,14 @@ def main():
     if install_type == "upgrade":
         sync_catalog_data()
 
-    # Fix 2: Extract media in background — doesn't touch the DB, images appear
-    # progressively while the server is already usable
+    def _media_extract_with_status():
+        try:
+            ensure_media()
+        finally:
+            _clear_media_status()
+
     media_thread = threading.Thread(
-        target=ensure_media, daemon=True, name="media-extract"
+        target=_media_extract_with_status, daemon=True, name="media-extract"
     )
     media_thread.start()
 

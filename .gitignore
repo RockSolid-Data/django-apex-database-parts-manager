@@ -41,7 +41,9 @@ data/output/
 # Build artifacts
 build/
 dist/
+Output/
 *.msi
+# Do NOT ignore .upgrade_code, .app_identity, or VERSION
 
 # Database backups
 *.backup

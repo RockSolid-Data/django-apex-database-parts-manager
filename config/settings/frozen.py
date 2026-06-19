@@ -25,8 +25,9 @@ else:
     _INSTALL_DIR = BASE_DIR  # noqa: F405
 
 _LOCALAPPDATA = os.environ.get("LOCALAPPDATA", "")
+_APP_NAME = os.environ.get("APP_NAME", "ApexDatabase")
 if _LOCALAPPDATA:
-    DATA_DIR = Path(_LOCALAPPDATA) / "ApexDatabase"
+    DATA_DIR = Path(_LOCALAPPDATA) / _APP_NAME
 else:
     DATA_DIR = _INSTALL_DIR / "data"
 

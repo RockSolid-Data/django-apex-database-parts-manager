@@ -2,10 +2,13 @@
 cx_Freeze setup -- builds standalone .exe (freeze only).
 Inno Setup handles the installer (installer.iss).
 """
+import shutil
 import sys
 import uuid
 from pathlib import Path
-from cx_Freeze import setup, Executable
+
+from cx_Freeze import Executable, setup
+from cx_Freeze.command.build_exe import build_exe as _build_exe
 
 # =========================================================================
 # PROJECT CONFIG
@@ -128,8 +131,33 @@ INCLUDES = ["email._header_value_parser"]
 # charset_normalizer uses mypyc-compiled extensions that reference a top-level
 # runtime module with a hash-based name. cx_Freeze can't auto-detect it.
 import glob as _glob
-for _pyd in _glob.glob(str(BASE_DIR / "venv/Lib/site-packages/*__mypyc*.pyd")):
-    INCLUDE_FILES.append((_pyd, f"lib/{Path(_pyd).name}"))
+
+for _site_packages in (BASE_DIR / "venv", BASE_DIR / ".venv"):
+    for _pyd in _glob.glob(str(_site_packages / "Lib/site-packages/*__mypyc*.pyd")):
+        INCLUDE_FILES.append((_pyd, f"lib/{Path(_pyd).name}"))
+
+# zip_exclude_packages copies entire Django app trees into lib/, including dev-only
+# import staging databases. These must never ship to end users.
+FREEZE_EXCLUDE_BUILD_PATHS = [
+    Path("lib") / "data_import" / "staging_dbs",
+]
+
+
+def prune_dev_assets(build_exe_dir: Path) -> None:
+    for rel_path in FREEZE_EXCLUDE_BUILD_PATHS:
+        target = build_exe_dir / rel_path
+        if target.exists():
+            shutil.rmtree(target)
+            print(f"Removed dev-only assets: {rel_path}")
+
+
+class build_exe(_build_exe):
+    """Prune dev-only package data after cx_Freeze copies zip_exclude_packages."""
+
+    def run(self):
+        super().run()
+        prune_dev_assets(Path(self.build_exe))
+
 
 BUILD_OPTIONS = {
     "packages": PACKAGES,
@@ -159,4 +187,5 @@ setup(
     description=APP_DESCRIPTION, author=APP_AUTHOR,
     options={"build_exe": BUILD_OPTIONS},
     executables=executables,
+    cmdclass={"build_exe": build_exe},
 )

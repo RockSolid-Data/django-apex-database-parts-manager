@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 
 from django.conf import settings
-from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
 from catalog.models import (
@@ -19,6 +18,7 @@ from catalog.models import (
     Unit,
 )
 from data_import.import_utils import normalize_space
+from config.media_utils import write_media_file
 
 
 ATTR_FIELD_MAP = {
@@ -537,7 +537,9 @@ class Command(BaseCommand):
             if ext == "jpeg":
                 ext = "jpg"
             filename = f"{yt}.{ext}"
-            part.image.save(filename, ContentFile(image_data), save=True)
+            rel_path = write_media_file(f"parts/{filename}", image_data)
+            part.image.name = rel_path
+            part.save(update_fields=["image"])
             saved += 1
 
             if saved % 200 == 0:

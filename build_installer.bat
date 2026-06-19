@@ -60,22 +60,29 @@ exit /b 0
 :freeze
 call :check_prereqs
 if errorlevel 1 exit /b 1
-echo [1/3] Exporting seed data...
+echo [0/4] Checking app identity registry...
+%PYTHON% register_app.py
+if errorlevel 1 exit /b 1
+echo [1/4] Exporting seed data...
 %PYTHON% manage.py export_seed_data
 if errorlevel 1 (echo [WARNING] Seed export failed -- building without seed data)
-echo [2/3] Collecting static files...
+echo [2/4] Collecting static files...
 %PYTHON% manage.py collectstatic --noinput
 echo [3/4] Freezing application...
 if exist "%BUILD_DIR%" rmdir /s /q "%BUILD_DIR%" 2>nul
-:: Move staging_dbs out so cx_Freeze doesn't copy 14 GB of dev-only import sources
+:: Move staging_dbs out so cx_Freeze doesn't copy ~10 GB of dev-only import sources
+if exist "_staging_dbs_tmp" rmdir /s /q "_staging_dbs_tmp" 2>nul
+set "STAGING_MOVED=0"
 if exist "data_import\staging_dbs" (
+    echo       Temporarily moving dev-only staging_dbs out of package tree...
     move "data_import\staging_dbs" "_staging_dbs_tmp" >nul
+    if not errorlevel 1 set "STAGING_MOVED=1"
 )
 %PYTHON% setup_cx_freeze.py build
 set FREEZE_ERR=%errorlevel%
 :: Restore staging_dbs regardless of freeze outcome
-if exist "_staging_dbs_tmp" (
-    move "_staging_dbs_tmp" "data_import\staging_dbs" >nul
+if "%STAGING_MOVED%"=="1" (
+    if exist "_staging_dbs_tmp" move "_staging_dbs_tmp" "data_import\staging_dbs" >nul
 )
 if %FREEZE_ERR% neq 0 (echo [ERROR] Build failed! & exit /b 1)
 if not exist "%BUILD_DIR%\%APP_NAME%.exe" (echo [ERROR] Output not found! & exit /b 1)
