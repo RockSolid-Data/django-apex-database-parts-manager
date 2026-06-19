@@ -48,6 +48,9 @@ dist/
 *_backup*.sqlite3
 db_backup_*.sqlite3
 
+# Staging database snapshots and scraped images
+_staging_dbs_tmp/
+
 # Dev archive (one-off scripts and intermediate data)
 _dev_archive/
 scripts/

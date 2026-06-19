@@ -1,4 +1,51 @@
-﻿seed.sqlite3
-db.sqlite3
-db.sqlite3-*
-.git/lfs/
+﻿# Large binary / generated dirs that blow up Cursor indexing and file watching
+.git/
+.cursor/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Uploaded/scraped media (78K+ images)
+media/
+
+# Staging DB snapshots and scraped catalog images (8.5K+ files)
+_staging_dbs_tmp/
+
+# Django collected static
+staticfiles/
+
+# Build artifacts
+build/
+dist/
+*.msi
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Django file-based cache
+.cache/
+
+# Data files
+data/external/
+data/staging/
+data/backups/
+data/output/
+
+# Dev archive
+_dev_archive/
+
+# Databases
+*.sqlite3
+*.db
+*.bak
+*.backup
+
+# Logs
+*.log
