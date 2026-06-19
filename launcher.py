@@ -675,11 +675,11 @@ def main():
         port = find_available_port(port + 1)
         print(f"Using fallback port {port}.")
 
-    install_type = ensure_database()
-    ensure_media()
-
-    # Open loading page in the browser right away (polls until server is up)
+    # Fix 1: Open loading page IMMEDIATELY so the user sees feedback instantly
     open_loading_page(port)
+
+    # ensure_database() is synchronous — fast file copy, needed before Django starts
+    install_type = ensure_database()
 
     print("Setting up Django...")
     setup_django()
@@ -695,11 +695,23 @@ def main():
     if install_type == "upgrade":
         sync_catalog_data()
 
-    # --- Backup layer 1: startup backup ---
-    print("Checking auto-backup...")
-    auto_backup(reason="startup")
+    # Fix 2: Extract media in background — doesn't touch the DB, images appear
+    # progressively while the server is already usable
+    media_thread = threading.Thread(
+        target=ensure_media, daemon=True, name="media-extract"
+    )
+    media_thread.start()
 
-    # --- Backup layer 2: periodic background backups ---
+    # Fix 3: Delay startup backup by 30s so it doesn't block early requests
+    def _delayed_startup_backup():
+        time.sleep(30)
+        auto_backup(reason="startup")
+
+    threading.Thread(
+        target=_delayed_startup_backup, daemon=True, name="delayed-backup"
+    ).start()
+
+    # Periodic background backups (layer 2)
     start_periodic_backup_thread()
 
     # Register signal handlers for graceful shutdown with final backup
@@ -715,7 +727,6 @@ def main():
     try:
         run_server(port=port)
     except KeyboardInterrupt:
-        # --- Backup layer 3: shutdown backup ---
         print("\nShutting down (running final backup)...")
         shutdown_backup()
         print("Goodbye.")

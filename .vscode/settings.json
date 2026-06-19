@@ -1,4 +1,4 @@
-{
+﻿{
   "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
   "python.terminal.activateEnvironment": true,
   "python.terminal.activateEnvInCurrentTerminal": true,
@@ -13,5 +13,17 @@
     }
   },
   "terminal.integrated.defaultProfile.windows": "PowerShell (venv)",
-  "python-envs.pythonProjects": []
+  "python-envs.pythonProjects": [],
+  "files.watcherExclude": {
+    "**/seed.sqlite3": true,
+    "**/db.sqlite3": true,
+    "**/db.sqlite3-*": true,
+    "**/.git/lfs/**": true,
+    "**/.git/objects/**": true
+  },
+  "search.exclude": {
+    "**/seed.sqlite3": true,
+    "**/db.sqlite3": true
+  },
+  "git.autofetch": false
 }

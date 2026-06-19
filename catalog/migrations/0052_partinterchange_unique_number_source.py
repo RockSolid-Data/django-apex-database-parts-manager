@@ -3,6 +3,31 @@
 from django.db import migrations, models
 
 
+def deduplicate_partinterchange(apps, schema_editor):
+    """Remove duplicate (part_id, interchange_number, source_name) rows,
+    keeping the one with the lowest id, so the unique constraint can be added
+    safely on databases that predate this migration."""
+    if schema_editor.connection.vendor != 'sqlite':
+        # PostgreSQL / MySQL can use window functions; SQLite needs subquery
+        schema_editor.execute("""
+            DELETE FROM catalog_partinterchange
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM catalog_partinterchange
+                GROUP BY part_id, interchange_number, source_name
+            )
+        """)
+    else:
+        schema_editor.execute("""
+            DELETE FROM catalog_partinterchange
+            WHERE rowid NOT IN (
+                SELECT MIN(rowid)
+                FROM catalog_partinterchange
+                GROUP BY part_id, interchange_number, source_name
+            )
+        """)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,6 +35,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(
+            deduplicate_partinterchange,
+            migrations.RunPython.noop,
+        ),
         migrations.AddConstraint(
             model_name='partinterchange',
             constraint=models.UniqueConstraint(fields=('part', 'interchange_number', 'source_name'), name='unique_part_xref_number_source'),
