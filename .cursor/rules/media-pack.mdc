@@ -1,4 +1,4 @@
----
+﻿---
 description: Rebuild media pack when part images change
 alwaysApply: true
 ---
@@ -15,13 +15,47 @@ When new part images are imported or uploaded to the `media/` folder, the media 
 
 ## How the media pack works
 
-- `launcher.py` → `ensure_media()` checks if `%LOCALAPPDATA%\ApexDatabase\media\` has files
-- If empty (fresh install): searches for `ApexDatabase_Media.zip` on USB drives (D:–Z:) and the install directory
+- `launcher.py`  `ensure_media()` checks if `%LOCALAPPDATA%\ApexDatabase\media\` has files
+- If empty (fresh install): searches for `ApexDatabase_Media.zip` on USB drives (D:-Z:) and the install directory
 - If found: extracts all images automatically on first launch
-- If already populated (update): skips entirely — existing images are preserved
+- If already populated (update): skips entirely - existing images are preserved
 
 ## Key files
 
-- `build_media_pack.bat` / `build_media_pack.py` — builds the zip
-- `launcher.py` — `ensure_media()` handles detection and extraction
-- `data_import/management/commands/export_seed_data.py` — `catalog_partimage` is included in the seed so image metadata ships with the database
+- `build_media_pack.bat` / `build_media_pack.py` - builds the zip
+- `launcher.py` - `ensure_media()` handles detection and extraction
+- `data_import/management/commands/export_seed_data.py` - `catalog_partimage` is included in the seed so image metadata ships with the database
+
+## Pre-converting JPEGs to PNG for the Qt (ChoreBoy) edition
+
+The Qt edition of Apex Database that runs on the Linux box "ChoreBoy" has a broken Qt JPEG plugin and can only render PNGs. To ship a single `ApexDatabase_Media.zip` that works for BOTH the Windows Django app and the Qt edition, the build can pre-convert JPEGs to PNG before zipping. This is opt-in - default behaviour is unchanged.
+
+### How to opt in
+
+Pass `--preconvert` to `build_media_pack.bat`, or set the `MEDIA_PRECONVERT` env var before invoking it:
+
+```powershell
+build_media_pack.bat --preconvert siblings
+# or
+$env:MEDIA_PRECONVERT = "siblings"; build_media_pack.bat
+```
+
+The flag is forwarded to `tools/preconvert_media.py`, which can also be invoked directly:
+
+```powershell
+.\venv\Scripts\python.exe -u tools\preconvert_media.py --source media --mode siblings
+.\venv\Scripts\python.exe -u tools\preconvert_media.py --source media --mode replace
+.\venv\Scripts\python.exe -u tools\preconvert_media.py --source media --mode export-only --dest dist\media_png
+```
+
+### Option A vs Option B
+
+- **`siblings`** (Option A, **safe and recommended**) - writes a `.png` next to every `.jpg`/`.jpeg` in `media/`. Originals are kept, so every existing Django `ImageField` row still points at a file that exists. The zip is larger but the Windows install keeps working with no other changes. The Qt-side resolver picks up the `.png` sibling automatically.
+- **`replace`** (Option B, **needs an audit first**) - writes the `.png` and deletes the original JPEG. Smaller / faster zip, but every Django consumer that opens files by the DB-stored path (which still says `.jpg`/`.jpeg`) will 404 unless a resolver is added or a DB migration rewrites `catalog_part.image`, `catalog_partimage.image`, `catalog_unit.unit_image`, `catalog_unit.plug_image`, `catalog_unitimage.image`. Do not use without re-running the consumer audit.
+- **`export-only`** - copies the tree into a separate `--dest` and never mutates `media/`. Useful when you want to build a Qt-targeted zip without touching the live folder.
+
+### Key files
+
+- `tools/preconvert_media.py` - the standalone converter (uses Pillow, already in `requirements.txt` and `setup_cx_freeze.py` PACKAGES)
+- `build_media_pack.py` - exposes the `--preconvert {none,siblings,replace}` flag and forwards to the converter
+- `build_media_pack.bat` - forwards extra args (`%*`) to `build_media_pack.py`
