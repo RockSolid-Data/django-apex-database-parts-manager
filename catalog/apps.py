@@ -87,10 +87,23 @@ class CatalogConfig(AppConfig):
 
 
 def _delete_image_file(sender, instance, **kwargs):
-    """Remove the physical image file when a PartImage/UnitImage row is deleted."""
+    """Remove the physical image file (and its PNG sibling) when a PartImage/UnitImage row is deleted."""
     img = getattr(instance, "image", None)
     if img and img.name:
+        storage = img.storage
         try:
-            img.storage.delete(img.name)
+            storage.delete(img.name)
         except Exception:
             pass
+
+        # Remove the .png sibling if the storage class didn't already handle it
+        import os
+        ext = os.path.splitext(img.name)[1].lower()
+        if ext in {".jpg", ".jpeg"}:
+            stem, _ = os.path.splitext(img.name)
+            png_name = stem + ".png"
+            try:
+                if storage.exists(png_name):
+                    storage.delete(png_name)
+            except Exception:
+                pass

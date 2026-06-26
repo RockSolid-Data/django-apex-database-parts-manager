@@ -30,6 +30,14 @@ When new part images are imported or uploaded to the `media/` folder, the media 
 
 The Qt edition of Apex Database that runs on the Linux box "ChoreBoy" has a broken Qt JPEG plugin and can only render PNGs. To ship a single `ApexDatabase_Media.zip` that works for BOTH the Windows Django app and the Qt edition, the build can pre-convert JPEGs to PNG before zipping. This is opt-in - default behaviour is unchanged.
 
+### Automatic PNG siblings on new uploads/imports
+
+New uploads and imports now automatically create a `.png` sibling via the custom storage class `config.storage.PngSiblingStorage` (wired as `STORAGES["default"]` in both dev and frozen settings). This means:
+
+- Any JPEG saved through Django's file handling (admin uploads, management command imports, etc.) gets a PNG sibling immediately on disk.
+- The `preconvert_media.py` script is only needed for the **initial bulk conversion** of existing media that predates this storage class.
+- Deleting a PartImage/UnitImage also removes the PNG sibling (handled by the `post_delete` signal in `catalog/apps.py` and the storage's `delete()` override).
+
 ### How to opt in
 
 Pass `--preconvert` to `build_media_pack.bat`, or set the `MEDIA_PRECONVERT` env var before invoking it:
