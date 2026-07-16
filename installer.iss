@@ -21,6 +21,9 @@
 #ifndef BuildDir
   #define BuildDir "build\" + AppName
 #endif
+#ifndef MediaPackName
+  #define MediaPackName "ApexDatabase_Media.zip"
+#endif
 
 [Setup]
 AppId={{{#UpgradeCode}}
@@ -52,6 +55,11 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Media pack: copied from the folder the installer runs from (e.g. the USB drive)
+; into the data dir. Images are served on demand straight from this zip -- it is
+; NOT extracted -- so the app is fully ready on first launch. Skipped gracefully
+; when the pack isn't found next to the installer (see MediaPackAvailable).
+Source: "{src}\{#MediaPackName}"; DestDir: "{localappdata}\{#AppName}"; Flags: external ignoreversion; Check: MediaPackAvailable
 
 [Icons]
 Name: "{group}\{#AppDisplayName}"; Filename: "{app}\{#AppName}.exe"; Comment: "{#AppDescription}"
@@ -67,6 +75,12 @@ Filename: "taskkill"; Parameters: "/F /IM {#AppName}.exe"; Flags: runhidden; Run
 Filename: "taskkill"; Parameters: "/F /IM {#AppName}_Debug.exe"; Flags: runhidden; RunOnceId: "KillDebug"
 
 [Code]
+function MediaPackAvailable(): Boolean;
+begin
+  // Only copy the media pack if it sits next to the installer (e.g. on the USB).
+  Result := FileExists(ExpandConstant('{src}\{#MediaPackName}'));
+end;
+
 function InitializeSetup(): Boolean;
 var
   MarkerPath, MarkerContent, ExistingName: String;

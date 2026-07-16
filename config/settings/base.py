@@ -85,6 +85,10 @@ X_FRAME_OPTIONS = "SAMEORIGIN"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Optional media pack zip served on demand by config.media_utils.serve_media.
+# None in dev (images live under MEDIA_ROOT on disk); set in frozen settings.
+MEDIA_PACK_ZIP = None
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 STORAGES = {

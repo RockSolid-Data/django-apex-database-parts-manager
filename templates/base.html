@@ -195,11 +195,8 @@
         var placeholder = 'Select\u2026';
         var currentValue = el.value;
         var firstOpt = el.querySelector('option[value=""]');
-        if (firstOpt) {
-          if (firstOpt.textContent.trim()) {
-            placeholder = firstOpt.textContent.trim();
-          }
-          firstOpt.remove();
+        if (firstOpt && firstOpt.textContent.trim()) {
+          placeholder = firstOpt.textContent.trim();
         }
 
         var items = currentValue ? [currentValue] : [];

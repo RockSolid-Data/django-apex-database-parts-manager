@@ -290,8 +290,8 @@ class Command(BaseCommand):
             if not part.catalog:
                 part.catalog = CATALOG_NAME[:100]
                 changed = True
-            if not part.description and row["description"]:
-                part.description = row["description"][:2000]
+            if not part.notes and row["description"]:
+                part.notes = row["description"][:2000]
                 changed = True
 
             staged_specs = parse_specs(row["specifications_json"])

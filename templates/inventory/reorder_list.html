@@ -30,7 +30,7 @@
           <label class="form-label small mb-0">Search</label>
           <div class="search-input-wrapper js-search-with-clear">
             <input type="text" name="q" class="form-control form-control-sm"
-                   placeholder="Key, J&N, OEM #, description..." value="{{ q }}">
+                   placeholder="Key, J&N, OEM #, name..." value="{{ q }}">
             <button type="button" class="search-clear-btn" aria-label="Clear search"><i class="bi bi-x"></i></button>
           </div>
         </div>
@@ -96,7 +96,7 @@
         <td>{{ part.yt_number|default:"—" }}</td>
         <td>{{ part.j_and_n|first_jn|default:"—" }}</td>
         <td>{{ part.oem_number|default:"—" }}</td>
-        <td>{{ part.description|truncatewords:12|default:part.part_name|default:"—" }}</td>
+        <td>{{ part.notes|truncatewords:12|default:part.part_name|default:"—" }}</td>
         <td>{{ part.primary_vendor|default:"—" }}</td>
         <td class="text-center {% if part.stock_quantity <= 0 %}text-danger fw-bold{% endif %}">{{ part.stock_quantity }}</td>
         <td class="text-center">{{ part.reorder_qty }}</td>

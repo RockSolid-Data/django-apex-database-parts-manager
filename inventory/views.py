@@ -30,7 +30,7 @@ def inventory_item_create(request):
                 part_number=data["part_number"].strip(),
                 defaults={
                     "part_name": data["item_name"].strip(),
-                    "description": data["description"].strip() or "",
+                    "notes": data["description"].strip() or "",
                     "primary_vendor": supplier_name,
                     "cost_price": cost,
                     "price": round(sale_price, 2),
@@ -53,14 +53,13 @@ def inventory_list(request):
     """Inventory management list: parts with cost, margin, sale price, quantity, total value."""
     parts = Part.objects.select_related("unit").filter(is_active=True, track_inventory=True).order_by("part_number")
 
-    # --- Text search (name, part number, description) ---
+    # --- Text search (name, part number, YT number) ---
     q = request.GET.get("q", "").strip()
     if q:
         parts = parts.filter(
             Q(part_name__icontains=q)
             | Q(part_number__icontains=q)
             | Q(yt_number__icontains=q)
-            | Q(description__icontains=q)
         )
 
     # --- Supplier filter ---
@@ -108,14 +107,13 @@ def reorder_list(request):
         .filter(stock_quantity__lte=F("reorder_qty"))
     )
 
-    # --- Text search (key, J&N, OEM #, description) ---
+    # --- Text search (key, J&N, OEM #, name) ---
     q = request.GET.get("q", "").strip()
     if q:
         parts = parts.filter(
             Q(manufacturer_number__icontains=q)
             | Q(j_and_n__icontains=q)
             | Q(oem_number__icontains=q)
-            | Q(description__icontains=q)
             | Q(part_name__icontains=q)
         )
 

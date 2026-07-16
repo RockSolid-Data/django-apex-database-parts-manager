@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.4 — Instant, Reliable Part Images (2026-07-16)
+
+### Fixed
+- **Broken image links:** part images no longer show a broken link instead
+  of the picture. This happened two ways: right after install (images were
+  requested faster than the 7.5 GB pack could unpack in the background) and
+  later on (if the app was closed mid-unpack, truncated image files were left
+  on disk and never repaired). Both root causes are gone.
+
+### Changed
+- **Images served on demand from the media pack:** instead of extracting
+  35,000+ files to disk on first launch, the app now reads each image
+  straight out of `ApexDatabase_Media.zip` when a page needs it. There is no
+  extraction wait — every image is available immediately after install.
+- **Installer copies the media pack automatically:** the installer copies
+  `ApexDatabase_Media.zip` from the folder it runs from (e.g. the USB drive)
+  into the app's data folder, so users never handle it manually.
+- **User uploads still win:** images added or uploaded inside the app are
+  served from disk first, then the pack is used as the fallback.
+
 ## v1.2.1 — Search & Data Cleanup (2026-05-14)
 
 ### Improved

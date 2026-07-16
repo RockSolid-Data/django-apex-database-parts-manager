@@ -62,6 +62,10 @@ else:
 
 MEDIA_ROOT = DATA_DIR / "media"
 
+# Part images are served on demand straight out of this zip (copied into the
+# data dir by the installer). No extraction to disk -- see config.media_utils.
+MEDIA_PACK_ZIP = DATA_DIR / "ApexDatabase_Media.zip"
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",

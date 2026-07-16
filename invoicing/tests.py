@@ -126,6 +126,13 @@ class SettingsViewTest(TestCase):
             "default_net_terms": NetTerms.NET_10,
             "default_net_days": "30",
             "default_tax_rate": "8.5",
+            "pricing_method": CompanySettings.PRICING_MARKUP,
+            "invoice_number_prefix": "INV-",
+            "invoice_number_padding": "4",
+            "invoice_paper_size": CompanySettings.PAPER_LETTER,
+            "invoice_layout_style": CompanySettings.LAYOUT_STANDARD,
+            "invoice_date_format": CompanySettings.DATE_FMT_FULL,
+            "invoice_currency_symbol": "$",
         })
         self.assertRedirects(resp, reverse("invoicing:settings"))
         s = CompanySettings.get()
@@ -345,7 +352,7 @@ class InvoiceListViewTest(TestCase):
         self.assertContains(resp, "Suppliers")
 
     def test_invoice_list_shows_invoices(self):
-        """Invoices appear in table with View and Edit actions."""
+        """Invoices appear in the table; each row links to the invoice detail page."""
         inv = Invoice.objects.create(
             invoice_number="INV-001",
             customer=self.customer,
@@ -354,8 +361,8 @@ class InvoiceListViewTest(TestCase):
         resp = self.client.get(reverse("invoicing:invoice_list"))
         self.assertContains(resp, "INV-001")
         self.assertContains(resp, "Test Customer")
-        self.assertContains(resp, "View")
-        self.assertContains(resp, "Edit")
+        # Rows are clickable (data-href) rather than showing separate View/Edit links.
+        self.assertContains(resp, reverse("invoicing:invoice_detail", kwargs={"pk": inv.pk}))
 
     def test_invoice_list_search(self):
         """Search filters by invoice number and customer."""
@@ -376,17 +383,16 @@ class InvoiceListViewTest(TestCase):
         resp = self.client.get(reverse("invoicing:invoice_list"), {"q": "Test Customer"})
         self.assertContains(resp, "INV-AAA")
 
-    def test_invoice_list_has_quick_print_link(self):
-        """Invoice list includes Quick Print link to print view (bypasses detail)."""
-        inv = Invoice.objects.create(
+    def test_invoice_list_has_bulk_print(self):
+        """Invoice list offers bulk printing of selected invoices."""
+        Invoice.objects.create(
             invoice_number="INV-PRINT",
             customer=self.customer,
             date="2026-02-11",
         )
-        print_url = reverse("invoicing:invoice_print", kwargs={"pk": inv.pk})
         resp = self.client.get(reverse("invoicing:invoice_list"))
-        self.assertContains(resp, print_url)
-        self.assertContains(resp, "Print")
+        self.assertContains(resp, "Print Selected")
+        self.assertContains(resp, reverse("invoicing:invoice_bulk_print"))
 
     def test_invoice_list_has_print_report_button(self):
         """Invoice list includes Print Report button."""
@@ -556,6 +562,7 @@ class InvoiceCreateViewTest(TestCase):
             "items-0-description": "Test item",
             "items-0-quantity": "2",
             "items-0-unit_price": "25.00",
+            "items-0-discount_pct": "0",
             "items-0-DELETE": "",
         })
         inv = Invoice.objects.first()
@@ -620,6 +627,7 @@ class InvoiceEditViewTest(TestCase):
                 "items-0-description": "Updated item",
                 "items-0-quantity": "3",
                 "items-0-unit_price": "25.00",
+                "items-0-discount_pct": "0",
                 "items-0-DELETE": "",
             },
         )
@@ -647,6 +655,10 @@ class InvoiceEditViewTest(TestCase):
 
     def test_invoice_print_renders(self):
         """Print invoice view produces printable output (8.4)."""
+        # Company name is user-configured (blank by default); set it so it prints.
+        settings_obj = CompanySettings.get()
+        settings_obj.company_name = "Manchester Electric"
+        settings_obj.save()
         resp = self.client.get(reverse("invoicing:invoice_print", kwargs={"pk": self.invoice.pk}))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "INV-EDIT-001")

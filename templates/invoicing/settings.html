@@ -171,4 +171,16 @@
     <a href="{% url 'catalog:home' %}" class="btn btn-outline-secondary">Cancel</a>
   </div>
 </form>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold">About</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3 text-muted">Application</dt>
+      <dd class="col-sm-9 mb-2">{{ APP_NAME }}</dd>
+      <dt class="col-sm-3 text-muted">Version</dt>
+      <dd class="col-sm-9 mb-0"><code>{{ APP_VERSION }}</code></dd>
+    </dl>
+  </div>
+</div>
 {% endblock %}

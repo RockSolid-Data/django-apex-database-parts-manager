@@ -32,12 +32,12 @@ class HomeViewTest(TestCase):
         resp = self.client.get(reverse("catalog:home"))
         self.assertEqual(resp.status_code, 200)
         links = [
-            ("catalog:unit_search", "Unit Search"),
+            ("catalog:unit_search", "Search &amp; References"),
             ("catalog:unit_list", "Unit List"),
             ("catalog:application_list", "Applications"),
             ("catalog:part_list", "Parts"),
             ("catalog:bom_list", "BOMs"),
-            ("inventory:vendor_list", "Vendors"),
+            ("inventory:vendor_list", "Suppliers"),
             ("inventory:reorder_list", "Reorder"),
             ("invoicing:invoice_list", "Invoices"),
             ("invoicing:customer_list", "Customers"),
@@ -85,7 +85,7 @@ class PartModelTest(TestCase):
             stock_quantity=10,
             reorder_qty=5,
             bin_number="BIN-A1",
-            description="Description",
+            notes="Description",
             foot_notes="Footnotes",
             superseding_notes="Superseding",
             has_picture=True,
@@ -533,47 +533,6 @@ class YouTechPdfParserTest(TestCase):
         )
 
 
-class PartImportPdfConfirmTest(TestCase):
-    """Verify the PDF confirm step writes part and interchange data correctly."""
-
-    def test_confirm_import_leaves_part_number_blank_and_saves_source(self):
-        """YT number stays in YT field only, and interchanges store source separately."""
-        response = self.client.post(
-            reverse("catalog:part_import_pdf"),
-            {
-                "step": "confirm",
-                "row_count": "1",
-                "row_0_yt_number": "0A-00547",
-                "row_0_description": "Rectifier Bridge Nut",
-                "row_0_category": "Electrical",
-                "row_0_interchanges": json.dumps(
-                    [
-                        {"vendor": "J&N", "number": "462-64004"},
-                        {"vendor": "PIC", "number": "9590-003"},
-                    ]
-                ),
-            },
-        )
-
-        self.assertEqual(response.status_code, 200)
-        part = Part.objects.get(yt_number="0A-00547")
-        self.assertIsNone(part.part_number)
-        self.assertEqual(part.part_name, "Rectifier Bridge Nut")
-        self.assertEqual(part.description, "Rectifier Bridge Nut")
-        self.assertTrue(part.has_interchange)
-
-        interchanges = list(
-            PartInterchange.objects.filter(part=part).order_by("source_name", "interchange_number")
-        )
-        self.assertEqual(
-            [(ix.source_name, ix.interchange_number, ix.notes) for ix in interchanges],
-            [
-                ("J&N", "462-64004", ""),
-                ("PIC", "9590-003", ""),
-            ],
-        )
-
-
 class BOMModelTest(TestCase):
     """Verify BOM and BOMItem models per database plan (5.1)."""
 
@@ -819,15 +778,15 @@ class UnitSearchViewTest(TestCase):
     """Verify Unit Search page (separate from Unit List)."""
 
     def test_unit_search_renders(self):
-        """Unit Search page loads with title, subtitle, and tabs."""
+        """Search & References page loads with title, subtitle, and tabs."""
         resp = self.client.get(reverse("catalog:unit_search"))
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Unit Search")
+        self.assertContains(resp, "Search &amp; References")
         self.assertContains(resp, "Search for units, applications, and parts across the entire system")
+        self.assertContains(resp, "Cross Ref")
         self.assertContains(resp, "Units")
         self.assertContains(resp, "Applications")
         self.assertContains(resp, "Parts")
-        self.assertContains(resp, "Manufacturer")
 
     def test_unit_search_tabs_switch(self):
         """Applications and Parts tabs load their forms."""

@@ -642,7 +642,6 @@ def api_parts_search(request):
             | Q(oem_number__icontains=q)
             | Q(item_no__icontains=q)
             | Q(category__icontains=q)
-            | Q(description__icontains=q)
         )
         .values("id", "part_number", "part_name", "category", "price")[:200]
     )

@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.2.4",
+    "date": "2026-07-16",
+    "changes": [
+      "Fixed part images sometimes showing a broken link instead of the picture, both right after install and later on",
+      "Images are now served on demand directly from the media pack — no more 15-20 minute background extraction on first launch, so every image is available immediately",
+      "Eliminated the partial-extraction bug that left some images permanently broken if the app was closed while images were still unpacking",
+      "Installer now copies the media pack into place automatically, so the app is fully ready on first launch",
+      "Images added or uploaded inside the app still take priority and work normally"
+    ]
+  },
+  {
     "version": "1.2.3",
     "date": "2026-05-22",
     "changes": [

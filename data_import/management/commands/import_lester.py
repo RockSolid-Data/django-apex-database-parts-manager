@@ -388,7 +388,7 @@ class Command(BaseCommand):
                     type=pt[:100],
                     category=row["PartClass"] or "",
                     oem=oem[:200],
-                    description=desc[:2000],
+                    notes=desc[:2000],
                     foot_notes=row["LongNote"] or "",
                 ))
                 if len(batch) >= BATCH_SIZE:

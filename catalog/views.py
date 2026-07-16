@@ -2273,7 +2273,7 @@ def unit_search(request):
                     broad |= Q(item_no__icontains=val) | Q(catalog__icontains=val) | Q(plug_id__icontains=val)
                     broad |= _part_related_number_q(val)
                 elif field == "part_name":
-                    broad |= Q(description__icontains=val) | Q(foot_notes__icontains=val) | Q(superseding_notes__icontains=val)
+                    broad |= Q(notes__icontains=val) | Q(foot_notes__icontains=val) | Q(superseding_notes__icontains=val)
                     broad |= (
                         Q(part_interchanges__notes__icontains=val)
                         | Q(supersedings__notes__icontains=val)
@@ -3627,89 +3627,3 @@ def part_detail_api(request, pk):
         "stock_quantity": part.stock_quantity,
     })
 
-
-# ---------------------------------------------------------------------------
-# YouTech PDF import  (parts/import-pdf/)
-# ---------------------------------------------------------------------------
-
-def part_import_pdf(request):
-    """
-    3-step import flow for the YouTech "Our Numbers to Others" PDF.
-
-    Step 1 (GET)       : Show upload form.
-    Step 2 (POST/parse): Parse the uploaded PDF, render preview table.
-    Step 3 (POST/confirm): Write Part + PartInterchange rows, show report.
-    """
-    from .pdf_utils import parse_youtech_pdf
-
-    categories = list(PartCategory.objects.values_list("name", flat=True).order_by("name"))
-
-    # ---- Step 3: Confirm import ----
-    if request.method == "POST" and request.POST.get("step") == "confirm":
-        from .youtech_import import import_youtech_rows
-
-        row_count = int(request.POST.get("row_count", 0))
-        logger.info("[PDF Import] Confirm import — %d rows submitted", row_count)
-        rows = []
-        for i in range(row_count):
-            rows.append({
-                "yt_number": request.POST.get(f"row_{i}_yt_number", "").strip(),
-                "description": request.POST.get(f"row_{i}_description", "").strip(),
-                "category": request.POST.get(f"row_{i}_category", "").strip(),
-                "interchanges": request.POST.get(f"row_{i}_interchanges", "[]"),
-            })
-        result = import_youtech_rows(rows)
-        return render(request, "catalog/part_import_pdf_report.html", {
-            "report": result["report"],
-            "created": result["created"],
-            "updated": result["updated"],
-            "skipped": result["skipped"],
-            "total": row_count,
-        })
-
-    # ---- Step 2: Parse uploaded PDF, render preview ----
-    if request.method == "POST" and request.POST.get("step") == "parse":
-        pdf_file = request.FILES.get("pdf_file")
-        if not pdf_file:
-            messages.error(request, "Please select a PDF file.")
-            return redirect("catalog:part_import_pdf")
-        if not pdf_file.name.lower().endswith(".pdf"):
-            messages.error(request, "File must be a .pdf file.")
-            return redirect("catalog:part_import_pdf")
-        logger.info("[PDF Import] Parsing '%s' ...", pdf_file.name)
-        try:
-            entries = parse_youtech_pdf(pdf_file)
-        except Exception as exc:
-            logger.error("[PDF Import] Parse error: %s", exc)
-            messages.error(request, f"Error reading PDF: {exc}")
-            return redirect("catalog:part_import_pdf")
-
-        if not entries:
-            logger.warning("[PDF Import] No entries found in '%s'", pdf_file.name)
-            messages.warning(request, "No entries found in the PDF.")
-            return redirect("catalog:part_import_pdf")
-
-        issues_count = sum(len(e.get("issues", [])) for e in entries)
-        logger.info("[PDF Import] Parsed %d entries from '%s' (%d issues)",
-                    len(entries), pdf_file.name, issues_count)
-
-        # Annotate with existing-part status and pre-serialised interchange JSON
-        existing_yts = set(
-            Part.objects.filter(yt_number__in=[e["yt_number"] for e in entries])
-            .values_list("yt_number", flat=True)
-        )
-        for e in entries:
-            e["exists"] = e["yt_number"] in existing_yts
-            e["interchanges_json"] = json.dumps(e["interchanges"])
-
-        return render(request, "catalog/part_import_pdf_preview.html", {
-            "entries": entries,
-            "categories": categories,
-            "filename": pdf_file.name,
-            "total": len(entries),
-        })
-
-    # ---- Step 1: Show upload form ----
-    return render(request, "catalog/part_import_pdf.html", {
-        "categories": categories,
-    })

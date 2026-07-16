@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.test import TestCase
 from django.urls import reverse
 
@@ -46,18 +48,18 @@ class VendorViewTest(TestCase):
     """Verify Vendor CRUD views (6.2)."""
 
     def test_vendor_list_renders(self):
-        """Vendor list page loads."""
+        """Vendor list page loads (labeled 'Suppliers' in the UI)."""
         url = reverse("inventory:vendor_list")
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Vendors")
+        self.assertContains(resp, "Suppliers")
 
     def test_vendor_create_renders(self):
         """Add vendor form loads."""
         url = reverse("inventory:vendor_create")
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Add New Vendor")
+        self.assertContains(resp, "Add New Supplier")
 
     def test_vendor_create_post(self):
         """Creating a vendor redirects to list."""
@@ -100,7 +102,7 @@ class VendorViewTest(TestCase):
         url = reverse("inventory:vendor_edit", kwargs={"pk": v.pk})
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Edit Vendor")
+        self.assertContains(resp, "Edit Supplier")
         self.assertContains(resp, "Edit Me")
 
     def test_vendor_edit_post(self):
@@ -173,7 +175,8 @@ class InventoryItemCreateTest(TestCase):
         self.assertEqual(part.part_name, "Test Part")
         self.assertEqual(part.primary_vendor, "Acme Supplier")
         self.assertEqual(part.cost_price, 10)
-        self.assertEqual(part.price, 12.50)  # 10 * 1.25
+        # Price uses true margin: cost / (1 - margin%) = 10 / (1 - 0.25) = 13.33
+        self.assertEqual(part.price, Decimal("13.33"))
         self.assertEqual(part.stock_quantity, 5)
 
     def test_inventory_item_create_post_updates_existing_part(self):
@@ -199,7 +202,8 @@ class InventoryItemCreateTest(TestCase):
         part = Part.objects.get(part_number="INV-EXIST")
         self.assertEqual(part.part_name, "Updated Name")
         self.assertEqual(part.cost_price, 20)
-        self.assertEqual(part.price, 30)  # 20 * 1.5
+        # Price uses true margin: cost / (1 - margin%) = 20 / (1 - 0.50) = 40.00
+        self.assertEqual(part.price, Decimal("40.00"))
         self.assertEqual(part.stock_quantity, 13)
 
 
@@ -230,6 +234,7 @@ class InventoryListViewTest(TestCase):
             cost_price=10.00,
             price=15.00,
             stock_quantity=5,
+            track_inventory=True,
         )
         resp = self.client.get(reverse("inventory:inventory_list"))
         self.assertContains(resp, "INV-001")
@@ -262,18 +267,21 @@ class ReorderViewTest(TestCase):
             stock_quantity=2,
             reorder_qty=5,
             primary_vendor="Acme",
+            track_inventory=True,
         )
         out = Part.objects.create(
             part_number="P-OUT",
             stock_quantity=0,
             reorder_qty=3,
             primary_vendor="Acme",
+            track_inventory=True,
         )
         Part.objects.create(
             part_number="P-OK",
             stock_quantity=10,
             reorder_qty=5,
             primary_vendor="Acme",
+            track_inventory=True,
         )
         resp = self.client.get(reverse("inventory:reorder_list"))
         self.assertContains(resp, "2 items need reordering")

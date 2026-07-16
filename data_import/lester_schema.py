@@ -56,9 +56,9 @@ PART_MAPPING = {
     "PartTypeID": "type",  # lookup tblMasterPartType
     "ManufacturerID": "oem",  # lookup
     "PartClass": "category",
-    "Dimensions": "description",
+    "Dimensions": "notes",
     "LongNote": "foot_notes",
-    "ShortNote": "description",  # append to description
+    "ShortNote": "notes",  # append to notes
 }
 
 INTERCHANGE_MAPPING = {

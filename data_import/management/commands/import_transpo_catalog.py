@@ -295,8 +295,8 @@ class Command(BaseCommand):
                 if not part.oem and detail["manufacturer"]:
                     part.oem = detail["manufacturer"][:200]
                     changed = True
-                if not part.description and detail["description"]:
-                    part.description = detail["description"][:2000]
+                if not part.notes and detail["description"]:
+                    part.notes = detail["description"][:2000]
                     changed = True
                 combined_notes = normalize_space(" | ".join(filter(None, [detail["features_text"], detail["notes"]])))
                 if not part.foot_notes and combined_notes:

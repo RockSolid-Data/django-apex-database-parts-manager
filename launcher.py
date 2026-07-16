@@ -290,6 +290,69 @@ def _find_media_zip():
     return None
 
 
+def _zip_is_valid(path):
+    """True if ``path`` is a readable zip (parses its central directory)."""
+    try:
+        with zipfile.ZipFile(path, "r") as zf:
+            zf.namelist()
+        return True
+    except (zipfile.BadZipFile, OSError):
+        return False
+
+
+def ensure_media_pack():
+    """Ensure the media pack zip is present in the data dir.
+
+    Part images are served on demand straight from this zip (see
+    ``config.media_utils.serve_media``) -- there is no extraction step, so there
+    is no first-launch wait and no partial-extraction corruption to heal.
+
+    The installer copies the pack into the data dir during install, so on a
+    normal install this is a fast no-op. It also acts as a safety net: for
+    manual installs / dev where the pack is only on a USB drive or in the
+    install folder, it copies that single file into the data dir (with a size
+    check) so images keep working after the USB is removed.
+    """
+    data_dir = get_data_dir()
+    dest = data_dir / MEDIA_ZIP_NAME
+
+    if dest.is_file():
+        if _zip_is_valid(dest):
+            return
+        # Corrupt / partially-copied pack -- drop it so we re-copy a good one.
+        print("  Existing media pack is invalid -- replacing it.")
+        try:
+            dest.unlink()
+        except OSError:
+            pass
+
+    src = _find_media_zip()
+    if not src:
+        print("  No media pack found. Part images will not be available.")
+        print(f"  Place {MEDIA_ZIP_NAME} next to the installer or on a USB drive.")
+        return
+
+    if src.resolve() == dest.resolve():
+        return  # already the canonical copy in the data dir
+
+    print(f"  Copying media pack to {dest}...")
+    _write_media_status(True, 0, 0, "Preparing part images\u2026")
+    tmp = dest.with_suffix(".part")
+    try:
+        shutil.copyfile(src, tmp)
+        if src.stat().st_size != tmp.stat().st_size:
+            raise IOError("size mismatch after copy")
+        os.replace(tmp, dest)
+        print("  Media pack ready.")
+    except Exception as e:
+        print(f"  Media pack copy error: {e}")
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
+
+
 def ensure_media():
     """Ensure media files are up to date.
 
@@ -729,14 +792,17 @@ def main():
     if install_type == "upgrade":
         sync_catalog_data()
 
-    def _media_extract_with_status():
+    # Images are served on demand from the media pack zip (no extraction).
+    # This background step just ensures the single zip is present in the data
+    # dir; on a normal install the installer already copied it, so it's a no-op.
+    def _media_pack_with_status():
         try:
-            ensure_media()
+            ensure_media_pack()
         finally:
             _clear_media_status()
 
     media_thread = threading.Thread(
-        target=_media_extract_with_status, daemon=True, name="media-extract"
+        target=_media_pack_with_status, daemon=True, name="media-pack"
     )
     media_thread.start()
 

@@ -37,7 +37,7 @@
       <td>{{ part.yt_number|default:"—" }}</td>
       <td>{{ part.j_and_n|first_jn|default:"—" }}</td>
       <td>{{ part.oem_number|default:"—" }}</td>
-      <td>{{ part.description|truncatewords:12 }}</td>
+      <td>{{ part.notes|truncatewords:12 }}</td>
       <td>{{ part.voltage|default:"" }}</td>
       <td class="text-end">{{ part.stock_quantity }}</td>
     </tr>
