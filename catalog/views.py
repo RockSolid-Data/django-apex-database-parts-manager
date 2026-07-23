@@ -1045,6 +1045,11 @@ def part_list(request):
         lambda: list(Part.objects.filter(is_active=True).exclude(voltage="").values_list("voltage", flat=True).distinct().order_by("voltage")),
         1800)
 
+    # --- Build vendor choices for bulk-action modal (cached 30 min) ---
+    vendor_choices = cache.get_or_set("part_vendor_choices",
+        lambda: list(Part.objects.filter(is_active=True).exclude(primary_vendor="").values_list("primary_vendor", flat=True).distinct().order_by("primary_vendor")),
+        1800)
+
     try:
         per_page = min(int(request.GET.get("per_page", 50)), 500)
     except (ValueError, TypeError):
@@ -1100,6 +1105,7 @@ def part_list(request):
         "category_choices": category_choices,
         "filter_voltage": filter_voltage,
         "voltage_choices": voltage_choices,
+        "vendor_choices": vendor_choices,
     }
     if request.GET.get("print") == "1":
         return render(request, "catalog/part_list_print.html", context)

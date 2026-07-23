@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from .views_bulk import bulk_action
 
 app_name = "catalog"
 
@@ -35,6 +36,7 @@ urlpatterns = [
     path("bom/<int:pk>/edit/", views.bom_edit, name="bom_edit"),
     path("bom/<int:pk>/delete/", views.bom_delete, name="bom_delete"),
     path("parts/", views.part_list, name="part_list"),
+    path("parts/bulk-action/", bulk_action, name="bulk_action"),
     path("parts/add/", views.part_create, name="part_create"),
     path("parts/categories/", views.part_category_list, name="part_category_list"),
     path("parts/categories/add/", views.part_category_create, name="part_category_create"),

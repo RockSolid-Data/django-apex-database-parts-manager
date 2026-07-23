@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Parts List bulk actions:** select multiple parts on the Parts List to change
+  category, primary vendor, voltage, track inventory, or delete in one step.
+
 ## v1.2.4 — Instant, Reliable Part Images (2026-07-16)
 
 ### Fixed
