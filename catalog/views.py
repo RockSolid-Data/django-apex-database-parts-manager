@@ -337,6 +337,9 @@ def application_list(request):
     unit_type_choices = cache.get_or_set("app_unit_type_choices",
         lambda: list(Application.objects.filter(is_active=True).exclude(unit_type_name="").values_list("unit_type_name", flat=True).distinct().order_by("unit_type_name")),
         1800)
+    year_choices = cache.get_or_set("app_year_choices",
+        lambda: list(Application.objects.filter(is_active=True).exclude(year="").values_list("year", flat=True).distinct().order_by("year")),
+        1800)
 
     unfiltered = not q and not any([
         filter_make, filter_model, filter_year, filter_mfr,
@@ -376,6 +379,7 @@ def application_list(request):
         "mfr_choices": mfr_choices,
         "volt_choices": volt_choices,
         "unit_type_choices": unit_type_choices,
+        "year_choices": year_choices,
     }
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return render(request, "catalog/application_list_ajax.html", context)
@@ -1108,6 +1112,24 @@ def part_list(request):
         "vendor_choices": vendor_choices,
     }
     if request.GET.get("print") == "1":
+        ids_param = request.GET.get("ids", "").strip()
+        if ids_param:
+            id_list = []
+            for raw in ids_param.split(","):
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    id_list.append(int(raw))
+                except ValueError:
+                    continue
+            by_pk = {
+                p.pk: p
+                for p in Part.objects.filter(is_active=True, pk__in=id_list).only(*_PART_LIST_FIELDS)
+            }
+            selected_parts = [by_pk[i] for i in id_list if i in by_pk]
+            context["parts"] = selected_parts
+            context["total_count"] = len(selected_parts)
         return render(request, "catalog/part_list_print.html", context)
     return render(request, "catalog/part_list.html", context)
 

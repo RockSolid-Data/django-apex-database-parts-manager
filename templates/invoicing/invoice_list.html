@@ -93,7 +93,7 @@
       {% for inv in invoices %}
       <tr data-href="{% url 'invoicing:invoice_detail' inv.pk %}" data-id="{{ inv.pk }}"
           class="{% if inv.due_date and inv.status != 'PAID' and inv.status != 'CANCELLED' %}{% if inv.due_date < today %}table-danger{% elif inv.due_date <= due_soon_end %}table-warning{% endif %}{% endif %}">
-        <td class="text-center" onclick="event.stopPropagation()">
+        <td class="text-center drag-select-cell" onclick="event.stopPropagation()">
           <input type="checkbox" class="form-check-input invoice-cb" value="{{ inv.pk }}">
         </td>
         <td>{{ inv.invoice_number }}</td>
@@ -125,38 +125,52 @@
 </div>
 {% include "includes/pagination.html" %}
 </div>
+{% endblock %}
 
 {% block extra_js %}
 <script>
 (function () {
   const selectAllCb = document.getElementById('select-all-cb');
-  const printBtn    = document.getElementById('print-selected-btn');
   const countSpan   = document.getElementById('selected-count');
 
   function getChecked() {
-    return [...document.querySelectorAll('.invoice-cb:checked')];
+    return Array.prototype.filter.call(
+      document.querySelectorAll('.invoice-cb'),
+      function (cb) { return cb.checked; }
+    );
   }
 
   function updateUI() {
     const checked = getChecked();
     const n = checked.length;
-    countSpan.textContent = n;
+    if (countSpan) countSpan.textContent = n;
     const allCbs = document.querySelectorAll('.invoice-cb');
-    selectAllCb.checked = allCbs.length > 0 && checked.length === allCbs.length;
-    selectAllCb.indeterminate = n > 0 && n < allCbs.length;
+    if (selectAllCb) {
+      selectAllCb.checked = allCbs.length > 0 && checked.length === allCbs.length;
+      selectAllCb.indeterminate = n > 0 && n < allCbs.length;
+    }
   }
 
-  selectAllCb?.addEventListener('change', function () {
-    document.querySelectorAll('.invoice-cb').forEach(cb => cb.checked = this.checked);
+  // Count updates via ApexDragSelect onChange (checkbox `change` events).
+  if (typeof ApexDragSelect !== 'undefined' && document.querySelector('.invoice-cb')) {
+    ApexDragSelect.init({
+      rowCheckboxSelector: '.invoice-cb',
+      selectAllSelector: '#select-all-cb',
+      onChange: updateUI
+    });
+  } else {
+    selectAllCb?.addEventListener('change', function () {
+      document.querySelectorAll('.invoice-cb').forEach(function (cb) { cb.checked = selectAllCb.checked; });
+      updateUI();
+    });
+    document.getElementById('invoice-table')?.addEventListener('change', function (e) {
+      if (e.target.classList.contains('invoice-cb')) updateUI();
+    });
     updateUI();
-  });
-
-  document.getElementById('invoice-table')?.addEventListener('change', function (e) {
-    if (e.target.classList.contains('invoice-cb')) updateUI();
-  });
+  }
 
   window.printSelected = function () {
-    const ids = getChecked().map(cb => cb.value).join(',');
+    const ids = getChecked().map(function (cb) { return cb.value; }).join(',');
     if (!ids) {
       alert('Select at least one invoice to print.');
       return;
@@ -165,5 +179,4 @@
   };
 })();
 </script>
-{% endblock %}
 {% endblock %}

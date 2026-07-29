@@ -930,3 +930,58 @@ class AddToInvoicePartTest(TestCase):
         self.assertRedirects(resp, reverse("invoicing:add_to_invoice") + "?part=" + str(self.part.pk))
         inv.refresh_from_db()
         self.assertEqual(inv.items.count(), 0)
+class CustomerListPrintSelectedTest(TestCase):
+    """Print customer list with ?print=1&ids= filters to selected rows."""
+
+    def setUp(self):
+        self.c1 = Customer.objects.create(name="Alpha Customer Co")
+        self.c2 = Customer.objects.create(name="Beta Customer Co")
+        self.c3 = Customer.objects.create(name="Gamma Customer Co")
+
+    def test_print_with_ids_renders_only_selected_customers(self):
+        ids = f"{self.c1.pk},{self.c3.pk}"
+        url = reverse("invoicing:customer_list") + f"?print=1&ids={ids}"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "invoicing/customer_list_print.html")
+        body = resp.content.decode()
+        self.assertIn("Alpha Customer Co", body)
+        self.assertIn("Gamma Customer Co", body)
+        self.assertNotIn("Beta Customer Co", body)
+
+    def test_print_without_ids_still_renders_print_template(self):
+        url = reverse("invoicing:customer_list") + "?print=1"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "invoicing/customer_list_print.html")
+
+    def test_customer_list_has_select_checkboxes(self):
+        resp = self.client.get(reverse("invoicing:customer_list"))
+        self.assertContains(resp, "bulk-row-check")
+        self.assertContains(resp, "list-print-btn")
+
+
+class InvoiceListPrintSelectedTest(TestCase):
+    """Invoice list print=1 with ids filters list rows; bulk print stays separate."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(name="Print Cust")
+        self.inv1 = Invoice.objects.create(
+            invoice_number="INV-SEL-1", customer=self.customer, date="2026-02-11",
+        )
+        self.inv2 = Invoice.objects.create(
+            invoice_number="INV-SEL-2", customer=self.customer, date="2026-02-12",
+        )
+        self.inv3 = Invoice.objects.create(
+            invoice_number="INV-SEL-3", customer=self.customer, date="2026-02-13",
+        )
+
+    def test_list_print_with_ids_renders_only_selected(self):
+        ids = f"{self.inv1.pk},{self.inv3.pk}"
+        url = reverse("invoicing:invoice_list") + f"?print=1&ids={ids}"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertIn("INV-SEL-1", body)
+        self.assertIn("INV-SEL-3", body)
+        self.assertNotIn("INV-SEL-2", body)

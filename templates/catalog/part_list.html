@@ -12,8 +12,8 @@
     <i class="bi bi-box-seam"></i> Parts
   </h1>
   <div>
-    <button type="button" class="btn btn-outline-secondary me-2 js-iframe-print">
-      <i class="bi bi-printer me-1"></i> Print
+    <button type="button" id="parts-print-btn" class="btn btn-outline-secondary me-2 js-iframe-print">
+      <i class="bi bi-printer me-1"></i> <span id="parts-print-label">Print</span>
     </button>
     <a href="{% url 'catalog:part_upload_csv' %}" class="btn btn-outline-secondary me-2">
       <i class="bi bi-upload"></i> Upload CSV
@@ -114,7 +114,7 @@
     <tbody>
       {% for part, match_label in parts_with_match %}
       <tr data-href="{% url 'catalog:part_detail' part.pk %}">
-        <td class="bulk-check-cell" onclick="event.stopPropagation();">
+        <td class="bulk-check-cell drag-select-cell" onclick="event.stopPropagation();">
           <input type="checkbox" class="form-check-input bulk-row-check" value="{{ part.pk }}">
         </td>
         {% if deep_search_used %}
@@ -161,10 +161,12 @@
       </div>
       <div class="modal-body">
         <label class="form-label small">New Category</label>
-        <input type="text" name="value" class="form-control form-control-sm" list="bulk-category-list" required>
-        <datalist id="bulk-category-list">
-          {% for val in category_choices %}<option value="{{ val }}">{% endfor %}
-        </datalist>
+        <select name="value" class="form-select form-select-sm js-searchable-select" required>
+          <option value="">Select…</option>
+          {% for val in category_choices %}
+          <option value="{{ val }}">{{ val }}</option>
+          {% endfor %}
+        </select>
       </div>
       <div class="modal-footer py-2">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
@@ -187,10 +189,12 @@
       </div>
       <div class="modal-body">
         <label class="form-label small">New Vendor</label>
-        <input type="text" name="value" class="form-control form-control-sm" list="bulk-vendor-list" required>
-        <datalist id="bulk-vendor-list">
-          {% for val in vendor_choices %}<option value="{{ val }}">{% endfor %}
-        </datalist>
+        <select name="value" class="form-select form-select-sm js-searchable-select" required>
+          <option value="">Select…</option>
+          {% for val in vendor_choices %}
+          <option value="{{ val }}">{{ val }}</option>
+          {% endfor %}
+        </select>
       </div>
       <div class="modal-footer py-2">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
@@ -213,10 +217,12 @@
       </div>
       <div class="modal-body">
         <label class="form-label small">New Voltage</label>
-        <input type="text" name="value" class="form-control form-control-sm" list="bulk-voltage-list" required>
-        <datalist id="bulk-voltage-list">
-          {% for val in voltage_choices %}<option value="{{ val }}">{% endfor %}
-        </datalist>
+        <select name="value" class="form-select form-select-sm js-searchable-select" required>
+          <option value="">Select…</option>
+          {% for val in voltage_choices %}
+          <option value="{{ val }}">{{ val }}</option>
+          {% endfor %}
+        </select>
       </div>
       <div class="modal-footer py-2">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>

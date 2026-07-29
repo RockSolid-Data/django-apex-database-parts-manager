@@ -159,3 +159,24 @@ class BulkActionRedirectTest(BulkActionTestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("category=Rectifiers", resp.url)
         self.assertIn("q=test", resp.url)
+
+
+class PartListPrintSelectedTest(BulkActionTestCase):
+    def test_print_with_ids_renders_only_selected_parts(self):
+        ids = self._ids([0, 2, 4])
+        url = reverse("catalog:part_list") + f"?print=1&ids={ids}"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "catalog/part_list_print.html")
+        body = resp.content.decode()
+        self.assertIn(self.parts[0].part_number, body)
+        self.assertIn(self.parts[2].part_number, body)
+        self.assertIn(self.parts[4].part_number, body)
+        self.assertNotIn(self.parts[1].part_number, body)
+        self.assertNotIn(self.parts[3].part_number, body)
+
+    def test_print_without_ids_still_renders_print_template(self):
+        url = reverse("catalog:part_list") + "?print=1"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "catalog/part_list_print.html")

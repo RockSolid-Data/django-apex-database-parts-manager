@@ -101,9 +101,175 @@
     </form>
   </div>
 </div>
+
+{# ===== Bulk actions toolbar ===== #}
+<div id="bulk-toolbar" class="card mb-2 border-primary" style="display:none;">
+  <div class="card-body py-2 d-flex align-items-center gap-3">
+    <span class="fw-semibold text-primary">
+      <span id="bulk-count">0</span> application<span id="bulk-plural">s</span> selected
+    </span>
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button"
+              id="bulkActionsDropdown" data-bs-toggle="dropdown" disabled>
+        Bulk Actions
+      </button>
+      <ul class="dropdown-menu" aria-labelledby="bulkActionsDropdown">
+        <li><a class="dropdown-item" href="#" data-bulk-modal="bulkMakeModal">Change Make</a></li>
+        <li><a class="dropdown-item" href="#" data-bulk-modal="bulkYearModal">Change Year</a></li>
+        <li><a class="dropdown-item" href="#" data-bulk-modal="bulkUnitTypeModal">Change Unit Type</a></li>
+        <li><a class="dropdown-item" href="#" data-bulk-modal="bulkVoltModal">Change Volt</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item text-danger" href="#" data-bulk-modal="bulkDeleteModal">Delete Selected</a></li>
+      </ul>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="bulk-deselect-all">
+      Deselect All
+    </button>
+  </div>
+</div>
 </div>{# /.me-sticky-toolbar #}
 
 <div id="live-search-results">
 {% include "catalog/_application_list_results.html" %}
 </div>
+
+{# ===== Bulk Action Modals ===== #}
+
+{# --- Change Make --- #}
+<div class="modal fade" id="bulkMakeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <form method="post" action="{% url 'catalog:application_bulk_action' %}" class="bulk-action-form modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="change_make">
+      <input type="hidden" name="ids" class="bulk-ids-input">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Change Make</h6>
+        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small">New Make</label>
+        <select name="value" class="form-select form-select-sm js-searchable-select" required>
+          <option value="">Select…</option>
+          {% for val in make_choices %}
+          <option value="{{ val }}">{{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# --- Change Year --- #}
+<div class="modal fade" id="bulkYearModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <form method="post" action="{% url 'catalog:application_bulk_action' %}" class="bulk-action-form modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="change_year">
+      <input type="hidden" name="ids" class="bulk-ids-input">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Change Year</h6>
+        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small">New Year</label>
+        <select name="value" class="form-select form-select-sm js-searchable-select" required>
+          <option value="">Select…</option>
+          {% for val in year_choices %}
+          <option value="{{ val }}">{{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# --- Change Unit Type --- #}
+<div class="modal fade" id="bulkUnitTypeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <form method="post" action="{% url 'catalog:application_bulk_action' %}" class="bulk-action-form modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="change_unit_type">
+      <input type="hidden" name="ids" class="bulk-ids-input">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Change Unit Type</h6>
+        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small">New Unit Type</label>
+        <select name="value" class="form-select form-select-sm js-searchable-select" required>
+          <option value="">Select…</option>
+          {% for val in unit_type_choices %}
+          <option value="{{ val }}">{{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# --- Change Volt --- #}
+<div class="modal fade" id="bulkVoltModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <form method="post" action="{% url 'catalog:application_bulk_action' %}" class="bulk-action-form modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="change_volt">
+      <input type="hidden" name="ids" class="bulk-ids-input">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Change Volt</h6>
+        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small">New Volt</label>
+        <select name="value" class="form-select form-select-sm js-searchable-select" required>
+          <option value="">Select…</option>
+          {% for val in volt_choices %}
+          <option value="{{ val }}">{{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# --- Delete Selected --- #}
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <form method="post" action="{% url 'catalog:application_bulk_action' %}" class="bulk-action-form modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="ids" class="bulk-ids-input">
+      <input type="hidden" name="confirm" value="1">
+      <div class="modal-body text-center py-4">
+        <i class="bi bi-exclamation-triangle text-danger d-block mb-2" style="font-size:2rem;"></i>
+        <p class="mb-0">Delete <strong><span class="bulk-delete-count">0</span></strong> selected applications?<br>
+        <small class="text-muted">This cannot be undone.</small></p>
+      </div>
+      <div class="modal-footer justify-content-center border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger btn-sm">Yes, delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static_cache_bust 'js/bulk-actions.js' %}"></script>
 {% endblock %}

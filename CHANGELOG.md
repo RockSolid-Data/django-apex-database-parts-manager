@@ -2,9 +2,43 @@
 
 ## [Unreleased]
 
+### Changed
+- **Bulk action value pickers:** Change Category / Vendor / Voltage (Parts),
+  Unit Type / Family / OEM / Voltage (Units), and Make / Year / Unit Type / Volt
+  (Applications) now use searchable dropdowns of existing values instead of
+  free-text boxes.
+
 ### Added
 - **Parts List bulk actions:** select multiple parts on the Parts List to change
   category, primary vendor, voltage, track inventory, or delete in one step.
+- **Parts List print selected:** with parts checked, Print becomes Print Selected
+  and prints only those parts.
+- **Unit List bulk actions:** select multiple units to change unit type, family,
+  OEM, voltage, or delete in one step (with drag-select / Shift+click).
+- **Applications List bulk actions:** select multiple applications to change
+  make, year, unit type, volt, or delete in one step (with drag-select /
+  Shift+click).
+- **List print selected (Customers, Suppliers, Inventory, Reorder):** checkbox
+  multi-select and drag-select on these lists; Print becomes Print Selected (N)
+  and prints only checked rows (`?print=1&ids=...`). With nothing selected,
+  Print still prints the current list page.
+- **Reorder list print:** Reorder now has a Print button and a print-friendly
+  layout (previously had no print view).
+- **Drag-select on multi-select tables:** click-drag (after a small move) or
+  Shift+click to multi-select on Parts List, Unit List, Applications List,
+  BOM Details, Invoice List, Customers, Suppliers, Inventory, and Reorder.
+  Single-click still toggles exactly one row.
+
+### Fixed
+- **Bulk modal searchable dropdowns:** Change Category and other bulk-action
+  searchable selects no longer open behind the modal footer — options stay
+  clickable above Cancel/Apply (Parts, Units, Applications).
+- **Parts List selection:** drag-select no longer forces selecting two rows on a
+  light click, and individual checkboxes can be unchecked one at a time.
+- **Selected count stale after uncheck:** Print Selected (N) / bulk selected
+  counts now update immediately when unchecking boxes (single click, drag
+  deselect, or deselect all) on Parts List, Unit List, Applications List,
+  BOM Details, Invoice List, Customers, Suppliers, Inventory, and Reorder.
 
 ## v1.2.4 — Instant, Reliable Part Images (2026-07-16)
 

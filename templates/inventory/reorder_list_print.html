@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+{% load catalog_tags %}
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reorder List — Apex Database</title>
+  <style>
+    @page { size: letter; margin: 0.5in; }
+    body { font-family: sans-serif; font-size: 9pt; max-width: 7.5in; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 0.3rem 0.4rem; text-align: left; }
+    th { background: #333; color: #fff; }
+    .text-center { text-align: center; }
+  </style>
+</head>
+<body>
+<h1>Reorder List — Apex Database</h1>
+<p>{{ parts|length }} item{{ parts|length|pluralize }} need reordering</p>
+<table>
+  <thead>
+    <tr>
+      <th>Part Number</th>
+      <th>Mfr #</th>
+      <th>YT #</th>
+      <th>J&N</th>
+      <th>OEM #</th>
+      <th>Description</th>
+      <th>Supplier</th>
+      <th class="text-center">In Stock</th>
+      <th class="text-center">Reorder Qty</th>
+      <th class="text-center">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for part in parts %}
+    <tr>
+      <td>{{ part.part_number|default:"—" }}</td>
+      <td>{{ part.manufacturer_number|default:"—" }}</td>
+      <td>{{ part.yt_number|default:"—" }}</td>
+      <td>{{ part.j_and_n|first_jn|default:"—" }}</td>
+      <td>{{ part.oem_number|default:"—" }}</td>
+      <td>{{ part.notes|truncatewords:12|default:part.part_name|default:"—" }}</td>
+      <td>{{ part.primary_vendor|default:"—" }}</td>
+      <td class="text-center">{{ part.stock_quantity }}</td>
+      <td class="text-center">{{ part.reorder_qty }}</td>
+      <td class="text-center">{% if part.stock_quantity <= 0 %}Out of Stock{% else %}Low Stock{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="10" class="text-center">No items need reordering.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

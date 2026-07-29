@@ -13,6 +13,28 @@ from .models import Vendor, VendorContact
 logger = logging.getLogger(__name__)
 
 
+def _parse_ids_param(ids_param):
+    """Parse comma-separated integer IDs from a query param; preserve order."""
+    id_list = []
+    for raw in (ids_param or "").split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            id_list.append(int(raw))
+        except ValueError:
+            continue
+    return id_list
+
+
+def _ordered_parts_from_ids(id_list):
+    by_pk = {
+        p.pk: p
+        for p in Part.objects.select_related("unit").filter(pk__in=id_list)
+    }
+    return [by_pk[i] for i in id_list if i in by_pk]
+
+
 def inventory_item_create(request):
     """Add Inventory Item: creates or updates Part with cost, price, stock."""
     if request.method == "POST":
@@ -94,6 +116,11 @@ def inventory_list(request):
         "supplier_choices": supplier_choices,
     }
     if request.GET.get("print") == "1":
+        ids_param = request.GET.get("ids", "").strip()
+        if ids_param:
+            selected = _ordered_parts_from_ids(_parse_ids_param(ids_param))
+            context["parts"] = selected
+            context["total_count"] = len(selected)
         return render(request, "inventory/inventory_list_print.html", context)
     return render(request, "inventory/inventory_list.html", context)
 
@@ -173,6 +200,13 @@ def reorder_list(request):
         "category_choices": category_choices,
         "supplier_choices": supplier_choices,
     }
+    if request.GET.get("print") == "1":
+        ids_param = request.GET.get("ids", "").strip()
+        if ids_param:
+            selected = _ordered_parts_from_ids(_parse_ids_param(ids_param))
+            context["parts"] = selected
+            context["total_count"] = len(selected)
+        return render(request, "inventory/reorder_list_print.html", context)
     return render(request, "inventory/reorder_list.html", context)
 
 
@@ -215,6 +249,13 @@ def vendor_list(request):
         "show_inactive": show_inactive,
     }
     if request.GET.get("print") == "1":
+        ids_param = request.GET.get("ids", "").strip()
+        if ids_param:
+            id_list = _parse_ids_param(ids_param)
+            by_pk = {v.pk: v for v in Vendor.objects.filter(pk__in=id_list)}
+            selected = [by_pk[i] for i in id_list if i in by_pk]
+            context["vendors"] = selected
+            context["total_count"] = len(selected)
         return render(request, "inventory/vendor_list_print.html", context)
     return render(request, "inventory/vendor_list.html", context)
 

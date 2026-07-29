@@ -33,6 +33,9 @@ def _warm_dropdown_caches():
         cache.get_or_set("app_unit_type_choices",
             lambda: list(Application.objects.filter(is_active=True).exclude(unit_type_name="").values_list("unit_type_name", flat=True).distinct().order_by("unit_type_name")),
             1800)
+        cache.get_or_set("app_year_choices",
+            lambda: list(Application.objects.filter(is_active=True).exclude(year="").values_list("year", flat=True).distinct().order_by("year")),
+            1800)
         cache.get_or_set("app_total_count",
             lambda: Application.objects.filter(is_active=True).count(), 1800)
 

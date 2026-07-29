@@ -1,10 +1,10 @@
 (function () {
   'use strict';
 
-  var lastCheckedIndex = null;
+  var dragApi = null;
 
   function getCheckboxes() {
-    return Array.from(document.querySelectorAll('.bulk-row-check'));
+    return dragApi ? dragApi.getCheckboxes() : Array.from(document.querySelectorAll('.bulk-row-check'));
   }
 
   function getSelectedIds() {
@@ -22,6 +22,8 @@
     var dropdown = document.getElementById('bulkActionsDropdown');
     var selectAll = document.getElementById('bulk-select-all');
     var deleteCount = document.querySelector('.bulk-delete-count');
+    var printBtn = document.getElementById('parts-print-btn');
+    var printLabel = document.getElementById('parts-print-label');
 
     if (toolbar) toolbar.style.display = count > 0 ? '' : 'none';
     if (badge) badge.textContent = String(count);
@@ -34,36 +36,23 @@
       selectAll.checked = all.length > 0 && all.every(function (cb) { return cb.checked; });
       selectAll.indeterminate = count > 0 && count < all.length;
     }
-  }
 
-  function handleCheckboxChange(e) {
-    var boxes = getCheckboxes();
-    var current = boxes.indexOf(e.target);
-
-    if (e.shiftKey && lastCheckedIndex !== null && lastCheckedIndex !== current) {
-      var start = Math.min(lastCheckedIndex, current);
-      var end = Math.max(lastCheckedIndex, current);
-      var state = e.target.checked;
-      for (var i = start; i <= end; i++) {
-        boxes[i].checked = state;
-      }
+    if (printLabel) {
+      printLabel.textContent = count > 0 ? ('Print Selected (' + count + ')') : 'Print';
     }
-
-    lastCheckedIndex = current;
-    syncUI();
-  }
-
-  function handleSelectAll(e) {
-    var state = e.target.checked;
-    getCheckboxes().forEach(function (cb) { cb.checked = state; });
-    lastCheckedIndex = null;
-    syncUI();
+    if (printBtn) {
+      printBtn.classList.toggle('btn-outline-primary', count > 0);
+      printBtn.classList.toggle('btn-outline-secondary', count === 0);
+    }
   }
 
   function handleDeselectAll() {
-    getCheckboxes().forEach(function (cb) { cb.checked = false; });
-    lastCheckedIndex = null;
-    syncUI();
+    if (dragApi) {
+      dragApi.clear();
+    } else {
+      getCheckboxes().forEach(function (cb) { cb.checked = false; });
+      syncUI();
+    }
   }
 
   function handleDropdownAction(e) {
@@ -94,17 +83,29 @@
     bsModal.show();
   }
 
-  function bindEvents() {
-    document.addEventListener('change', function (e) {
-      if (e.target.id === 'bulk-select-all') {
-        handleSelectAll(e);
-        return;
-      }
-      if (e.target.classList.contains('bulk-row-check')) {
-        handleCheckboxChange(e);
-      }
-    });
+  function bindPrintSelected() {
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('#parts-print-btn');
+      if (!btn) return;
 
+      var ids = getSelectedIds();
+      if (!ids.length) return; // fall through to default js-iframe-print (current list page)
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      var url = new URL(window.location.href);
+      url.searchParams.set('print', '1');
+      url.searchParams.set('ids', ids.join(','));
+      if (typeof window.printViaIframe === 'function') {
+        window.printViaIframe(url.toString());
+      } else {
+        window.open(url.toString(), '_blank');
+      }
+    }, true);
+  }
+
+  function bindEvents() {
     document.addEventListener('click', function (e) {
       if (e.target.closest('#bulk-deselect-all')) {
         handleDeselectAll();
@@ -115,17 +116,34 @@
         handleDropdownAction(e);
       }
     });
+
+    bindPrintSelected();
   }
 
   function init() {
+    if (!document.querySelector('.bulk-row-check')) return;
+
+    if (typeof ApexDragSelect === 'undefined') {
+      console.warn('ApexDragSelect missing; bulk checkbox UI will be limited');
+      bindEvents();
+      syncUI();
+      return;
+    }
+
+    dragApi = ApexDragSelect.init({
+      rowCheckboxSelector: '.bulk-row-check',
+      selectAllSelector: '#bulk-select-all',
+      onChange: syncUI
+    });
+
     bindEvents();
     syncUI();
 
-    var observer = new MutationObserver(function () {
-      syncUI();
-    });
     var results = document.getElementById('live-search-results');
     if (results) {
+      var observer = new MutationObserver(function () {
+        syncUI();
+      });
       observer.observe(results, { childList: true, subtree: true });
     }
   }

@@ -300,3 +300,111 @@ class ReorderViewTest(TestCase):
         )
         resp = self.client.get(reverse("inventory:reorder_list"))
         self.assertContains(resp, "No items need reordering")
+
+class VendorListPrintSelectedTest(TestCase):
+    """Print supplier list with ?print=1&ids= filters to selected rows."""
+
+    def setUp(self):
+        self.v1 = Vendor.objects.create(name="Alpha Supplier")
+        self.v2 = Vendor.objects.create(name="Beta Supplier")
+        self.v3 = Vendor.objects.create(name="Gamma Supplier")
+
+    def test_print_with_ids_renders_only_selected_vendors(self):
+        ids = f"{self.v1.pk},{self.v3.pk}"
+        url = reverse("inventory:vendor_list") + f"?print=1&ids={ids}"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "inventory/vendor_list_print.html")
+        body = resp.content.decode()
+        self.assertIn("Alpha Supplier", body)
+        self.assertIn("Gamma Supplier", body)
+        self.assertNotIn("Beta Supplier", body)
+
+    def test_print_without_ids_still_renders_print_template(self):
+        url = reverse("inventory:vendor_list") + "?print=1"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "inventory/vendor_list_print.html")
+
+    def test_vendor_list_has_select_checkboxes(self):
+        resp = self.client.get(reverse("inventory:vendor_list"))
+        self.assertContains(resp, "bulk-row-check")
+        self.assertContains(resp, "list-print-btn")
+
+
+class InventoryListPrintSelectedTest(TestCase):
+    """Print inventory list with ?print=1&ids= filters to selected parts."""
+
+    def setUp(self):
+        self.p1 = Part.objects.create(
+            part_number="INV-P1", part_name="Item One",
+            track_inventory=True, stock_quantity=5, price=10,
+        )
+        self.p2 = Part.objects.create(
+            part_number="INV-P2", part_name="Item Two",
+            track_inventory=True, stock_quantity=5, price=10,
+        )
+        self.p3 = Part.objects.create(
+            part_number="INV-P3", part_name="Item Three",
+            track_inventory=True, stock_quantity=5, price=10,
+        )
+
+    def test_print_with_ids_renders_only_selected_parts(self):
+        ids = f"{self.p1.pk},{self.p3.pk}"
+        url = reverse("inventory:inventory_list") + f"?print=1&ids={ids}"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "inventory/inventory_list_print.html")
+        body = resp.content.decode()
+        self.assertIn("INV-P1", body)
+        self.assertIn("INV-P3", body)
+        self.assertNotIn("INV-P2", body)
+
+    def test_inventory_list_has_select_checkboxes(self):
+        resp = self.client.get(reverse("inventory:inventory_list"))
+        self.assertContains(resp, "bulk-row-check")
+        self.assertContains(resp, "list-print-btn")
+
+
+class ReorderListPrintSelectedTest(TestCase):
+    """Reorder list print view + ids filter."""
+
+    def setUp(self):
+        self.p1 = Part.objects.create(
+            part_number="RO-P1", stock_quantity=1, reorder_qty=5,
+            track_inventory=True, primary_vendor="Acme",
+        )
+        self.p2 = Part.objects.create(
+            part_number="RO-P2", stock_quantity=0, reorder_qty=3,
+            track_inventory=True, primary_vendor="Acme",
+        )
+        self.p3 = Part.objects.create(
+            part_number="RO-P3", stock_quantity=2, reorder_qty=5,
+            track_inventory=True, primary_vendor="Acme",
+        )
+
+    def test_print_without_ids_renders_print_template(self):
+        url = reverse("inventory:reorder_list") + "?print=1"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "inventory/reorder_list_print.html")
+        body = resp.content.decode()
+        self.assertIn("RO-P1", body)
+        self.assertIn("RO-P2", body)
+        self.assertIn("RO-P3", body)
+
+    def test_print_with_ids_renders_only_selected_parts(self):
+        ids = f"{self.p1.pk},{self.p3.pk}"
+        url = reverse("inventory:reorder_list") + f"?print=1&ids={ids}"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "inventory/reorder_list_print.html")
+        body = resp.content.decode()
+        self.assertIn("RO-P1", body)
+        self.assertIn("RO-P3", body)
+        self.assertNotIn("RO-P2", body)
+
+    def test_reorder_list_has_select_checkboxes_and_print(self):
+        resp = self.client.get(reverse("inventory:reorder_list"))
+        self.assertContains(resp, "bulk-row-check")
+        self.assertContains(resp, "list-print-btn")

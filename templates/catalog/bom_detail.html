@@ -71,7 +71,7 @@
       <table class="table table-sm table-striped table-hover align-middle mb-0">
         <thead class="table-dark">
           <tr>
-            <th class="text-center" style="width: 40px;">
+            <th class="text-center drag-select-cell" style="width: 40px;">
               <input type="checkbox" class="form-check-input" id="bom-select-all" title="Select all lines for Print">
             </th>
             <th class="text-center">YT #</th>
@@ -88,7 +88,7 @@
         <tbody>
           {% for item in bom.items.all %}
           <tr data-href="{% url 'catalog:bom_item_detail' bom.pk item.pk %}">
-            <td class="text-center">
+            <td class="text-center drag-select-cell" onclick="event.stopPropagation();">
               <input type="checkbox" class="form-check-input bom-item-check" data-item-id="{{ item.pk }}" title="Select for Print">
             </td>
             <td class="text-center">
@@ -152,11 +152,17 @@
 (function() {
   const printBtn = document.getElementById('bom-print-selected');
   const countEl = document.getElementById('bom-selected-count');
+  const selectAll = document.getElementById('bom-select-all');
   const baseUrl = printBtn ? printBtn.getAttribute('data-bom-print-url') : '';
 
   function updateCount() {
-    const checks = document.querySelectorAll('.bom-item-check:checked');
-    if (countEl) countEl.textContent = checks.length;
+    const checks = document.querySelectorAll('.bom-item-check');
+    const selected = Array.prototype.filter.call(checks, function (cb) { return cb.checked; });
+    if (countEl) countEl.textContent = selected.length;
+    if (selectAll) {
+      selectAll.checked = checks.length > 0 && selected.length === checks.length;
+      selectAll.indeterminate = selected.length > 0 && selected.length < checks.length;
+    }
   }
 
   function openPrintSelected() {
@@ -180,18 +186,26 @@
     }
   }
 
-  document.querySelectorAll('.bom-item-check').forEach(cb => {
-    cb.addEventListener('change', updateCount);
-  });
-  const masterCheck = document.getElementById('bom-select-all');
-  if (masterCheck) {
-    masterCheck.addEventListener('change', function() {
-      document.querySelectorAll('.bom-item-check').forEach(cb => { cb.checked = this.checked; });
-      updateCount();
+  if (typeof ApexDragSelect !== 'undefined' && document.querySelector('.bom-item-check')) {
+    ApexDragSelect.init({
+      rowCheckboxSelector: '.bom-item-check',
+      selectAllSelector: '#bom-select-all',
+      onChange: updateCount
     });
+  } else {
+    document.querySelectorAll('.bom-item-check').forEach(function (cb) {
+      cb.addEventListener('change', updateCount);
+    });
+    if (selectAll) {
+      selectAll.addEventListener('change', function () {
+        document.querySelectorAll('.bom-item-check').forEach(function (cb) { cb.checked = selectAll.checked; });
+        updateCount();
+      });
+    }
+    updateCount();
   }
-  if (printBtn) printBtn.addEventListener('click', function(e) { e.preventDefault(); openPrintSelected(); });
-  updateCount();
+
+  if (printBtn) printBtn.addEventListener('click', function (e) { e.preventDefault(); openPrintSelected(); });
 })();
 </script>
 {% endblock %}

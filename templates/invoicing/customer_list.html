@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load catalog_tags %}
 
 {% block title %}Customers — Apex Database{% endblock %}
 {% block main_class %}{% endblock %}
@@ -11,8 +12,8 @@
     <i class="bi bi-people"></i> Customers
   </h1>
   <div>
-    <button type="button" class="btn btn-outline-secondary me-2 js-iframe-print">
-      <i class="bi bi-printer me-1"></i> Print
+    <button type="button" id="list-print-btn" class="btn btn-outline-secondary me-2 js-iframe-print">
+      <i class="bi bi-printer me-1"></i> <span id="list-print-label">Print</span>
     </button>
     <a href="{% url 'invoicing:customer_create' %}" class="btn btn-primary">
       <i class="bi bi-plus-lg"></i> Add New Customer
@@ -58,6 +59,7 @@
   <table class="table table-striped table-hover align-middle">
     <thead class="table-dark">
       <tr>
+        <th style="width:36px;"><input type="checkbox" id="bulk-select-all" class="form-check-input" title="Select all visible"></th>
         <th>Company Name</th>
         <th>Contact Name</th>
         <th>Phone</th>
@@ -69,6 +71,9 @@
     <tbody>
       {% for c in customers %}
       <tr data-href="{% url 'invoicing:customer_edit' c.pk %}">
+        <td class="bulk-check-cell drag-select-cell" onclick="event.stopPropagation();">
+          <input type="checkbox" class="form-check-input bulk-row-check" value="{{ c.pk }}">
+        </td>
         <td>{{ c.name }}</td>
         <td>{{ c.contact_name|default:"—" }}</td>
         <td>{{ c.phone|default:"—" }}</td>
@@ -84,7 +89,7 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="6" class="text-center text-muted py-4">
+        <td colspan="7" class="text-center text-muted py-4">
           <i class="bi bi-inbox fs-3 d-block mb-2"></i>
           No customers found.
         </td>
@@ -95,4 +100,8 @@
 </div>
 {% include "includes/pagination.html" %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static_cache_bust 'js/list-select-print.js' %}"></script>
 {% endblock %}

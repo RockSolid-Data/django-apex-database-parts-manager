@@ -726,6 +726,12 @@ thead.table-dark th {
   overscroll-behavior: contain;
 }
 
+/* Body-parented Tom Select menus (modals) must sit above Bootstrap modal (1055).
+   Non-modal selects keep the default parent and are unaffected. */
+body > .ts-dropdown {
+  z-index: 1060;
+}
+
 /* ---- Scrollable table sections (caps height ~10 rows, sticky header) ---- */
 .card-body.me-scrollable-table,
 .me-scrollable-table {
@@ -833,4 +839,15 @@ thead.table-dark th {
 
 @media print {
   .me-back-to-top { display: none !important; }
+}
+
+/* Drag-select checkbox columns — suppress text selection while painting */
+body.bulk-drag-selecting,
+body.bulk-drag-selecting * {
+  user-select: none !important;
+  cursor: default !important;
+}
+.drag-select-cell,
+.bulk-check-cell {
+  cursor: pointer;
 }

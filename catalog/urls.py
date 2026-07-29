@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import views
-from .views_bulk import bulk_action
+from .views_bulk import application_bulk_action, bulk_action, unit_bulk_action
 
 app_name = "catalog"
 
@@ -9,6 +9,7 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("image-viewer/", views.image_viewer, name="image_viewer"),
     path("applications/", views.application_list, name="application_list"),
+    path("applications/bulk-action/", application_bulk_action, name="application_bulk_action"),
     path("applications/add/", views.application_create, name="application_create"),
     path("applications/<int:pk>/", views.application_detail, name="application_detail"),
     path("applications/<int:pk>/edit/", views.application_edit, name="application_edit"),
@@ -60,6 +61,7 @@ urlpatterns = [
     path("parts/<int:pk>/superseding/<int:sup_pk>/edit/", views.part_superseding_edit, name="part_superseding_edit"),
     path("parts/<int:pk>/superseding/<int:sup_pk>/delete/", views.part_superseding_delete, name="part_superseding_delete"),
     path("units/", views.unit_list, name="unit_list"),
+    path("units/bulk-action/", unit_bulk_action, name="unit_bulk_action"),
     path("units/search/", views.unit_search, name="unit_search"),
     path("units/add/", views.unit_create, name="unit_create"),
     path("units/type-categories/", views.unit_type_category_list, name="unit_type_category_list"),

@@ -21,6 +21,26 @@ from .models import CompanySettings, Customer, CustomerContact, Invoice, Invoice
 logger = logging.getLogger(__name__)
 
 
+def _parse_ids_param(ids_param):
+    """Parse comma-separated integer IDs from a query param; preserve order."""
+    id_list = []
+    for raw in (ids_param or "").split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            id_list.append(int(raw))
+        except ValueError:
+            continue
+    return id_list
+
+
+def _ordered_from_ids(qs, id_list):
+    """Fetch objects from qs by pk list, returned in the same order as id_list."""
+    by_pk = {obj.pk: obj for obj in qs.filter(pk__in=id_list)}
+    return [by_pk[i] for i in id_list if i in by_pk]
+
+
 def _format_customer_address(customer):
     """Format customer bill-to address fields into inline text for Invoice.address."""
     parts = []
@@ -102,6 +122,15 @@ def invoice_list(request):
         "company_settings": CompanySettings.get(),
     }
     if request.GET.get("print") == "1":
+        ids_param = request.GET.get("ids", "").strip()
+        if ids_param:
+            id_list = _parse_ids_param(ids_param)
+            selected = _ordered_from_ids(
+                Invoice.objects.select_related("customer"),
+                id_list,
+            )
+            context["invoices"] = selected
+            context["total_count"] = len(selected)
         return render(request, "invoicing/invoice_list_print.html", context)
     return render(request, "invoicing/invoice_list.html", context)
 
@@ -534,6 +563,12 @@ def customer_list(request):
         "show_inactive": show_inactive,
     }
     if request.GET.get("print") == "1":
+        ids_param = request.GET.get("ids", "").strip()
+        if ids_param:
+            id_list = _parse_ids_param(ids_param)
+            selected = _ordered_from_ids(Customer.objects.all(), id_list)
+            context["customers"] = selected
+            context["total_count"] = len(selected)
         return render(request, "invoicing/customer_list_print.html", context)
     return render(request, "invoicing/customer_list.html", context)
 

@@ -3,7 +3,14 @@
     "version": "Unreleased",
     "date": "",
     "changes": [
-      "Parts List bulk actions: select multiple parts to change category, primary vendor, voltage, track inventory, or delete at once"
+      "Parts List bulk actions: select multiple parts to change category, primary vendor, voltage, track inventory, or delete at once",
+      "Unit List bulk actions: select multiple units to change unit type, family, OEM, voltage, or delete at once",
+      "Applications List bulk actions: select multiple applications to change make, year, unit type, volt, or delete at once",
+      "Bulk change modals now use searchable dropdowns of existing values (category, vendor, voltage, unit type, family, OEM, make, year, volt) instead of free-text inputs",
+      "Fixed bulk-action searchable dropdowns opening behind the modal footer so options stay clickable (Parts, Units, Applications)",
+      "Print Selected on Customers, Suppliers, Inventory, and Reorder lists — check rows (including drag-select) to print only those items",
+      "Reorder list now has a Print button and print layout",
+      "Selected count (Print Selected / bulk selected) now updates immediately when unchecking boxes on Parts List, Unit List, Applications List, BOM Details, Invoice List, and other multi-select lists"
     ]
   },
   {

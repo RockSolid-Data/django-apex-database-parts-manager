@@ -156,6 +156,7 @@
   <script src="{% static 'vendor/tom-select/tom-select.complete.min.js' %}"></script>
   <script src="{% static_cache_bust 'js/live-search.js' %}"></script>
   <script src="{% static_cache_bust 'js/iframe-print.js' %}"></script>
+  <script src="{% static_cache_bust 'js/drag-select.js' %}"></script>
 
   <!-- Sidebar collapse/expand + mobile drawer -->
   <script>
@@ -214,6 +215,10 @@
             }
           }
         };
+        // Bootstrap modals clip overflow; attach dropdown to body so options are visible.
+        if (el.closest('.modal')) {
+          opts.dropdownParent = 'body';
+        }
         if (el.multiple) {
           opts.plugins = ['remove_button'];
         }
@@ -279,6 +284,9 @@
             }
           }
         };
+        if (el.closest('.modal')) {
+          opts.dropdownParent = 'body';
+        }
         if (el.multiple) {
           opts.plugins = ['remove_button'];
         }
@@ -328,6 +336,9 @@
             }
           }
         };
+        if (el.closest('.modal')) {
+          opts.dropdownParent = 'body';
+        }
         if (el.multiple) {
           opts.plugins = ['remove_button'];
         }
